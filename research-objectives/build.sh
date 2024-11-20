@@ -31,21 +31,6 @@ function check_file_exists {
 	fi
 }
 
-function compile_file {
-	local file="$1"
-	local output_dir="$2"
-
-	echo -e "${CYAN}Compiling:${YELLOW} $file${RESET}"
-
-	for i in {1..3}; do
-		output=$(pdflatex -shell-escape -synctex=1 -interaction=nonstopmode -file-line-error -recorder -output-directory="$output_dir" "$file" 2>&1)
-		if [ $? -ne 0 ]; then
-			echo -e "${RED}Error:${RESET} Compilation of $file failed on iteration $i."
-			echo -e "${RED}Output:${RESET}\n$output"
-			exit 1
-		fi
-	done
-}
 function build_latex {
 	local file="$1"
 	local output_dir="$2"
@@ -55,11 +40,8 @@ function build_latex {
 	mkdir -p "$output_dir"
 	echo -e "${CYAN}Building LaTeX file: ${YELLOW}${file}${RESET}"
 
-	# for subfile in ./pages/*.tex; do
-	# 	compile_file "$subfile" "$output_dir"
-	# done
-
-	compile_file "$file" "$output_dir"
+	echo -e "${CYAN}Compiling:${YELLOW} $file${RESET}"
+	latexmk -pdf -outdir="$output_dir" -shell-escape -interaction=nonstopmode "$file"
 
 	echo -e "${GREEN}Build complete!${RESET}"
 	echo -e "${CYAN}Copying generated PDF to the current directory...${RESET}"
