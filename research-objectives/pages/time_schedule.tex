@@ -1,0 +1,56 @@
+% Time schedule
+\thispagestyle{empty}
+
+\ifx\FIITlagEN\undefined
+\chapter{Harmonogram práce}
+\else
+\chapter{Project task schedule}
+\fi
+
+\pagenumbering{arabic}
+\renewcommand*{\thepage}{A-\arabic{page}}
+
+\section{Winter semester}
+
+\begin{tabular}{|l||l|}
+\hline
+1\textsuperscript{st}-4\textsuperscript{th} week    & Exploring ZK ecosystem and finding suitable ZK theme \\
+\hline
+5\textsuperscript{th}-8\textsuperscript{th} week    & Researching ZK-EVM, ZK-Rollups, Stealth Addresses \\
+\hline
+9\textsuperscript{th}-11\textsuperscript{th} week   & Researching Stealth Addresses with ZKP scheme \\
+\hline
+12\textsuperscript{th}-13\textsuperscript{th} week  & Writing Analysis and Solution design \\
+\hline
+\end{tabular}
+
+\section{Summer semester}
+\begin{tabular}{|l||l|}
+\hline
+1\textsuperscript{st}-2\textsuperscript{nd} week    & Learning CIRCOM  \\
+\hline
+3\textsuperscript{rd}-4\textsuperscript{th} week    & Implementing ZKP with CIRCOM  \\
+\hline
+5\textsuperscript{th}-7\textsuperscript{th} week    & Implementing smart contracts in Solidity  \\
+\hline
+8\textsuperscript{th}-9\textsuperscript{th} week    & Implementing browser experimentation wallet  \\
+\hline
+10\textsuperscript{th}-11\textsuperscript{th} week  & Solution testing  \\
+\hline
+12\textsuperscript{th}-13\textsuperscript{th} week  & Revision of final document  \\
+\hline
+\end{tabular}
+
+The beginning of this work started in different direction. First application of
+ZKPs in the ZK-EVM or in ZK-Rollups was being researched and considered. However,
+after discussion with supervisor, these themes were considered too advanced and
+a more suitable theme for Stealth Addresses with ZKP was chosen. The remainder
+of the winter semester was split between researching how a stealth address scheme
+with ZKPs can be designed and implemented, and then the solution design was proposed.
+
+Start of the summer semester was more focused on learning CIRCOM for implementing
+the a circuit needed to generate and verify ZKPs. Then the main part of the semester
+was spent implementing the ZKP circuit, implementing set of smart contracts
+and finally a proof of concept browser wallet supporting implemented scheme.
+Last four weeks were spent on testing, fixing bugs and revising this document.
+
