@@ -51,7 +51,7 @@
 \tableofcontents{}
 
 % List of figures
-\listoffigures
+% \listoffigures
 
 % List of abbreviations
 % \include{pages/abbreviations}
@@ -61,10 +61,12 @@
 
 % Begin references segment
 \begin{refsegment}
-    % \include{content/introduction}
-    %
-    % \include{content/analysis}
-    %
+    \include{content/introduction}
+
+    % \include{content/goals}
+
+    \include{content/analysis}
+
     % \include{content/related}
     %
     % \include{content/design}
@@ -83,7 +85,7 @@
     % \fi
 
     % Bibliography
-    % \printbibliography[heading=references,segment=\therefsegment]
+    \printbibliography[heading=references,segment=\therefsegment]
 
     % no page numbers for appendices
     \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}

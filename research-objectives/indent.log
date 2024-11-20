@@ -1,0 +1,28 @@
+INFO:  latexindent version 3.24.4, 2024-07-18, a script to indent .tex files
+       latexindent lives here: /home/nesquiko/.local/share/nvim/mason/packages/latexindent/
+       Wed Nov 20 17:28:21 2024
+       Filename: /home/nesquiko/fiit/dp/research-objectives/bibliography.bib
+INFO:  Processing switches:
+       -w|--overwrite: Overwrite mode active, will make a back up before overwriting
+INFO:  Directory for backup files and log file indent.log:
+       /home/nesquiko/fiit/dp/research-objectives
+INFO:  YAML settings read: defaultSettings.yaml
+       Reading defaultSettings.yaml from /home/nesquiko/.local/share/nvim/mason/packages/latexindent/defaultSettings.yaml
+       Reading defaultSettings.yaml (2nd attempt) from /home/nesquiko/.local/share/nvim/mason/packages/latexindent/../../texmf-dist/scripts/latexindent/defaultSettings.yaml
+       and then, if necessary, /home/nesquiko/.local/share/nvim/mason/packages/latexindent/LatexIndent/defaultSettings.yaml
+INFO:  YAML reading settings
+       Home directory is /home/nesquiko
+       latexindent.pl didn't find indentconfig.yaml or .indentconfig.yaml
+       see all possible locations: https://latexindentpl.readthedocs.io/en/latest/sec-appendices.html#indentconfig-options)
+INFO:  Backup procedure (-w flag active):
+       Backing up /home/nesquiko/fiit/dp/research-objectives/bibliography.bib to /home/nesquiko/fiit/dp/research-objectives/bibliography.bak0...
+       /home/nesquiko/fiit/dp/research-objectives/bibliography.bib will be overwritten after indentation
+INFO:  Phase 1: searching for objects
+INFO:  Phase 2: finding surrounding indentation
+INFO:  Phase 3: indenting objects
+INFO:  Phase 4: final indentation check
+INFO:  Output routine:
+       Overwriting file /home/nesquiko/fiit/dp/research-objectives/bibliography.bib
+       --------------
+INFO:  Please direct all communication/issues to:
+        https://github.com/cmhughes/latexindent.pl

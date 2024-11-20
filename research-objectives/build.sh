@@ -31,6 +31,12 @@ function check_file_exists {
 	fi
 }
 
+function watch {
+	local file="$1"
+	local output_dir="$2"
+	latexmk -pvc -pdf -shell-escape -interaction=nonstopmode -outdir="$output_dir" "$file"
+}
+
 function build_latex {
 	local file="$1"
 	local output_dir="$2"
@@ -41,24 +47,21 @@ function build_latex {
 	echo -e "${CYAN}Building LaTeX file: ${YELLOW}${file}${RESET}"
 
 	echo -e "${CYAN}Compiling:${YELLOW} $file${RESET}"
-	latexmk -pdf -outdir="$output_dir" -shell-escape -interaction=nonstopmode "$file"
+	latexmk -pdf -shell-escape -interaction=nonstopmode -outdir="$output_dir" "$file"
 
 	echo -e "${GREEN}Build complete!${RESET}"
-	echo -e "${CYAN}Copying generated PDF to the current directory...${RESET}"
-	cp "$output_dir"/*.pdf .
-	echo -e "${GREEN}PDF successfully copied.${RESET}"
 }
 
-# Main function
 function main {
 	local file=""
 	local output_dir="$LATEX_BUILD_DIR"
+	local enable_watch=false
 
-	# Parse command-line arguments
-	while getopts "f:o:h" opt; do
+	while getopts "f:o:wh" opt; do
 		case $opt in
 		f) file="$OPTARG" ;;
 		o) output_dir="$OPTARG" ;;
+		w) enable_watch=true ;;
 		h)
 			usage
 			exit 0
@@ -70,7 +73,19 @@ function main {
 		esac
 	done
 
-	build_latex "$file" "$output_dir"
+	local base_name="${file%.tex}"
+	local pdf_file="$base_name.pdf"
+
+	if [ ! -f "$pdf_file" ]; then
+		echo -e "${GREEN}Hard link created ${YELLOW}$pdf_file${RESET}"
+		ln "$output_dir/$pdf_file" "$pdf_file"
+	fi
+
+	if $enable_watch; then
+		watch "$file" "$output_dir"
+	else
+		build_latex "$file" "$output_dir"
+	fi
 }
 
 main "$@"
