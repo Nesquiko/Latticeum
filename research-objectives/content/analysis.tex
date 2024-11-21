@@ -1,4 +1,4 @@
-\chapter{Analysis}
+\chapter{Analysis}\label{analysis}
 
 This chapter, analyzes shift towards smaller prime fields in
 ZKP systems to enhance efficiency and data density.
@@ -30,7 +30,7 @@ shrink the underlying field size further with usage of Mersenne prime $2^{31} - 
 \section{Binary field}\label{analysis:binary-fields}
 
 This tendency to shrink underlying field has a logical conclusion, a field over
-the smallest prime, 2. This field has a beatiful properties when computation is
+the smallest prime, 2. This field has a beautiful properties when computation is
 done in it. Addition is a bitwise XOR without the need to carry. Squaring elements
 is less expensive than multiplying two elements, due to the fact that in this
 field $(x + y)^2 = x^2 + y^2$ (this property can be referred to as "Freshman's
@@ -38,14 +38,14 @@ dream \cite{FreshmansDream}).
 
 Diamond and Posen in \cite{Binius} propose a protocol constructed from binary
 field and binary tower of fields ($F_2 \subset F_{2^2} \subset F_{2^3}
-\ldots$) \cite{TowerOfFields}. The binary field can be extended as many 
+\ldots$). The binary field can be extended as many 
 times as needed \cite{Wiedemann86}. By using the binary field, data of size
 $n$ will be encoded in $n$ bits, and hence creating a dense encoding.
 
-Multilinear polynomial is commited with a Merkle tree. In order to
+Multilinear polynomial is committed with a Merkle tree. In order to
 encode a polynomial representing large set of values, they need to be
 accessible as evaluations of the polynomial and used field must contain such
-values. So, the values (the trace of the compuatation) are encoded as points on
+values. So, the values (the trace of the computation) are encoded as points on
 hypercube $P(x_0, x_1, \ldots, x_k)$. Then to prove evaluations at random
 points, the data is interpreted as a square, extended with Reed-Solomon
 encoding. This gives the data redundancy for random Merkle tree queries, so
