@@ -11,10 +11,14 @@
             "id": "68c156ef85b8128e",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "LatticeFold Presentation.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "LatticeFold Presentation"
             }
           }
         ]
@@ -90,6 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "LatticeFold Presentation.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -99,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks"
+              "title": "Backlinks for LatticeFold Presentation"
             }
           },
           {
@@ -162,8 +167,16 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "68c156ef85b8128e",
+  "active": "08e6e7004f652cba",
   "lastOpenFiles": [
+    "media/latticefold/binary-chunk-tree-proved.png",
+    "media/latticefold/binary-chunk-tree.png",
+    "LatticeFold Presentation.md",
+    "media/latticefold",
+    "media",
+    "Pasted image 20250327073930.png",
+    "Halo2.md",
+    "LatticeFold Presentation",
     "A Simple Introduction to Folding Schemes.md",
     "Understanding Nova.md",
     "Do not trust anybody.md",
