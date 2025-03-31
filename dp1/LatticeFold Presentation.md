@@ -62,6 +62,6 @@ The root proof is the proof for the whole statement.
 
 ### Problem
 
-Noticable recursion overhead. The chunk SNARK verifier are expensive to represent.
+Noticeable recursion overhead. The chunk SNARK verifier are expensive to represent.
 
 # TODO https://youtu.be/DVHfukc35xk?si=4GxR_TYYbu6i7zcM&t=531
