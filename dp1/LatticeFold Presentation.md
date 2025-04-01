@@ -64,4 +64,22 @@ The root proof is the proof for the whole statement.
 
 Noticeable recursion overhead. The chunk SNARK verifier are expensive to represent.
 
-# TODO https://youtu.be/DVHfukc35xk?si=4GxR_TYYbu6i7zcM&t=531
+## SNAKRs from Folding
+
+I have two witnesses $w_1$ and $w_2$ for some relation, to which I also compute commitments $c_1$ and $c_2$. Then
+after folding them returns a $w_{fd}$ and $c_{fd}$ (and a proof $\pi_{fd}$). Then folding verifier
+only nneds to check the commitments and the proof, thus reducing check of two witnesses
+$w_1$ and $w_2$ to one. To prove a chain of computation, fold previous $c_{fd}$ with the new commitment
+and at the end there will be one commitment. But there is problem with authenticity, how to know that commitments
+were folded in order and correctly...
+
+### Piecemeal SNARKs
+
+To also prove the authenticity, the folding verification will be embedded into
+the relation, so that it proves:
+
+1. $c_{i+1} = com(w_{i+1})$
+2. The local computation/statement is correct
+3. The folding verification was done correctly at each step
+
+## Warm up: Folding for Ajtai commitment openings
