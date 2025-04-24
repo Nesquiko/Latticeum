@@ -16,21 +16,7 @@ execution and then start proving. Thus, large prover memory is needed and parall
 
 ## Piecemeal SNARKS _Valiant08, BCTV14, BCCT12_
 
-### Based on **IVC/PCD**
-
-#### IVC (Incrementally Verifiable Computation):
-
-- a cryptographic primitive for proving the correctness of an iterated and incremental computation
-- the output of step `i` of the computation is fed as input into step `i+1` of the computation
-
-#### PCD (Proof Carrying Data):
-
-- a generalization of IVC to a distributed computation that unfolds over time (i.e., occurs incrementally)
-- key difference between **IVC** and **PCD** is that in **PCD** steps of the computation are linked together in an
-  arbitrary directed acyclic graph (DAG), whereas in **IVC** the steps are linked in a simple path
-
-Recursive SNARKS are a technique how to construct **IVC/PCD**, [the first implementation](https://eprint.iacr.org/2014/595)
-of **PCD** uses recursive SNARKS.
+### Based on **[[Folding Schemes#IVC (Incrementally Verifiable Computation)|IVC]]/[[Folding Schemes#PCD (Proof Carrying Data)|PCD]]**
 
 ### Ideas
 
@@ -68,7 +54,7 @@ Noticeable recursion overhead. The chunk SNARK verifier are expensive to represe
 
 I have two witnesses $w_1$ and $w_2$ for some relation, to which I also compute commitments $c_1$ and $c_2$. Then
 after folding them returns a $w_{fd}$ and $c_{fd}$ (and a proof $\pi_{fd}$). Then folding verifier
-only nneds to check the commitments and the proof, thus reducing check of two witnesses
+only needs to check the commitments and the proof, thus reducing check of two witnesses
 $w_1$ and $w_2$ to one. To prove a chain of computation, fold previous $c_{fd}$ with the new commitment
 and at the end there will be one commitment. But there is problem with authenticity, how to know that commitments
 were folded in order and correctly...
@@ -82,4 +68,3 @@ the relation, so that it proves:
 2. The local computation/statement is correct
 3. The folding verification was done correctly at each step
 
-## Warm up: Folding for Ajtai commitment openings

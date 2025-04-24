@@ -39,5 +39,5 @@ proof is generated and must be able to compute the witness.
 If the proof yields no additional information (just that prover knew) about
 a witness, then the proof system is **zero knowledge**.
 
-If a proof is "short" (polylogarithmic in the circuit size) then it is **succint**.
-Which is then called **Succint Non-interactive Argument of Knowledge (SNARK)**.
+If a proof is "short" (poly-logarithmic in the circuit size) then it is **succinct**.
+Which is then called **Succinct Non-interactive Argument of Knowledge (SNARK)**.
