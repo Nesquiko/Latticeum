@@ -1,1 +1,3 @@
-research-objectives/latex-builds
+latex-builds
+_minted-main
+*.aux
