@@ -27,20 +27,21 @@
 % Cover & title page
 \include{pages/titlepage}
 
-% Thesis assignment
-\newpage
-\thispagestyle{empty}
-\begin{center}
-    \includegraphics[width=\textwidth]{assets/assignment.pdf}
-\end{center}
-\newpage
-\emptypage
+% TODO Thesis assignment
+% \newpage
+% \thispagestyle{empty}
+% \begin{center}
+%     \includegraphics[width=\textwidth]{assets/assignment.pdf}
+% \end{center}
+% \newpage
+% \emptypage
 
-% Declaration of honor
-\include{pages/declaration}
 
-% Annotation
-\include{pages/annotation}
+% TODO Declaration of honor
+% \include{pages/declaration}
+
+% TODO Annotation
+% \include{pages/annotation}
 
 % Table of contents
 \ifx\FIITlagEN\undefined
@@ -61,26 +62,46 @@
 
 % Begin references segment
 \begin{refsegment}
-    \include{content/introduction}
 
-    \include{content/analysis}
+% the analysis structure:
+%	1. ethereum
+%		a. consensus
+%		b. execution layer
+%	2. beam chain snarkification
+%		a. ZKPs
+%		b. snarkification benefits, why and how
+% 	3. execution layer snarkification => zkEVM, what it is
+%		a. RISC-V zkVMs with EVMs binaries compiled to RISC-V
+%		b. nowadays -> recursion and folding
+%		c. comparison of different zkVMs/zkEVMs (https://ethproofs.org/)
+%	4. Proposed lattice based ZK system
+%		a. LatticeFold
+%		b. LABRADOR/Greyhound for final check
+% 	5. Goal: prove ethereum blocks with lattices. Simple question, are lattice
+%		based ZK systems viable to prove ETH blocks? And on what hardware?
 
-    \include{content/related}
+    \include{content/analysis/ethereum}
 
-    \include{content/design}
+    % \include{content/introduction}
+    %
+    % \include{content/analysis}
+    %
+    % \include{content/related}
+    %
+    % \include{content/design}
+    %
+    % \include{content/proof}
+    %
+    % \include{content/implementation}
+    %
+    % \include{content/evaluation}
+    %
+    % \include{content/conclusion}
 
-    \include{content/proof}
-
-    \include{content/implementation}
-
-    \include{content/evaluation}
-
-    \include{content/conclusion}
-
-    \ifx\FIITlagEN\undefined
-    \else
-        \include{pages/resume}
-    \fi
+    % \ifx\FIITlagEN\undefined
+    % \else
+    %     \include{pages/resume}
+    % \fi
 
     % Bibliography
     \printbibliography[heading=references,segment=\therefsegment]
@@ -94,10 +115,10 @@
 % Appendix
 \appendix
 
-\include{pages/time_schedule}
+% \include{pages/time_schedule}
 
-\include{pages/setup_guide}
+% \include{pages/setup_guide}
 
-\include{pages/digital_medium}
+% \include{pages/digital_medium}
 
 \end{document}
