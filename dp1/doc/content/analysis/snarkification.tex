@@ -1,28 +1,94 @@
-%	2. snarkification
-%		a. ZKPs
-%		b. snarkification benefits, why and how
-%		c. beam chain - snarkification of consensus
-%		d. enshrined zkEVM - snarkification of execution
 \section{Snarkification of Ethereum}\label{sec:snarkification}
 
-As discussed in sections about consensus (\ref{subsec:ethereum_consensus}) and
-execution layer (\ref{subsec:ethereum_execution}), nodes on each layer must spend
+As discussed in sections on consensus (\ref{subsec:ethereum_consensus}) and
+execution layer (\ref{subsec:ethereum_execution}), nodes on each layer must expend
 compute resources to validate the consensus data of new blocks or re-execute all
-transactions within them to maintain the blockchain's state.
-These computations limit the scalability of the whole network.
+transactions within them to verify and maintain the blockchain's state.
+These computational demands limit the scalability of the entire network.
 
-Ethereum's strong
-decentralized node set includes not only participants with capable servers,
-but also hobbyists, who use home internet connections and low-end machines.
-Naively scaling the network, for instance, by decreasing slot time, or increasing
-block size may raise bandwidth and node requirements, which would exclude
-less capable nodes and thus hinder Ethereum's decentralization.
+Ethereum's decentralized node network includes not only participants with
+capable servers, but also hobbyists, who use home internet connections and
+less powerful machines. Naively attempting to scale the network, for instance,
+by decreasing slot time, or increasing block size may raise bandwidth and node
+requirements, thereby ousting less capable nodes and thus hindering Ethereum's
+decentralization.
 
-Snarkification refers to the process of using type of Zero Knowledge Proofs (ZKPs)
-called SNARK (Succint Non-interactive Argument of Knowledge) in order to offload
-a computation to one entity (one node, or a cluster that is a small subset of
-the whole network), which performs the computation and generates a proof of
-its validity. This proof can then be verified by the rest of the network
-at fractional compute cost.
+Snarkification refers to the process of integrating specific type of Zero
+Knowledge Proofs (ZKPs) called SNARK (Succinct Non-interactive Argument of
+Knowledge) in order to offload a computation to one entity (one node, or a
+cluster that is a small subset of the whole network), which performs the
+computation and generates a proof of its validity. This proof can then be
+verified by the rest of the network at fractional compute cost.
 
+\subsection{Zero Knowledge Proofs}
+
+Zero-Knowledge Proofs are cryptographic primitives that allow a prover
+to convince a verifier of a statement's truth without revealing any
+information beyond the statement's validity itself. The statement typically
+concerns membership in an NP language/relation \cite{GoldreichNPProofs}.
+Traditionally, ZKPs are interactive protocols where a prover, knows a
+private witness for a statement (e.g., a solution to a problem), aims to
+convince a verifier of this knowledge. Through a series of back-and-forth
+interactions, the verifier becomes convinced of the prover's claim (if true)
+without learning the witness itself.
+
+Interactive proofs where the verifier's messages consist only of random
+challenges are known as public-coin protocols. The Fiat-Shamir heuristic \cite{FiatShamir}
+can transform such public-coin interactive proofs into non-interactive
+proofs by replacing the verifier's random challenges with challenges derived
+from a cryptographic hash function applied to the protocol's transcript. This
+non-interactivity allows a single generated proof to be validated by any
+number of verifiers.
+
+A SNARK is a specific type of ZKP. The 'Succinct' aspect implies that proof
+sizes are very small (e.g., polylogarithmic in the size of the witness or
+statement) and verification is faster than re-executing the original
+computation, often polylogarithmic in the computation's complexity \cite{BCCT11}.
+
+\subsection{Snarkifying consensus}
+
+The 'Beam Chain' is a research initiative, introduced by Justin Drake at Devcon
+2024 \cite{JustinDrakeBeamchain}, aimed at redesigning and improving
+Ethereum's consensus mechanism. A key aspect of this proposal involves
+leveraging SNARKs to make consensus layer state transitions provable, in near
+real-time. Instead of each validator independently re-validating all
+components of a new consensus state, they would verify a single, compact
+SNARK. Based on this proof's validity, they would accept or
+reject the proposed state update.\footnote{The entity proposing the state
+update, such as a block proposer, would be responsible for generating and
+submitting this proof.}
+
+\subsection{Snarkifying execution}
+
+Ethereum's execution state transitions are dictated by the rules of the
+EVM. To reduce the computational burden of verifying execution using ZKPs, the
+EVM's execution logic needs to be provable with a ZKPs, creating a ZkEVM. This
+would change the state transition function (\ref{eq:state_transition}) to:
+
+\[
+	F(S_n, T) = (S_{n+1}, \pi)
+\]
+
+Where $\pi$ is the proof of the state transition's validity. Therefore,
+verifying a block's execution state transition would involve verifying this
+single proof, rather than re-executing all transactions within the block.
+Furthermore, an increase in block size would have a little to no impact on
+verification times for nodes, as proof verification complexity typically grows
+much slower than the computation being proven. This could allow for larger
+block sizes without risking the exclusion of nodes with modest computational
+capabilities due to their weaker computational capabilities, thereby
+supporting scalability.
+
+Another approach is to 'enshrine' a ZkEVM directly into the Ethereum protocol (L1).
+This offers similar benefits in terms of L1 state transition verification, as
+the native EVM could delegate execution proving to this enshrined ZkEVM. In
+addition, an enshrined ZkEVM could support and simplify the creation of what
+are sometimes termed 'native rollups' \cite{NativeRollups}. These would be
+Layer 2 solutions that could leverage the L1's enshrined ZkEVM for verifying
+their own state transitions, which are themselves batches of EVM-compatible
+transactions. The correctness of these L2 transaction batches would thus be
+directly enforced by the L1 execution layer through ZK proof verification.
+This could lead to faster, settlement for these L2s on L1, which in turn could
+simplify composability between L1 and these native L2s, as well as among
+different native L2s.
 
