@@ -1,0 +1,28 @@
+%	2. snarkification
+%		a. ZKPs
+%		b. snarkification benefits, why and how
+%		c. beam chain - snarkification of consensus
+%		d. enshrined zkEVM - snarkification of execution
+\chapter{Snarkification of Ethereum}\label{chapter:snarkification}
+
+As discussed in sections about consensus (\ref{sec:ethereum_consensus}) and
+execution layer (\ref{sec:ethereum_execution}), nodes on each layer must spend
+compute resources to validate the consensus data of new blocks or re-execute all
+transactions within them to maintain the blockchain's state.
+These computations limit the scalability of the whole network.
+
+Ethereum's strong
+decentralized node set includes not only participants with capable servers,
+but also hobbyists, who use home internet connections and low-end machines.
+Naively scaling the network, for instance, by decreasing slot time, or increasing
+block size may raise bandwidth and node requirements, which would exclude
+less capable nodes and thus hinder Ethereum's decentralization.
+
+Snarkification refers to the process of using type of Zero Knowledge Proofs (ZKPs)
+called SNARK (Succint Non-interactive Argument of Knowledge) in order to offload
+a computation to one entity (one node, or a cluster that is a small subset of
+the whole network), which performs the computation and generates a proof of
+its validity. This proof can then be verified by the rest of the network
+at fractional compute cost.
+
+
