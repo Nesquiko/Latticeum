@@ -1,4 +1,4 @@
-\chapter{Ethereum}\label{chapter:ethereum}
+\section{Ethereum}\label{sub:ethereum}
 
 Ethereum is a decentralized, open-source blockchain with smart contract
 functionality \cite{ethereumEthereumWhitepaper}. Conceptualized by Vitalik
@@ -9,7 +9,7 @@ create and deploy decentralized applications and crypto assets.
 The Ethereum network is comprised of two layers, two peer-to-peer networks,
 consensus layer and execution layer.
 
-\section{Consensus}\label{sec:ethereum_consensus}
+\subsection{Consensus}\label{subsec:ethereum_consensus}
 % very good explainer https://ethos.dev/beacon-chain
 
 Consensus on Ethereum is achieved with proof-of-stake (PoS) consensus mechanism
@@ -22,14 +22,14 @@ a block proposal pseudo-randomly from the pool in each slot. A slot is some
 time amount (as of writing of this work it is 12 seconds on Ethereum mainnet),
 in which the pseudo-randomly chosen validator can propose new block. The software
 creating the new block is called consensus client. Proposer's consensus client
-requests a bundle of transactions from the execution layer \ref{sec:ethereum_execution},
+requests a bundle of transactions from the execution layer \ref{subsec:ethereum_execution},
 wraps them into a block and gossips (sends) the new block to other participants
 over the consensus p2p network. The rest of the validator pool can in 32 slot
 (or one epoch) attest to that new block's validity. In order for a block to be
 finalized, it must be attested by a super-majority, which is 66\% of the total
 balance of all validators. \cite{ethereumConsensusMechanisms}.
 
-\section{Execution}\label{sec:ethereum_execution}
+\subsection{Execution}\label{subsec:ethereum_execution}
 
 Software operating on the execution layer is called execution client. Nodes on
 execution layer hold the latest state and database of all Ethereum data. These
@@ -40,7 +40,7 @@ virtual machine operating 256 bit words which executes smart contract code.
 Ethereum is a decentralized state machine, with rules defined by the EVM.
 EVM can be thought of as a function. Given a valid state and valid set of
 transactions\footnote{validity of transactions, and thus transitively validity
-of state, is guaranteed by the consensus layer \ref{sec:ethereum_consensus}},
+of state, is guaranteed by the consensus layer \ref{subsec:ethereum_consensus}},
 outputs next valid state:
 
 \[
