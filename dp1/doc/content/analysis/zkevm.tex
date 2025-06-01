@@ -1,0 +1,179 @@
+\section{ZkEVM}
+
+ZkEVM, as mentioned in \ref{subsec:snarkifying_execution}, is a modified EVM,
+which given state and list of transactions produces next state and a proof $\pi$
+attesting to correctness of that execution. Primary use case of ZkEVMs today is
+enabling "ZK rollups", L2s which execute a bundle of transactions offchain,
+generate a proof and submit the bundle with the proof on the L1, where only the
+proof is validated. Second use case, but not used today, is to enshrine ZkEVM
+into EVM as described in \ref{subsec:snarkifying_execution}.
+
+\subsection{Challenges of EVM}
+
+EVM was not designed with ZK taken into consideration:
+
+\begin{enumerate}
+	\item Many EVM opcodes are complex and expensive to prove with ZK. This has
+		led to different types of EVM compatibility among ZkEVMs \cite{VitalikButerinZkEVMTypes}.
+	\item 256 bit word size means that ZK systems working over prime fields must
+		include range proofs, which increases the ZkEVM complexity.
+	\item It's harder to prove stack based VM. For example, Starkware developed
+		Cairo \cite{Cairo}, a register based model in order to implement its ZkEVM.
+		This requires a custom smart contract compiler.
+	\item EVM storage uses Merkle Patricia Tries with Keccak, which are not
+		ZK friendly and have huge proving overhead.
+\end{enumerate}
+
+Proving the entire EVM within a single circuit (one proof) is computationally
+and economically unfeasible. Such a proof would be several megabytes in size,
+making it too expensive to store on L1, let alone prove.
+
+\subsection{Recursive proofs}
+
+Recursive proofs combine benefits of ZKP systems with fast prover times (e.g.,
+those based FRI) and systems with short proofs (like Groth16). The idea is to
+produce a proof of a knowledge of a proof.
+
+\begin{tikzFigure}
+	\begin{tikzpicture}[
+		diamondNode/.style={
+			diamond, draw, thick,
+			minimum width=4cm,
+			minimum height=0.1cm,
+			align=center, font=\sffamily
+		},
+		proverNode/.style={
+			rectangle, rounded corners=10pt, draw, thick, fill=blue!20,
+			minimum width=4cm,
+			minimum height=1cm,
+			text width=3.5cm,
+			align=center, font=\sffamily
+		},
+		piNode/.style={
+			circle, draw, thick, fill=white,
+			minimum size=1.2cm,
+			align=center, font=\sffamily\Large
+		},
+		piPrimeNode/.style={
+			circle, draw, thick, fill=green!40,
+			minimum size=1.2cm,
+			align=center, font=\sffamily\Large
+		},
+		arrow/.style={
+			-Stealth, thick, draw=black!80
+		},
+		labelOnArrow/.style={
+			font=\sffamily\small, midway, sloped
+		},
+		annotationText/.style={
+			text=red, font=\sffamily\small, align=center
+		}
+	]
+
+	\node[proverNode] (inner) {Inner prover};
+	\node[proverNode, right=2.5cm of inner] (outer) {Outer prover};
+
+	\node[diamondNode, fill=red!25, above=0.8cm of inner] (witness) {witness};
+	\node[diamondNode, fill=green!25, right=1cm of witness] (public) {public inputs};
+
+	\node[piNode, below=1.2cm of inner.south] (pi) {$\pi$};
+	\node[piPrimeNode, right=2cm of outer.east] (piprime) {$\pi'$};
+
+	\draw[arrow] (witness.south) -- (inner.north);
+	\draw[arrow] (public.east) -- (outer.north);
+	\draw[arrow] (public.west) -- (inner.north);
+
+	\draw[arrow] (inner.south) to node[font=\sffamily\small, below, xshift=-1cm] {generate} (pi.north);
+	\draw[arrow] (pi.east) to[out=0, in=190, looseness=1] node[font=\sffamily\small, right] {Take in as witness} (outer.west);
+	\draw[arrow] (outer.east) to node[font=\sffamily\small, below] {generate} (piprime.west);
+
+	\end{tikzpicture}
+	\caption{Recursive proving}
+\end{tikzFigure}
+
+The recursive ZKP is an instantiation of Incrementally-Verifiable-Computation (IVC)
+\cite{ValiantIVC}. IVC is a cryptographic primitive for proving the
+correctness of an iterated and incremental computation (such as EVM, or RISC-V
+microprocessor). The output of step $i$ of the computation ($F$) is fed as input
+into step $i+1$ of the computation, along with a proof $\pi$, which proves that:
+
+\begin{enumerate}
+	\item $F(s_{i-1}, \omega_i) = s_i$ - proves that executing $F$ with $s_{i-1}$
+		and $\omega_i$ correctly outputs $s_i$,
+	\item $V((i-1, s_0, s_{i-1}), \pi_{i-1}) = true$ - proves that $\pi_{i-1}$ is
+		a valid proof relative to the previous step of the computation.
+\end{enumerate}
+
+\begin{tikzFigure}
+	\begin{tikzpicture}[
+		% settings for node distances
+		node distance=1cm and 1.5cm, % vertical and horizontal base distance
+		% Styles
+		processNode/.style={ % For F1, F2, Fn
+			rectangle, draw, fill=blue!20,
+			minimum size=1cm, % makes F nodes squarish and compact
+			align=center
+		},
+		dataNode/.style={ % For s0, sn, w1, w2, wn
+			parallelogram, draw, fill=green!20,
+			minimum height=0.5cm, % consistent height
+			align=center,
+			inner xsep=2pt, % padding inside the node
+		},
+		multiLineDataNode/.style={ % specific for s0 and sn with line breaks
+			dataNode,
+			text width=2.5cm % allows text to wrap
+		},
+		omegaDataNode/.style={ % specific for omega nodes
+			dataNode,
+			minimum width=1cm
+		},
+		ellipsisNode/.style={
+			text centered,
+			font=\small
+		},
+		arrow/.style={
+			-Stealth,
+			semithick
+		},
+		labelFont/.style={font=\footnotesize}
+	]
+
+	\node[multiLineDataNode] (s0) {$s_0$\\init state};
+	\node[processNode, right=0.5cm of s0] (F1) {F};
+	\node[processNode, right=of F1] (F2) {F};
+	\node[ellipsisNode, right=1.5cm of F2] (dots) {...};
+	\node[processNode, right=2cm of dots] (Fn) {F};
+	\node[multiLineDataNode, right=0.5cm of Fn] (sn) {$(s_n, \pi_n)$\\final output};
+
+	\node[omegaDataNode, below=of F1] (w1) {$\omega_1$};
+	\node[omegaDataNode, below=of F2] (w2) {$\omega_2$};
+	\node[omegaDataNode, below=of Fn] (wn) {$\omega_n$};
+
+	\draw[arrow] (s0) -- (F1);
+	\draw[arrow] (w1) -- (F1);
+	\draw[arrow] (F1) -- node[midway, above, labelFont] {$(s_1, \pi_1)$} (F2);
+	\draw[arrow] (w2) -- (F2);
+	\draw[arrow] (F2) -- node[midway, above, labelFont] {$(s_2, \pi_2)$} (dots);
+	\draw[arrow] (dots) -- node[midway, above, labelFont] {$(s_{n-1}, \pi_{n-1})$} (Fn);
+	\draw[arrow] (wn) -- (Fn);
+	\draw[arrow] (Fn) -- (sn);
+
+	\end{tikzpicture}
+	\caption{IVC \cite{ValiantIVC}}
+\end{tikzFigure}
+
+Final proof $\pi_n$ is a succinct proof that prover has $\omega_1, \ldots, \omega_n$,
+s.t., final output $s_n$ is correct. The first implementation of IVC was done
+using SNARKs \cite{RecursiveSNARKsIVC}
+
+\subsection{First generation of ZkEVMs}
+
+In the 2022 to early 2024 first generation of ZkEVMs was successfully deployed.
+Thanks to recursive proving, it was feasible for these ZkEVMs to be created.
+They first prove the EVM execution, and then prove it inside another circuit.
+This enabled parallelization of proving and reduced the size and complexity of
+the final proof submitted to L1. ZK systems like Plonky2 \cite{Plonky2}, or
+Halo2 \cite{Halo2}, are examples of recursive ZKP systems. Notable references
+include Scroll, zkSync Era, Polygon ZkEVM.
+

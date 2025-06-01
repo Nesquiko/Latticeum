@@ -1,4 +1,4 @@
-\section{Snarkification of Ethereum}\label{sec:snarkification}
+\section{Snarkification of Ethereum}
 
 As discussed in sections on consensus (\ref{subsec:ethereum_consensus}) and
 execution layer (\ref{subsec:ethereum_execution}), nodes on each layer must expend
@@ -26,6 +26,7 @@ Zero-Knowledge Proofs are cryptographic primitives that allow a prover
 to convince a verifier of a statement's truth without revealing any
 information beyond the statement's validity itself. The statement typically
 concerns membership in an NP language/relation \cite{GoldreichNPProofs}.
+The membership statements are usually named ZK circuits.
 Traditionally, ZKPs are interactive protocols where a prover, knows a
 private witness for a statement (e.g., a solution to a problem), aims to
 convince a verifier of this knowledge. Through a series of back-and-forth
@@ -58,7 +59,7 @@ reject the proposed state update.\footnote{The entity proposing the state
 update, such as a block proposer, would be responsible for generating and
 submitting this proof.}
 
-\subsection{Snarkifying execution}
+\subsection{Snarkifying execution}\label{subsec:snarkifying_execution}
 
 Ethereum's execution state transitions are dictated by the rules of the
 EVM. To reduce the computational burden of verifying execution using ZKPs, the
