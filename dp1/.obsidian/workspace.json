@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "HyperNova.md",
+                "file": "notes/Folding Schemes.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "HyperNova"
+              "title": "Folding Schemes"
             }
           }
         ]
@@ -168,11 +168,24 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "fea6e93d150aaaf7",
+  "active": "08e6e7004f652cba",
   "lastOpenFiles": [
+    "doc/main.aex",
+    "doc/main.w18",
+    "doc/latex-builds/pdflatex79127.fls",
+    "notes/Proof systems.md",
+    "notes/Folding Schemes.md",
+    "notes/Halo2.md",
+    "doc/latex-builds/pdflatex76602.fls",
+    "doc/latex-builds/pdflatex76568.fls",
+    "doc/latex-builds/pdflatex76539.fls",
+    "doc/latex-builds/pdflatex76524.fls",
+    "doc/latex-builds/pdflatex76509.fls",
+    "doc/latex-builds/pdflatex76494.fls",
+    "doc/latex-builds/pdflatex76457.fls",
+    "doc/latex-builds/pdflatex76336.fls",
     "Spartan.md",
     "HyperNova.md",
-    "4913",
     "MLE - Multi-linear extension.md",
     "mle-multi-linear-extension.md",
     "Proof systems.md",
@@ -183,11 +196,8 @@
     "Halo2.md",
     "LatticeFold.md",
     "Do not trust anybody.md",
-    "Untitled",
-    "media/nova/concept-folding.png.crdownload",
     "Untitled.md",
     "media/nova/concept-folding.png",
-    "media/nova",
     "Pasted image 20250412172338.png",
     "folding-schemes.md",
     "Understanding Nova.md",
@@ -195,13 +205,9 @@
     "A Simple Introduction to Folding Schemes.md",
     "media/lattices/z_elements_mod.png",
     "media/lattices/z_elements.png",
-    "media/lattices",
     "media/latticefold/binary-chunk-tree-proved.png",
     "media/latticefold/binary-chunk-tree.png",
-    "media/latticefold",
-    "media",
     "Pasted image 20250327073930.png",
-    "LatticeFold Presentation",
     "Do not trust anobody.md",
     "2025-03-13.md",
     "Welcome.md"
