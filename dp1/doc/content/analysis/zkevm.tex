@@ -177,3 +177,98 @@ the final proof submitted to L1. ZK systems like Plonky2 \cite{Plonky2}, or
 Halo2 \cite{Halo2}, are examples of recursive ZKP systems. Notable references
 include Scroll, zkSync Era, Polygon ZkEVM.
 
+\subsection{Folding schemes}
+
+Even though recursion proofs enabled teams to build ZkEVMs, they are not without
+their flaws. Prover needs to have circuit which contains the whole verification
+algorithm of another proof system. It must verify expensive evaluation proofs
+for polynomial commitments.
+
+Folding scheme takes almost all of the verification steps out of the circuit.
+There are no FFTs, only multi-exponentiations, which do not require big
+memory overhead. Also no embedded elliptic curve pairings are needed, because
+there is no need to switch curves like in recursive proofs.
+
+It compresses two instances into one. Folding prover will fold two instances,
+with corresponding witnesses, and produce single instance, s.t., if it is correct,
+it is implied that also the two original instances were correct \cite{Nova}.
+
+Given some relations $R = \alpha(pp,\;x,\;W)$, where:
+\begin{itemize}
+	\item $pp$ = public parameters,
+	\item $x$ = instance or public inputs,
+	\item $W$ = witness.
+\end{itemize}
+
+For example: $R$ is an equation, $x$ are coefficients and $W$ are concrete
+values that satisfy the equation.
+
+A folding scheme for two relations $R$ and $R_{acc}$ (or $R_1$ and $R_2$) is an
+interactive protocol between folding prover $P$ and folding verifier $V$ where:
+
+\begin{enumerate}
+	\item $P$ has $(pp, x_1, w_1) \in R, (pp, x_2, w_2) \in R_{acc}$,
+	\item $V$ has $(pp, x_1), (pp, x_2)$.
+\end{enumerate}
+
+And the result of their interaction is $(pp, x_3, w_3)$ (where $V$ only knows
+$(pp, x_3)$ and $w_3$ is kept private for $P$). Thus instead of validating two
+instances, verifier only needs to check one. To make the interaction between
+$P$ and $V$ non-interactive with \cite{FiatShamir}, $P$ must also provide
+proof that Fiat-Shamir was used correctly. And also, $P$ needs to prove that
+the folded instances are all linked together, output of step $i$ is input of
+step $i+1$.
+
+\begin{tikzFigure}
+	\begin{tikzpicture}[
+		node distance=1cm and 2cm, % vertical and horizontal base distance
+		processNode/.style={
+			rectangle, draw, fill=blue!20,
+			minimum size=1cm,
+			align=center
+		},
+		dataNode/.style={
+			parallelogram, draw, fill=green!20,
+			minimum height=0.5cm,
+			align=center,
+			inner xsep=2pt, % padding inside the node
+		},
+		omegaDataNode/.style={
+			dataNode,
+			minimum width=1cm
+		},
+		ellipsisNode/.style={
+			text centered,
+			font=\small
+		},
+		arrow/.style={
+			-Stealth,
+			semithick
+		},
+		labelFont/.style={font=\footnotesize}
+	]
+
+	\node[omegaDataNode] (w1) {$(\omega_1, x_1)$};
+	\node[omegaDataNode, below=of w1] (w2) {$(\omega_2, x_2)$};
+	\node[omegaDataNode, below=of F1, xshift=1cm] (w3) {$(\omega_4, x_4)$};
+	\node[omegaDataNode, below=of dots, xshift=1cm, yshift=-.4cm] (wn1) {$(\omega_{n-1}, x_{n-1})$};
+	\node[omegaDataNode, below=of Fn, xshift=3.1cm] (wn) {$(\omega_n, x_n)$};
+
+	\node[processNode, right=0.5cm of w1] (F1) {Folding};
+	\node[processNode, right=of F1] (F2) {Folding};
+	\node[ellipsisNode, right=2cm of F2] (dots) {...};
+	\node[processNode, right=3cm of dots] (Fn) {Folding};
+
+	\draw[arrow] (w1) -- (F1);
+	\draw[arrow] (w2) -- (F1);
+	\draw[arrow] (F1) -- node[midway, above, labelFont] {$(w_3, x_3, \pi_3)$} (F2);
+	\draw[arrow] (w3) -- (F2);
+	\draw[arrow] (F2) -- node[midway, above, labelFont] {$(w_5, x_5, \pi_5)$} (dots);
+	\draw[arrow] (dots) -- node[midway, above, labelFont] {$(w_{n-2}, x_{n-2}, \pi_{n-2})$} (Fn);
+	\draw[arrow] (wn1) -- (Fn);
+	\draw[arrow] (Fn) -- (wn);
+
+	\end{tikzpicture}
+	\caption{Folding scheme \cite{Nova}}
+\end{tikzFigure}
+
