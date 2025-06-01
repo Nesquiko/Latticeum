@@ -31,7 +31,7 @@ making it too expensive to store on L1, let alone prove.
 \subsection{Recursive proofs}
 
 Recursive proofs combine benefits of ZKP systems with fast prover times (e.g.,
-those based FRI) and systems with short proofs (like Groth16). The idea is to
+those based FRI) and systems with short proofs (like Groth16 \cite{Groth16}). The idea is to
 produce a proof of a knowledge of a proof.
 
 \begin{tikzFigure}
@@ -272,3 +272,51 @@ step $i+1$.
 	\caption{Folding scheme \cite{Nova}}
 \end{tikzFigure}
 
+\subsection{New generation of ZkEVMs}
+
+Nowadays, industry is moving towards ZkVMs, dominantly RISC-V ZkVMs. RISC-V is
+an open sourced Instruction Set Architecture (ISA) \cite{RISCV}. RISC-V's
+simpler, reduced instruction set is better suited for ZK proof computations.
+Its register-based architecture is generally more efficient for proving than
+the EVM's stack-based architecture. Another benefit is a mature tooling
+ecosystem, including compilers like GCC and LLVM, debuggers, and libraries.
+This allows developers to write provable programs in familiar languages like
+Rust, C, and C++. And RISC-V is a general purpose ISA, which opens possibilities
+for proving not just blockchain applications. Due to this, a EVM written in
+a language that can be compiled into RISC-V, can be executed inside a ZkVM and
+together this combination creates a ZkEVM.
+
+\subsubsection*{RISC-0}
+
+First such ZkVM was RISC-0 \cite{RISC0}, a general purpose RISC-V VM. It implements
+the RISC-V RV32IM specification (the RV32I base with the multiplication extension).
+It uses STARKs \cite{STARK} with FRI \cite{FRI}, for the inner provers, and
+the final output proof is generated with Groth16 \cite{Groth16}. Proving
+process of RISC-0 is as follows:
+
+\begin{enumerate}
+	\item From execution of a program a collection of segments is collected,
+	\item Each segment is proven with STARK based circuit \cite{RISC0ProofSystem},
+	\item Pairs of these proofs are recursively proven until only one proof remains,
+	\item This proof is proven with Groth16.
+\end{enumerate}
+
+\subsubsection*{SP1}
+
+SP1 by Succinct is also a RISC-V RV32IM, proving programs in a recursive STARK \cite{STARK}
+environment using FRI \cite{FRI}, with final proof being wrapped by Groth16
+\cite{Groth16}, or PlonK \cite{Plonk} SNARK for small proof sizes \cite{SP1}.
+
+\subsubsection*{Jolt}
+
+Another RISC-V RV32I ZkVM. Uses a technique termed as \emph{lookup singularity}.
+This technique produces circuits that perform only lookup into massive
+precomputed lookup tables of size more than $2^{128}$ \cite{Jolt}. Underlying
+lookup argument protocol is Lasso \cite{Lasso}.
+
+\subsubsection*{OpenVM}
+
+OpenVM introduces a RISC-V ZkVM with novel "no-CPU" design. This decouples
+opcode implementation and let's developers build custom VM extensions. Using
+FRI \cite{FRI} and DEEP-ALI \cite{DEEP-ALI}. The overall proving process follows
+previous designs \cite{RISC0}, but enables aforementioned modularization \cite{OpenVM}.

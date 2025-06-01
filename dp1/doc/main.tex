@@ -27,18 +27,14 @@
 % Cover & title page
 \include{pages/titlepage}
 
-% TODO Thesis assignment
-% \newpage
-% \thispagestyle{empty}
-% \begin{center}
-%     \includegraphics[width=\textwidth]{assets/assignment.pdf}
-% \end{center}
-% \newpage
-% \emptypage
+\newpage
+\thispagestyle{empty}
+\includepdf[pages=-]{assets/assignment.pdf}
+\newpage
+\emptypage
 
 
-% TODO Declaration of honor
-% \include{pages/declaration}
+\include{pages/declaration}
 
 % TODO Annotation
 % \include{pages/annotation}
@@ -65,27 +61,6 @@
 
     \include{content/analysis/analysis}
 
-    % \include{content/introduction}
-    %
-    % \include{content/analysis}
-    %
-    % \include{content/related}
-    %
-    % \include{content/design}
-    %
-    % \include{content/proof}
-    %
-    % \include{content/implementation}
-    %
-    % \include{content/evaluation}
-    %
-    % \include{content/conclusion}
-
-    % \ifx\FIITlagEN\undefined
-    % \else
-    %     \include{pages/resume}
-    % \fi
-
     % Bibliography
     \printbibliography[heading=references,segment=\therefsegment]
 
@@ -95,13 +70,9 @@
 
 \end{refsegment}
 
-% Appendix
 \appendix
 
+% TODO
 % \include{pages/time_schedule}
-
-% \include{pages/setup_guide}
-
-% \include{pages/digital_medium}
 
 \end{document}
