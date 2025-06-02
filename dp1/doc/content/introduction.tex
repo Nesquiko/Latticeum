@@ -1,0 +1,58 @@
+\chapter{Introduction}
+
+Ethereum, a decentralized blockchain platform launched in 2015, provides a
+Turing-complete execution environment for smart contracts and decentralized
+applications. Its modular architecture comprises a proof-of-stake consensus
+layer (Gasper) and an execution layer governed by the Ethereum Virtual Machine
+(EVM). A primary challenge for Ethereum is scalability, as the need for all
+nodes to validate and re-execute every transaction limits throughput and can
+centralize the network by increasing resource demands.
+
+"Snarkification," the integration of Zero-Knowledge Proofs (ZKPs) like SNARKs,
+offers a path to mitigate these scalability issues. Initiatives such as the
+'Beam Chain' aim to snarkify consensus, allowing validators to verify compact
+proofs instead of entire state components. Similarly, Zero-Knowledge Ethereum
+Virtual Machines (ZkEVMs) seek to make EVM execution provable, enabling nodes
+to verify block execution via a single proof. Enshrining a ZkEVM into
+Ethereum's Layer 1 could further enhance scalability and simplify the creation
+of native rollups.
+
+Zero-Knowledge proofs allow proving a statement's truth without revealing
+underlying information. The statement are usually a membership in NP language,
+thus an entire computations can be proven with this primitives, for example
+like computations done by the EVM, turning it into a ZkEVM. However,
+developing ZkEVMs is challenging due to the EVM's original design: complex
+opcodes, large word sizes requiring range proofs, its stack-based nature, and
+ZK-unfriendly storage mechanisms. Early solutions utilized recursive proofs to
+aggregate computation steps, leading to the first generation of Layer 2
+ZkEVMs. Folding schemes further optimized this by compressing instances. The
+current trend involves Zero-Knowledge Virtual Machines (ZkVMs), especially
+those based on the simpler, register-based RISC-V ISA, which is more amenable
+to ZK proof generation.
+
+While many ZKP systems rely on assumptions vulnerable to quantum attacks,
+lattice-based cryptography provides a foundation for post-quantum secure ZK
+solutions, with security often based on hard problems like SVP or SIS.
+
+This thesis investigates the design and implementation of a RISC-V ZkVM using
+lattice-based cryptography. A key application is proving Ethereum block
+execution, contributing to the network's scalability and post-quantum
+security. This work explores the practical construction of such a system and
+aims to assess whether lattice-based cryptography can offer performance
+comparable to classical ZKP methods while ensuring quantum resistance.
+
+\section*{Document Structure}
+
+This progress report on the DP1 solution details the initial analytical work
+in Analysis \ref{chap:analysis}. This chapter begins with an overview of
+Ethereum \ref{sec:ethereum}, covering its consensus and execution mechanisms.
+It then explores the concept of Snarkification of Ethereum \ref{sec:snarkification},
+discussing Zero-Knowledge Proofs and their application to both the consensus
+layer via the Beam Chain initiative and the execution layer through enshrined
+ZkEVMs. Following this, the report analyzes ZkEVMs \ref{sec:zkevm},
+examining the challenges of proving EVM execution, the evolution of solutions
+from recursive proofs and folding schemes to modern ZkVMs. Finally, the
+analysis introduces Lattice-based cryptography \ref{sec:lattices}, outlining
+Ajtai commitments and the potential of lattices for post-quantum
+zero-knowledge systems, including recent developments like LaBRADOR,
+Greyhound, and LatticeFold/LatticeFold+.
