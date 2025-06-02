@@ -1,0 +1,94 @@
+\section{Lattice-based cryptography}
+
+Lattice-based cryptography has emerged as a significant area of research,
+particularly due to its potential for constructing cryptographic primitives
+resistant to attacks by quantum computers. Unlike traditional public-key
+cryptosystems such as those based on elliptic curves, which are vulnerable to
+Shor's algorithm on a quantum computer, many lattice-based constructions are
+believed to maintain their security in a post-quantum world. The security of
+these schemes often relies on the presumed hardness of certain computational
+problems on lattices, such as the Shortest Vector Problem (SVP) \cite{AjtaiLattices, LatticeTutorial}.
+
+A lattice $L$ is a discrete subgroup of $\mathbb{R}^n$, typically
+represented as the set of all integer linear combinations of a set of linearly
+independent basis vectors $B = \{\mathbf{b}_1, \mathbf{b}_2, \dots, \mathbf{b}_m\}$
+where $\mathbf{b}_i \in \mathbb{R}^n$. That is:
+
+\[
+	L(B) = \left\{ \sum_{i=1}^{m} x_i \mathbf{b}_i \mid x_i \in \mathbb{Z} \right\}
+\]
+
+The dimension of the lattice is $m$. Many cryptographic constructions are
+built upon the difficulty of solving problems like finding the shortest
+non-zero vector in a lattice (SVP) or finding the lattice point closest to a
+given target vector (CVP), especially in high dimensions.
+
+One of the pioneering works in this field was by Miklós Ajtai in 1996, who
+introduced a cryptographic construction whose security could be based on the
+worst-case hardness of lattice problems \cite{AjtaiLattices}. This provided a
+stronger theoretical foundation for cryptosystems using lattices.
+
+Lattice-based cryptography offers several advantages:
+
+\begin{itemize}
+    \item \textbf{Post-quantum security:} As mentioned, this is a primary driver for its adoption.
+    \item \textbf{Efficiency:} Some lattice-based operations can be
+		computationally efficient, particularly those involving matrix-vector
+		multiplications over small integers \cite{LatticeTutorial}.
+    \item \textbf{Versatility:} Lattices have been used to construct a wide
+		array of cryptographic primitives, including public-key encryption,
+		digital signatures, and importantly for this thesis, commitment
+		schemes \cite{LatticeTutorial}.
+\end{itemize}
+
+\subsection{Ajtai Commitments}
+
+A commitment scheme is a cryptographic primitive that allows a party (the
+prover) to commit to a value while keeping it hidden from another party (the
+verifier), with the ability to reveal the committed value later. The scheme
+must satisfy two main properties:
+\begin{itemize}
+    \item \textbf{Hiding:} The verifier cannot learn the committed value from
+		the commitment itself before the reveal phase.
+    \item \textbf{Binding:} The prover cannot change the committed value after
+		the commitment phase.
+\end{itemize}
+
+The Ajtai commitment scheme from Ajtai's 1996 work \cite{AjtaiLattices}, is a
+lattice-based commitment scheme. Its security is typically based on the
+hardness of the Shortest Integer Solution (SIS) problem \cite{AjtaiLattices, LatticeTutorial}.
+
+The SIS problem is defined as follows: Given a random matrix
+$A \in \mathbb{Z}_q^{n \times m}$ (where $q$ is a modulus, $n$ is the row
+dimension, and $m$ is the column dimension, with $m > n \log q$), find a
+non-zero integer vector $\mathbf{s} \in \mathbb{Z}^m$ with small norm (i.e.,
+$s_i \in s; ||s_i|| \leq \beta$, for some bound $\beta$) such that:
+
+\[
+	A\mathbf{s} = \mathbf{0} \pmod{q}
+\]
+
+Finding such a short vector $\mathbf{s}$ is believed to be computationally
+hard for appropriate parameters.
+
+\begin{itemize}
+    \item \textbf{Binding:} The binding property relies on the SIS assumption.
+		If a prover could find two different openings (e.g., $\mathbf{s}$ and
+		$\mathbf{s}'$ where $\mathbf{s} \neq \mathbf{s}'$) for the same
+		commitment $\mathbf{t}$, such that $A\mathbf{s} = \mathbf{t} \pmod{q}$
+		and $A\mathbf{s}' = \mathbf{t} \pmod{q}$, then $A(\mathbf{s} -
+		\mathbf{s}') = \mathbf{0} \pmod{q}$. If $\mathbf{s} - \mathbf{s}'$ is
+		a short non-zero vector, this would imply a solution to the SIS
+		problem for matrix $A$.
+    \item \textbf{Hiding:} The hiding property is based on the Learning With
+		Errors (MLWE) problem or related assumptions. Informally, given $A$ and
+		$A\mathbf{s} \pmod{q}$ where $\mathbf{s}$ is short and random, it is
+		computationally difficult to recover $\mathbf{s}$. The distribution of
+		$A\mathbf{s} \pmod{q}$ is computationally indistinguishable from a
+		uniform random vector over $\mathbb{Z}_q^n$ \cite{LatticesInZKP}.
+\end{itemize}
+
+A useful feature of some Ajtai commitments is that the size of the
+commitment $\mathbf{t}$ does not grow with the dimension of the
+message $\mathbf{s}$, though the message components themselves must be
+small \cite{LatticesInZKP}.
