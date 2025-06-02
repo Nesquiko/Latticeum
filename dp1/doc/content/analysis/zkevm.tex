@@ -115,7 +115,7 @@ into step $i+1$ of the computation, along with a proof $\pi$, which proves that:
 			align=center
 		},
 		dataNode/.style={ % For s0, sn, w1, w2, wn
-			parallelogram, draw, fill=green!20,
+			rectangle, draw, fill=green!20,
 			minimum height=0.5cm, % consistent height
 			align=center,
 			inner xsep=2pt, % padding inside the node
@@ -320,3 +320,18 @@ OpenVM introduces a RISC-V ZkVM with novel "no-CPU" design. This decouples
 opcode implementation and let's developers build custom VM extensions. Using
 FRI \cite{FRI} and DEEP-ALI \cite{DEEP-ALI}. The overall proving process follows
 previous designs \cite{RISC0}, but enables aforementioned modularization \cite{OpenVM}.
+
+\subsection{Comparison}
+
+The only sensible comparison method for ZkEVMs is to benchmark them on proving
+Ethereum blocks. However, this is not doable in this analysis because of two
+reasons. First, only recently was there some effort to create standardized
+benchmarks. EthProofs \cite{EthProofs} is a portal where ZkEVM teams can
+join and be measured on the most important thing, the proving times of Ethereum
+blocks. As of writing of this work, only teams using SP1's ZkVM have their
+proving times listed. Other ZkVMs, are not participating in this, as well as
+ZkEVMs from L2s.
+
+The SP1 from Succinct is proving Ethereum blocks averages one Ethereum block proof
+in around 3 minutes, with proof sizes of around 1.48MB \cite{EthProofs}.
+
