@@ -23,21 +23,29 @@
 
 \bigskip{}
 
-Bakalárska práca skúma aplikáciu dôkazov s nulovým vedomím (ZKPs) v
-blockchainoch. Dôkazy s nulovým vedomím sú kryptografická metóda, ktorá
-umožňuje overenie dát bez odhalenia samotných dát, čo je ideálne pre bezpečné
-a súkromné aplikácie v blockchainoch. Táto práca je zameraná na návrh
-a implementáciu konceptu schémy tajných adries s použitím ZKPs. Táto schéma
-umožňuje odosielateľom vytvoriť tajnú adresu z verejných údajov príjemcu.
-Iba príjemca má kontrolu nad touto adresou, a zaroveň neodhaľuje žiadne informácie
-o tom, kto príjemca je.
+Táto práca skúma návrh a potenciálnu implementáciu riešení využívajúcich
+dôkazy s nulovým vedomím (ZKP) v rámci ekosystému Ethereum, s cieľom riešiť
+problémy škálovateľnosti a dosiahnuť post-kvantovú bezpečnosť. Dôkazy s
+nulovým vedomím sú kryptografické metódy, ktoré umožňujú overenie integrity
+výpočtov bez odhalenia citlivých dát, čo ich robí mimoriadne vhodnými pre
+zlepšenie súkromia a efektivity v blockchainových systémoch. Ústredným
+zameraním tejto práce je prieskum Zero-Knowledge Virtual Machine (ZkVM)
+prispôsobenej pre inštrukčnú sadu RISC-V, s využitím princípov kryptografie
+založenej na mriežkach. Kľúčovou aplikáciou takéhoto ZkVM by bolo dokázateľne
+spávne vykonanie Ethereum blokov cez ZkEVM.
 
-Výskum zahŕňa analýzu kryptografických princípov za ZKPs, nasledovanú
-vysvetlením návrhu schémy tajných adries a jej integráciou do blockchainu Ethereum.
+Výskum zahŕňa analýzu architektúry Ethereum, konceptu "snarkifikácie" pre
+konsenzuálnu aj exekučnú vrstvu, evolúciu a prirodzené výzvy ZkEVM (vrátane
+rekurzívnych dôkazov a skladacích schém), a preskúmanie kryptografických
+primitív založených na mriežkach, ako sú Ajtaiho záväzky, spolu so súčasnými
+systémami LaBRADOR, Greyhound a LatticeFold/LatticeFold+.
 
-Táto práca prispieva do oblasti ukázaním, ako možno využiť ZKPs v blockchaine
-na riešenie problémov súkromia, ponúkajúc riešenie vo forme konceptuálnej
-implementácie schémy tajných adries s použitím ZKPs.
+Cieľom tejto diplomovej práce je prispieť do odboru zhodnotením potenciálnej
+výkonnosti ZKP systémov postavených na kryptografii založenej na mriežkach pre
+úlohu dokazovania správneho vykonania Ethereum blokov. Práca sa ďalej snaží
+porovnať tieto nové riešenia s etablovanými klasickými ZKP prístupmi, pričom
+zachováva post-kvantovú odolnosť.
+
 
 \newpage{}\thispagestyle{empty}\medskip{}
 
@@ -66,23 +74,29 @@ implementácie schémy tajných adries s použitím ZKPs.
 
 \bigskip{}
 
-This bachelor's thesis investigates application of Zero Knowledge Proofs
-(ZKPs) in blockchains. Zero Knowledge Proofs are a cryptographic
-method which enables validation of data without revealing underlying
-data itself, making it ideal for secure and private applications in
-blockchain networks. Focus of this thesis is design and implementation
-of a proof of concept Stealth Address scheme using ZKPs. This scheme allows
-any sender to derive a stealth address from recipients public data. Only the
-recipient has control over this address, yet it does not leak any information
-about who the recipient is.
+This thesis explores the design and potential implementation of
+solutions utilizing Zero-Knowledge Proofs (ZKPs) within the Ethereum
+ecosystem, aiming to address scalability challenges and achieve post-quantum
+security. ZKPs are cryptographic methods that allow the verification of
+computational integrity without revealing sensitive data, making them
+suitable for improving privacy and efficiency in blockchain systems. The
+central focus of this work is the exploration of a Zero-Knowledge Virtual
+Machine (ZkVM) for the RISC-V instruction set, leveraging lattice-based
+cryptography. A key application of such a ZkVM would be to enable creating
+proofs of correct execution of EVM.
 
-The research includes an analysis of the cryptographic principles behind
-ZKPs, followed by an explanation of the Stealth Address scheme's design and
-its integration into a an Ethereum blockchain.
+The research includes an analysis of Ethereum's architecture, the concept of
+"snarkification" for both consensus and execution layers, the evolution and
+challenges of ZkEVMs (recursive proofs and folding schemes), and an
+examination of lattice-based cryptographic primitives, such as Ajtai
+commitments, along with contemporary systems like LaBRADOR, Greyhound, and
+LatticeFold/LatticeFold+.
 
-This thesis contributes to the field by showcasing how ZKPs can be utilized
-in blockchain to address privacy concerns, offering a solution in the form of
-a proof of concept  implementation of Stealth Address scheme using ZKPs.
+This engineer's thesis aims to contribute to the field by evaluating the
+potential performance of ZKP systems built on lattice-based cryptography for
+the task of proving the correct execution of Ethereum blocks. The work further
+seeks to compare these emerging solutions with established classical ZKP
+approaches, while maintaining post-quantum resistance.
 
 \newpage{}\thispagestyle{empty}
 
