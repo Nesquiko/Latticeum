@@ -2,11 +2,13 @@ use elf::{ElfBytes, endian::LittleEndian, file::Class};
 use std::{collections::HashMap, path::PathBuf, usize};
 use thiserror::Error;
 
-use crate::riscvm::consts::{HALF_WORD_SIZE, MAX_MEM, is_compressed};
+use crate::riscvm::consts::{MAX_MEM, WORD_SIZE};
 
+#[derive(Debug)]
 pub struct Elf {
-    pub instructions: Vec<u32>,
     pub image: HashMap<usize, u32>,
+    pub entry_point: usize,
+    pub raw_code: Box<[u8]>,
 }
 
 #[derive(Error, Debug)]
@@ -17,13 +19,11 @@ pub enum ElfLoadingError {
     ElfParse(#[from] elf::ParseError),
     #[error("elf file falidation failed, {0}")]
     ElfValidation(String),
-    #[error("failed to number to u32")]
-    EntryConvert(#[from] std::num::TryFromIntError),
 }
 
 impl Elf {
     pub fn load(path: PathBuf) -> Result<Elf, ElfLoadingError> {
-        tracing::trace!("loading program at {:?}", path);
+        tracing::trace!("loading elf program at {:?}", path);
 
         let file_data = std::fs::read(path)?;
         let slice = file_data.as_slice();
@@ -39,14 +39,14 @@ impl Elf {
             ));
         }
 
-        let entry_point: u32 = elf_file.ehdr.e_entry.try_into()?;
+        let entry_point = elf_file.ehdr.e_entry as usize;
         tracing::trace!("entry_point is 0x{:x}", entry_point);
 
-        if (entry_point as usize) % HALF_WORD_SIZE != 0 {
+        if (entry_point as usize) % WORD_SIZE != 0 {
             return Err(ElfLoadingError::ElfValidation(
                 "entry_point is not divisible by word size".to_owned(),
             ));
-        } else if entry_point == MAX_MEM {
+        } else if entry_point == MAX_MEM as usize {
             return Err(ElfLoadingError::ElfValidation(
                 "entry_point is set as max memory size".to_owned(),
             ));
@@ -61,52 +61,50 @@ impl Elf {
             }
         };
 
-        let mut instructions = vec![];
+        let mut raw_code = vec![];
         let mut image = HashMap::<usize, u32>::new(); // address to word
         let pt_load_segments = segments.iter().filter(|s| s.p_type == elf::abi::PT_LOAD);
+        let mut pt_load_segments_count = 0;
+
         for segment in pt_load_segments.into_iter() {
+            pt_load_segments_count += 1;
             let vaddr = segment.p_vaddr as usize;
             let offset = segment.p_offset as usize;
             let is_text = segment.p_flags & elf::abi::PF_X != 0;
+            tracing::trace!(
+                "parsing segment at vaddr 0x{:x}, offset 0x{:x}, is .text = {}",
+                vaddr,
+                offset,
+                is_text
+            );
 
-            let mut first_inst_half: Option<u16> = None;
-            for i in (0..segment.p_memsz as usize).step_by(HALF_WORD_SIZE) {
-                let mut addr = vaddr + i;
-
+            for i in (0..segment.p_memsz as usize).step_by(WORD_SIZE) {
                 let b0 = file_data[offset + i];
                 let b1 = file_data[offset + i + 1];
-                let half_word = u16::from_le_bytes([b0, b1]);
-                let instruction: u32;
+                let b2 = file_data[offset + i + 2];
+                let b3 = file_data[offset + i + 3];
+                let bytes = [b0, b1, b2, b3];
+                let word = u32::from_le_bytes(bytes);
 
-                if let Some(half) = first_inst_half {
-                    // the previous read was half of a 32bit instruction, join them
-                    // and create one full 32 bit one
-
-                    instruction = (half_word as u32) << 16 | half as u32;
-                    first_inst_half = None;
-                    // the whole 32 bit instruction begain
-                    // HALF_WORD_SIZE previous
-                    addr = addr - HALF_WORD_SIZE;
-                } else if is_compressed(half_word) {
-                    // process compressed instruction
-                    // TODO decompress it https://hackmd.io/@kaeteyaruyo/risc-v-rvc#Instruction-Decompression, then map opcodes and print them
-                    instruction = half_word as u32;
-                } else {
-                    // first half of a 32 bit instruction
-                    first_inst_half = Some(half_word);
-                    continue;
-                }
-
-                image.insert(addr, instruction);
+                let addr = vaddr + i;
+                image.insert(addr, word);
                 if is_text {
-                    instructions.push(instruction);
+                    raw_code.extend_from_slice(&bytes);
                 }
             }
         }
 
+        tracing::trace!(
+            "parsed {} pt_load segment, image size {} words, raw code size {} bytes",
+            pt_load_segments_count,
+            image.len(),
+            raw_code.len()
+        );
+
         Ok(Elf {
-            instructions: instructions,
-            image: image,
+            image,
+            entry_point,
+            raw_code: raw_code.into_boxed_slice(),
         })
     }
 }

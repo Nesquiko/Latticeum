@@ -141,6 +141,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
+name = "riscv-isa"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6353b6f97390cddfc8fccc0a253bc30dd10ff38b5685ec5925cc3d4d6b09c05a"
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -294,6 +300,7 @@ name = "vm"
 version = "0.1.0"
 dependencies = [
  "elf",
+ "riscv-isa",
  "thiserror",
  "tracing",
  "tracing-test",

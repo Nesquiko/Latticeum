@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 elf = "0.8.0"
+riscv-isa = "0.3.1"
 thiserror = "2.0.12"
 tracing = "0.1.41"
 tracing-test = "0.2.5"
