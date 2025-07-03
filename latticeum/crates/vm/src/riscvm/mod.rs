@@ -1,5 +1,6 @@
 mod consts;
 mod elf;
-mod instruction;
+mod inst;
+mod inst_decoder;
 mod reg;
 pub(crate) mod vm;

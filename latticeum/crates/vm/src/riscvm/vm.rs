@@ -6,7 +6,7 @@ use std::{
 use crate::riscvm::{
     consts::MAX_MEM,
     elf::{Elf, ElfLoadingError},
-    instruction::{DecodedInstruction, Decoder},
+    inst_decoder::{DecodedInstruction, Decoder},
 };
 
 pub trait VmState {}
@@ -14,7 +14,7 @@ pub trait VmState {}
 struct Uninitialized {}
 impl VmState for Uninitialized {}
 
-struct ProgramLoaded {
+pub(crate) struct ProgramLoaded {
     elf: Elf,
 }
 impl VmState for ProgramLoaded {}
@@ -71,8 +71,14 @@ impl VM<Uninitialized> {
 }
 
 impl VM<ProgramLoaded> {
-    pub fn instructions(&self) -> Vec<DecodedInstruction> {
+    fn instructions(&self) -> Vec<DecodedInstruction> {
         Decoder::decode(&self.program.elf.raw_code)
+    }
+
+    fn run(&mut self) {
+        self.instructions()
+            .iter()
+            .for_each(|inst| self.execute_step(inst.0));
     }
 }
 
@@ -174,5 +180,19 @@ mod tests {
         assert_eq!(instructions[14], (Instruction::LUI { rd: reg::X10, imm: 0x300 }, 4));
         assert_eq!(instructions[15], (Instruction::SW { rs1: reg::X10, rs2: reg::X11, offset: 4 }, 2));
         assert_eq!(instructions[16], (Instruction::JAL { rd: reg::X0, offset: 0 }, 2));
+    }
+
+    #[test]
+    #[traced_test]
+    fn run() {
+        let vm = VM::<Uninitialized>::new();
+
+        let program = PathBuf::from("samples/fibonacci");
+        let mut vm = match vm.load_elf(program) {
+            Ok(vm) => vm,
+            Err(e) => panic!("failed to loaed samples/fibonacci elf, {}", e),
+        };
+
+        vm.run();
     }
 }
