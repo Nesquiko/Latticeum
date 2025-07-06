@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 pub use riscv_isa::Instruction;
 use riscv_isa::Target;
 
@@ -9,7 +11,17 @@ pub struct Decoder<'a> {
 }
 
 /// A tuple containing a decoded RISC-V instruction and its length in bytes.
-pub type DecodedInstruction = (Instruction, usize);
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct DecodedInstruction {
+    pub inst: Instruction,
+    pub size: usize,
+}
+
+impl Display for DecodedInstruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}, size {}", self.inst, self.size)
+    }
+}
 
 impl<'a> Decoder<'a> {
     pub fn decode(bytes: &'a [u8]) -> Vec<DecodedInstruction> {
@@ -27,8 +39,8 @@ impl Iterator for Decoder<'_> {
     type Item = DecodedInstruction;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (insn, len) = riscv_isa::decode_le_bytes(self.bytes, &self.target)?;
-        self.bytes = &self.bytes[len..];
-        Some((insn, len))
+        let (inst, size) = riscv_isa::decode_le_bytes(self.bytes, &self.target)?;
+        self.bytes = &self.bytes[size..];
+        Some(DecodedInstruction { inst, size })
     }
 }

@@ -1,6 +1,6 @@
 use crate::riscvm::{
-    inst_decoder::Instruction,
-    vm::{ProgramLoaded, VM},
+    inst_decoder::{DecodedInstruction, Instruction},
+    vm::{Loaded, VM},
 };
 
 // These structs represent the common argument patterns for RISC-V instructions.
@@ -78,18 +78,36 @@ struct AmoArgs {
     aq: u32,
 }
 
-impl VM<ProgramLoaded> {
+pub(crate) struct ExectionTrace {
+    pub(crate) pc: usize,
+    pub(crate) new_pc: usize,
+}
+
+impl VM<Loaded> {
     /// Dispatches the given instruction to the appropriate handler function.
-    /// This only handles instructions from the RV32IMAC set.
-    pub fn execute_step(&mut self, inst: Instruction) {
-        match inst {
+    /// Also mutates `pc`.
+    ///
+    /// Only handles instructions from the RV32IMAC set.
+    pub(crate) fn execute_step(&mut self, inst: &DecodedInstruction) -> ExectionTrace {
+        let mut trace = ExectionTrace {
+            pc: self.pc,
+            new_pc: 0,
+        };
+
+        tracing::trace!("executing 0x{:x} - {}", self.pc, inst);
+
+        match inst.inst {
             // --- RV32I: Base Integer Instructions ---
             Instruction::LUI { rd, imm } => self.inst_lui(UTypeArgs { rd, imm }),
             Instruction::AUIPC { rd, imm } => self.inst_auipc(UTypeArgs { rd, imm }),
-            Instruction::JAL { rd, offset } => self.inst_jal(JTypeArgs { rd, offset }),
-            Instruction::JALR { rd, rs1, offset } => self.inst_jalr(JalrArgs { rd, rs1, offset }),
+            Instruction::JAL { rd, offset } => self.inst_jal(JTypeArgs { rd, offset }, inst.size),
+            Instruction::JALR { rd, rs1, offset } => {
+                self.inst_jalr(JalrArgs { rd, rs1, offset }, inst.size)
+            }
             Instruction::BEQ { rs1, rs2, offset } => self.inst_beq(BTypeArgs { rs1, rs2, offset }),
-            Instruction::BNE { rs1, rs2, offset } => self.inst_bne(BTypeArgs { rs1, rs2, offset }),
+            Instruction::BNE { rs1, rs2, offset } => {
+                self.inst_bne(BTypeArgs { rs1, rs2, offset }, inst.size)
+            }
             Instruction::BLT { rs1, rs2, offset } => self.inst_blt(BTypeArgs { rs1, rs2, offset }),
             Instruction::BGE { rs1, rs2, offset } => self.inst_bge(BTypeArgs { rs1, rs2, offset }),
             Instruction::BLTU { rs1, rs2, offset } => {
@@ -283,29 +301,76 @@ impl VM<ProgramLoaded> {
             }),
 
             _ => panic!("unsupported instruction: {:?}", inst),
-        }
-    }
+        };
 
-    // TODO implement the ones needed for fibonaci
+        if !inst.inst.branch() {
+            self.pc = self.pc.wrapping_add(inst.size);
+            tracing::trace!(
+                "non branching instruction incrementing pc 0x{:x} to 0x{:x}",
+                trace.pc,
+                self.pc
+            );
+        }
+        trace.new_pc = self.pc;
+        self.write_reg(0, 0);
+
+        trace
+    }
 
     // --- RV32I Instruction Implementations ---
     fn inst_lui(&mut self, UTypeArgs { rd, imm }: UTypeArgs) {
-        println!("LUI: rd={}, imm={}", rd, imm);
+        self.write_reg(rd, imm << 12);
     }
     fn inst_auipc(&mut self, UTypeArgs { rd, imm }: UTypeArgs) {
-        println!("AUIPC: rd={}, imm={}", rd, imm);
+        let val = TryInto::<u32>::try_into(self.pc)
+            .expect("can't convert pc to u32")
+            .wrapping_add(imm);
+        self.write_reg(rd, val);
+        tracing::trace!("\tAUIPC value 0x{:x}", val);
     }
-    fn inst_jal(&mut self, JTypeArgs { rd, offset }: JTypeArgs) {
-        println!("JAL: rd={}, offset={}", rd, offset);
+    fn inst_jal(&mut self, JTypeArgs { rd, offset }: JTypeArgs, inst_len: usize) {
+        let link = self.pc.wrapping_add(inst_len) as u32;
+        let new_pc = self.pc.wrapping_add(offset as usize);
+
+        self.write_reg(rd, link);
+        self.pc = new_pc;
+
+        tracing::trace!("\tJAL link 0x{:x}, new pc 0x{:x}", link, new_pc);
     }
-    fn inst_jalr(&mut self, JalrArgs { rd, rs1, offset }: JalrArgs) {
-        println!("JALR: rd={}, rs1={}, offset={}", rd, rs1, offset);
+    fn inst_jalr(&mut self, JalrArgs { rd, rs1, offset }: JalrArgs, inst_len: usize) {
+        let rs1_data = self.read_reg(rs1);
+        let link = self
+            .pc
+            .wrapping_add(inst_len)
+            .try_into()
+            .expect("can't convert usize to u32");
+
+        let new_pc = (rs1_data.wrapping_add(offset as u32)) & !1;
+
+        self.pc = new_pc as usize;
+        self.write_reg(rd, link);
+        tracing::trace!("\tJALR link 0x{:x}, new pc 0x{:x}", link, new_pc);
     }
     fn inst_beq(&mut self, BTypeArgs { rs1, rs2, offset }: BTypeArgs) {
         println!("BEQ: rs1={}, rs2={}, offset={}", rs1, rs2, offset);
     }
-    fn inst_bne(&mut self, BTypeArgs { rs1, rs2, offset }: BTypeArgs) {
-        println!("BNE: rs1={}, rs2={}, offset={}", rs1, rs2, offset);
+    fn inst_bne(&mut self, BTypeArgs { rs1, rs2, offset }: BTypeArgs, inst_len: usize) {
+        // if rs1 != rs2 then pc += offset else pc += inst_len
+        let rs1_data = self.read_reg(rs1);
+        let rs2_data = self.read_reg(rs2);
+        if rs1_data != rs2_data {
+            let new_pc = self.pc.wrapping_add(offset as usize);
+            tracing::trace!("\tBNE branching from pc 0x{:x} to 0x{:x}", self.pc, new_pc);
+            self.pc = new_pc;
+        } else {
+            let new_pc = self.pc.wrapping_add(inst_len);
+            tracing::trace!(
+                "\tBNE not equal, continuing pc 0x{:x} to 0x{:x}",
+                self.pc,
+                new_pc
+            );
+            self.pc = new_pc;
+        }
     }
     fn inst_blt(&mut self, BTypeArgs { rs1, rs2, offset }: BTypeArgs) {
         println!("BLT: rs1={}, rs2={}, offset={}", rs1, rs2, offset);
@@ -341,10 +406,19 @@ impl VM<ProgramLoaded> {
         println!("SH: rs1={}, rs2={}, offset={}", rs1, rs2, offset);
     }
     fn inst_sw(&mut self, STypeArgs { rs1, rs2, offset }: STypeArgs) {
-        println!("SW: rs1={}, rs2={}, offset={}", rs1, rs2, offset);
+        // M[rs1+offset] = reg[rs2]
+        let rs1_data = self.read_reg(rs1) as i32;
+        let rs2_data = self.read_reg(rs2);
+        let addr = rs1_data.wrapping_add(offset) as u32;
+        self.write_mem(addr, rs2_data);
+
+        tracing::trace!("\tSW addr 0x{:x} - value 0x{:x}", addr, rs2_data);
     }
     fn inst_addi(&mut self, ITypeArgs { rd, rs1, imm }: ITypeArgs) {
-        println!("ADDI: rd={}, rs1={}, imm={}", rd, rs1, imm);
+        let rs1_data = self.read_reg(rs1) as i32;
+        let value = rs1_data.wrapping_add(imm);
+        self.write_reg(rd, value as u32);
+        tracing::trace!("\tADDI value 0x{:x}", value);
     }
     fn inst_slti(&mut self, ITypeArgs { rd, rs1, imm }: ITypeArgs) {
         println!("SLTI: rd={}, rs1={}, imm={}", rd, rs1, imm);
@@ -371,7 +445,13 @@ impl VM<ProgramLoaded> {
         println!("SRAI: rd={}, rs1={}, shamt={}", rd, rs1, shamt);
     }
     fn inst_add(&mut self, RTypeArgs { rd, rs1, rs2 }: RTypeArgs) {
-        println!("ADD: rd={}, rs1={}, rs2={}", rd, rs1, rs2);
+        //  regs[rd] = regs[rs1] + regs[rs2]
+        let rs1_data = self.read_reg(rs1) as i32;
+        let rs2_data = self.read_reg(rs2) as i32;
+        let value = rs1_data.wrapping_add(rs2_data);
+        self.write_reg(rd, value as u32);
+
+        tracing::trace!("\tADD 0x{:x} + 0x{:x} = 0x{:x} ", rs1_data, rs2_data, value);
     }
     fn inst_sub(&mut self, RTypeArgs { rd, rs1, rs2 }: RTypeArgs) {
         println!("SUB: rd={}, rs1={}, rs2={}", rd, rs1, rs2);
