@@ -81,9 +81,9 @@ impl VM<Uninitialized> {
         let elf = Elf::load(path)?;
 
         let mut instructions = HashMap::new();
-        let mut addr = elf.entry_point;
-        let decoded_list = Decoder::decode(&elf.raw_code);
-        for inst in decoded_list {
+        let mut addr = elf.raw_code.start;
+
+        for inst in Decoder::from_le_bytes(&elf.raw_code.bytes, elf.raw_code.size) {
             let size = inst.size;
             instructions.insert(addr, inst);
             addr += size;
@@ -187,8 +187,14 @@ impl Display for VM<Loaded> {
 
         let program = &self.program.elf;
         writeln!(f, "\nProgram Information:")?;
-        writeln!(f, "  Image size: {} words", program.image.len())?;
-        writeln!(f, "  Raw code size: {} bytes", program.raw_code.len())?;
+        writeln!(f, "  Entry point: 0x{:x}", program.entry_point)?;
+        writeln!(f, "  Image size: 0x{:x} words", program.image.len())?;
+        writeln!(f, "  Raw code start: 0x{:x}", program.raw_code.start)?;
+        writeln!(
+            f,
+            "  Raw code size: 0x{:x} bytes",
+            program.raw_code.bytes.len()
+        )?;
 
         if !self.program.instructions.is_empty() {
             writeln!(f, "\nDisassembled Code:")?;
@@ -216,6 +222,7 @@ mod tests {
         reg,
         vm::{Uninitialized, VM},
     };
+    use configuration::RESULT_ADDRESS;
     use riscv_isa::Instruction;
     use std::path::PathBuf;
     use test_log::test;
@@ -232,89 +239,33 @@ mod tests {
 
         let insts = vm.program.instructions;
 
-        assert_eq!(17, insts.len());
+        assert_eq!(24, insts.len());
 
-        // init code
+        // The main code is first. Linker can reorders sections in `.text` segment.
         assert_eq!(
-            insts[&vm.program.elf.entry_point],
-            DecodedInstruction {
-                inst: Instruction::AUIPC {
-                    rd: reg::X3,
-                    imm: 0xfffff
-                },
-                size: 4
-            }
-        );
-
-        assert_eq!(
-            insts[&0x110d8],
-            DecodedInstruction {
-                inst: Instruction::ADDI {
-                    rd: reg::X3,
-                    rs1: reg::X3,
-                    imm: 1836
-                },
-                size: 4
-            }
-        );
-
-        assert_eq!(
-            insts[&0x110dc],
-            DecodedInstruction {
-                inst: Instruction::LUI {
-                    rd: reg::X2,
-                    imm: 0x300
-                },
-                size: 4
-            }
-        );
-        assert_eq!(
-            insts[&0x110e0],
-            DecodedInstruction {
-                inst: Instruction::AUIPC {
-                    rd: reg::X1,
-                    imm: 0x0
-                },
-                size: 4
-            }
-        );
-        assert_eq!(
-            insts[&0x110e4],
-            DecodedInstruction {
-                inst: Instruction::JALR {
-                    rd: reg::X1,
-                    rs1: reg::X1,
-                    offset: 8
-                },
-                size: 4
-            }
-        );
-
-        // fibonacci code
-        assert_eq!(
-            insts[&0x110e8],
-            DecodedInstruction {
-                inst: Instruction::ADDI {
-                    rd: reg::X10,
-                    rs1: reg::X0,
-                    imm: 0
-                },
-                size: 2
-            }
-        );
-        assert_eq!(
-            insts[&0x110ea],
+            insts[&vm.program.elf.raw_code.start],
             DecodedInstruction {
                 inst: Instruction::ADDI {
                     rd: reg::X11,
                     rs1: reg::X0,
-                    imm: 1
+                    imm: 0x0
                 },
                 size: 2
             }
         );
         assert_eq!(
-            insts[&0x110ec],
+            insts[&0x110d6],
+            DecodedInstruction {
+                inst: Instruction::ADDI {
+                    rd: reg::X10,
+                    rs1: reg::X0,
+                    imm: 0x1
+                },
+                size: 2
+            }
+        );
+        assert_eq!(
+            insts[&0x110d8],
             DecodedInstruction {
                 inst: Instruction::LUI {
                     rd: reg::X12,
@@ -324,7 +275,7 @@ mod tests {
             }
         );
         assert_eq!(
-            insts[&0x110ee],
+            insts[&0x110da],
             DecodedInstruction {
                 inst: Instruction::ADDI {
                     rd: reg::X12,
@@ -335,18 +286,18 @@ mod tests {
             }
         );
         assert_eq!(
-            insts[&0x110f2],
+            insts[&0x110de],
             DecodedInstruction {
                 inst: Instruction::ADD {
-                    rd: 13,
-                    rs1: 0,
-                    rs2: 11
+                    rd: reg::X13,
+                    rs1: reg::X0,
+                    rs2: reg::X10
                 },
                 size: 2
             }
         );
         assert_eq!(
-            insts[&0x110f4],
+            insts[&0x110e0],
             DecodedInstruction {
                 inst: Instruction::ADDI {
                     rd: reg::X12,
@@ -357,21 +308,21 @@ mod tests {
             }
         );
         assert_eq!(
-            insts[&0x110f6],
+            insts[&0x110e2],
             DecodedInstruction {
                 inst: Instruction::ADD {
-                    rd: reg::X11,
-                    rs1: reg::X11,
-                    rs2: reg::X10
+                    rd: reg::X10,
+                    rs1: reg::X10,
+                    rs2: reg::X11
                 },
                 size: 2
             }
         );
         assert_eq!(
-            insts[&0x110f8],
+            insts[&0x110e4],
             DecodedInstruction {
                 inst: Instruction::ADD {
-                    rd: reg::X10,
+                    rd: reg::X11,
                     rs1: reg::X0,
                     rs2: reg::X13
                 },
@@ -379,7 +330,7 @@ mod tests {
             }
         );
         assert_eq!(
-            insts[&0x110fa],
+            insts[&0x110e6],
             DecodedInstruction {
                 inst: Instruction::BNE {
                     rs1: reg::X12,
@@ -390,11 +341,65 @@ mod tests {
             }
         );
         assert_eq!(
-            insts[&0x110fc],
+            insts[&0x110e8],
+            DecodedInstruction {
+                inst: Instruction::AUIPC {
+                    rd: reg::X6,
+                    imm: 0x0
+                },
+                size: 4
+            }
+        );
+        assert_eq!(
+            insts[&0x110ec],
+            DecodedInstruction {
+                inst: Instruction::JALR {
+                    rd: reg::X0,
+                    rs1: reg::X6,
+                    offset: 42
+                },
+                size: 4
+            }
+        );
+
+        // _start function
+        assert_eq!(
+            insts[&0x110f0],
+            DecodedInstruction {
+                inst: Instruction::AUIPC {
+                    rd: reg::X3,
+                    imm: 0xfffff
+                },
+                size: 4
+            }
+        );
+        assert_eq!(
+            insts[&0x110f4],
+            DecodedInstruction {
+                inst: Instruction::ADDI {
+                    rd: reg::X3,
+                    rs1: reg::X3,
+                    imm: 1808
+                },
+                size: 4
+            }
+        );
+        assert_eq!(
+            insts[&0x110f8],
             DecodedInstruction {
                 inst: Instruction::LUI {
-                    rd: reg::X10,
-                    imm: 0xff000
+                    rd: reg::X2,
+                    imm: 0x300
+                },
+                size: 4
+            }
+        );
+        assert_eq!(
+            insts[&0x110fc],
+            DecodedInstruction {
+                inst: Instruction::AUIPC {
+                    rd: reg::X1,
+                    imm: 0
                 },
                 size: 4
             }
@@ -402,19 +407,98 @@ mod tests {
         assert_eq!(
             insts[&0x11100],
             DecodedInstruction {
-                inst: Instruction::SW {
-                    rs1: reg::X10,
-                    rs2: reg::X11,
-                    offset: 0
+                inst: Instruction::JALR {
+                    rd: reg::X1,
+                    rs1: reg::X1,
+                    offset: 8
+                },
+                size: 4
+            }
+        );
+        // rust_main function
+        assert_eq!(
+            insts[&0x11104],
+            DecodedInstruction {
+                inst: Instruction::ADDI {
+                    rd: reg::X2,
+                    rs1: reg::X2,
+                    imm: -16
                 },
                 size: 2
             }
         );
         assert_eq!(
-            insts[&0x11102],
+            insts[&0x11106],
+            DecodedInstruction {
+                inst: Instruction::SW {
+                    rs1: reg::X2,
+                    rs2: reg::X1,
+                    offset: 12
+                },
+                size: 2
+            }
+        );
+        assert_eq!(
+            insts[&0x11108],
+            DecodedInstruction {
+                inst: Instruction::AUIPC {
+                    rd: reg::X1,
+                    imm: 0
+                },
+                size: 4
+            }
+        );
+        assert_eq!(
+            insts[&0x1110c],
+            DecodedInstruction {
+                inst: Instruction::JALR {
+                    rd: reg::X1,
+                    rs1: reg::X1,
+                    offset: -52
+                },
+                size: 4
+            }
+        );
+        assert_eq!(
+            insts[&0x11110],
             DecodedInstruction {
                 inst: Instruction::JAL {
                     rd: reg::X0,
+                    offset: 0
+                },
+                size: 2
+            }
+        );
+
+        // link to the configuration crate
+        assert_eq!(
+            insts[&0x11112],
+            DecodedInstruction {
+                inst: Instruction::LUI {
+                    rd: reg::X11,
+                    imm: 0xff000
+                },
+                size: 4
+            }
+        );
+        assert_eq!(
+            insts[&0x11116],
+            DecodedInstruction {
+                inst: Instruction::SW {
+                    rs1: reg::X11,
+                    rs2: reg::X10,
+                    offset: 0
+                },
+                size: 2
+            }
+        );
+
+        assert_eq!(
+            insts[&0x11118],
+            DecodedInstruction {
+                inst: Instruction::JALR {
+                    rd: reg::X0,
+                    rs1: reg::X1,
                     offset: 0
                 },
                 size: 2
@@ -434,7 +518,7 @@ mod tests {
 
         vm.run();
 
-        let result_addr = 0xff00_0000;
+        let result_addr = RESULT_ADDRESS as usize;
         let expected_value = 0x34164a7b;
         assert!(vm.memory.contains_key(&result_addr));
         assert_eq!(vm.memory[&result_addr], expected_value);

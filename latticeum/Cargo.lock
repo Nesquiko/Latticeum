@@ -74,6 +74,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
+name = "configuration"
+version = "0.1.0"
+
+[[package]]
 name = "elf"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -98,6 +102,20 @@ dependencies = [
  "anstyle",
  "env_filter",
  "log",
+]
+
+[[package]]
+name = "fibonacci"
+version = "0.1.0"
+dependencies = [
+ "guest",
+]
+
+[[package]]
+name = "guest"
+version = "0.1.0"
+dependencies = [
+ "configuration",
 ]
 
 [[package]]
@@ -388,6 +406,7 @@ checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 name = "vm"
 version = "0.1.0"
 dependencies = [
+ "configuration",
  "elf",
  "riscv-isa",
  "test-log",
