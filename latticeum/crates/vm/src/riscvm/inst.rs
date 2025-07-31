@@ -78,7 +78,8 @@ struct AmoArgs {
     aq: u32,
 }
 
-pub(crate) struct ExectionTrace {
+#[derive(Debug)]
+pub struct ExectionTrace {
     pub(crate) pc: usize,
     pub(crate) new_pc: usize,
 }
@@ -88,7 +89,7 @@ impl VM<Loaded> {
     /// Also mutates `pc`.
     ///
     /// Only handles instructions from the RV32IMAC set.
-    pub(crate) fn execute_step(&mut self, inst: &DecodedInstruction) -> ExectionTrace {
+    pub fn execute_step(&mut self, inst: &DecodedInstruction) -> ExectionTrace {
         let mut trace = ExectionTrace {
             pc: self.pc,
             new_pc: 0,

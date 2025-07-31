@@ -8,6 +8,7 @@ use thiserror::Error;
 
 use crate::riscvm::{
     elf::{Elf, ElfLoadingError},
+    inst::ExectionTrace,
     inst_decoder::{DecodedInstruction, Decoder},
 };
 
@@ -101,12 +102,13 @@ impl VM<Uninitialized> {
 
 impl VM<Loaded> {
     /// Runs the VM's execution loop
-    pub fn run(&mut self) {
+    pub fn run(&mut self, intercept: fn(trace: &ExectionTrace)) {
         loop {
             match self.fetch_execute() {
-                Ok(ExecutionState::Continue) => {}
-                Ok(ExecutionState::Halt) => {
+                Ok((ExecutionState::Continue, trace)) => intercept(&trace),
+                Ok((ExecutionState::Halt, trace)) => {
                     tracing::info!("execution halted");
+                    intercept(&trace);
                     break;
                 }
                 Err(err) => {
@@ -118,7 +120,7 @@ impl VM<Loaded> {
     }
 
     /// Fetches instruction pointed at by `pc`, executes it and updates `pc`.
-    fn fetch_execute(&mut self) -> Result<ExecutionState, ExecutionError> {
+    fn fetch_execute(&mut self) -> Result<(ExecutionState, ExectionTrace), ExecutionError> {
         let inst = match self.program.instructions.get(&self.pc) {
             Some(inst) => inst.clone(),
             None => {
@@ -135,10 +137,10 @@ impl VM<Loaded> {
         // halt when program enters an infinite loop by jumping to itself
         if trace.pc == trace.new_pc {
             tracing::trace!("halting on instruction {} at 0x{:x}", inst, trace.pc);
-            return Ok(ExecutionState::Halt);
+            return Ok((ExecutionState::Halt, trace));
         }
 
-        Ok(ExecutionState::Continue)
+        Ok((ExecutionState::Continue, trace))
     }
 }
 
@@ -516,7 +518,7 @@ mod tests {
             Err(e) => panic!("failed to loaed samples/fibonacci elf, {}", e),
         };
 
-        vm.run();
+        vm.run(|trace| tracing::debug!("{:?}", trace));
 
         let result_addr = RESULT_ADDRESS as usize;
         let expected_value = 0x34164a7b;
