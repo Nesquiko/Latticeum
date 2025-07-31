@@ -1,5 +1,5 @@
 $R$ is the committed R1CS relation. HyperNova uses high degree
-generalization of R1CS, called CCS. CCS can be though of as R1CS
+generalization of R1CS, called CCS. [[CCS]] can be though of as R1CS
 with more matrices, e.g. $(A_1z \cdot A_2z \cdot A_3z) + (B_1z \cdot B_2z) + \ldots = 0$
 
 $R_{R1CS} = (pp, \mathbb{x}, \mathbb{w})$ such that:
