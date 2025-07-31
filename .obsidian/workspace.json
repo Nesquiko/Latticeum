@@ -1,0 +1,216 @@
+{
+  "main": {
+    "id": "f10c4c6246035532",
+    "type": "split",
+    "children": [
+      {
+        "id": "3b708595f290684e",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1e52b3b85073e0dd",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "notes/Understanding Folding.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Understanding Folding"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "c5b64e94ee85363d",
+    "type": "split",
+    "children": [
+      {
+        "id": "ccccc3d0a6950c0d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "08e6e7004f652cba",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": true
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "0c146b0620db3f41",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "IVC",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "f2c2ca645790bebc",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "2fbe489efd876078",
+    "type": "split",
+    "children": [
+      {
+        "id": "4f3dad4818b2ad1e",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e354bd585a4eeb36",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Nova.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Nova"
+            }
+          },
+          {
+            "id": "ca044c1e4adaa2ca",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Do not trust anybody.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Do not trust anybody"
+            }
+          },
+          {
+            "id": "c353f43a3ca76f15",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "82e58bbe249f948a",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Do not trust anybody.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Do not trust anybody"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 200,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false
+    }
+  },
+  "active": "08e6e7004f652cba",
+  "lastOpenFiles": [
+    "notes/Understanding Folding.md",
+    "notes/Folding Schemes.md",
+    "doc/main.aex",
+    "doc/main.w18",
+    "doc/latex-builds/pdflatex109454.fls",
+    "doc/latex-builds/pdflatex109429.fls",
+    "doc/latex-builds/pdflatex109405.fls",
+    "doc/latex-builds/pdflatex107339.fls",
+    "doc/latex-builds/pdflatex103564.fls",
+    "doc/latex-builds/pdflatex103515.fls",
+    "doc/latex-builds/pdflatex103192.fls",
+    "doc/latex-builds/pdflatex102969.fls",
+    "notes/Halo2.md",
+    "notes/HyperNova.md",
+    "notes/Lattice based crypto.md",
+    "notes/LatticeFold Presentation.md",
+    "notes/MLE - Multi-linear extension.md",
+    "notes/Nova.md",
+    "notes/Proof systems.md",
+    "notes/Spartan.md",
+    "Spartan.md",
+    "HyperNova.md",
+    "MLE - Multi-linear extension.md",
+    "mle-multi-linear-extension.md",
+    "Proof systems.md",
+    "Folding Schemes.md",
+    "LatticeFold Presentation.md",
+    "Nova.md",
+    "Lattice based crypto.md",
+    "Halo2.md",
+    "LatticeFold.md",
+    "Do not trust anybody.md",
+    "media/nova/concept-folding.png",
+    "Pasted image 20250412172338.png",
+    "folding-schemes.md",
+    "Understanding Nova.md",
+    "IVC.md",
+    "media/lattices/z_elements_mod.png",
+    "media/lattices/z_elements.png",
+    "media/latticefold/binary-chunk-tree-proved.png",
+    "media/latticefold/binary-chunk-tree.png",
+    "Pasted image 20250327073930.png"
+  ]
+}
