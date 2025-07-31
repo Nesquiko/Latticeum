@@ -80,8 +80,15 @@ struct AmoArgs {
 
 #[derive(Debug)]
 pub struct ExectionTrace {
-    pub(crate) pc: usize,
-    pub(crate) new_pc: usize,
+    pub input: ExectionSnapshot,
+    pub output: ExectionSnapshot,
+    pub instruction: DecodedInstruction,
+}
+
+#[derive(Debug)]
+pub struct ExectionSnapshot {
+    pub pc: usize,
+    pub regs: [u32; 32],
 }
 
 impl VM<Loaded> {
@@ -91,8 +98,15 @@ impl VM<Loaded> {
     /// Only handles instructions from the RV32IMAC set.
     pub fn execute_step(&mut self, inst: &DecodedInstruction) -> ExectionTrace {
         let mut trace = ExectionTrace {
-            pc: self.pc,
-            new_pc: 0,
+            input: ExectionSnapshot {
+                pc: self.pc,
+                regs: self.regs.clone(),
+            },
+            output: ExectionSnapshot {
+                pc: 0,
+                regs: [0; 32],
+            },
+            instruction: inst.clone(),
         };
 
         tracing::trace!("executing 0x{:x} - {}", self.pc, inst);
@@ -308,11 +322,12 @@ impl VM<Loaded> {
             self.pc = self.pc.wrapping_add(inst.size);
             tracing::trace!(
                 "non branching instruction incrementing pc 0x{:x} to 0x{:x}",
-                trace.pc,
+                trace.input.pc,
                 self.pc
             );
         }
-        trace.new_pc = self.pc;
+        trace.output.pc = self.pc;
+        trace.output.regs = self.regs.clone();
         self.write_reg(0, 0);
 
         trace

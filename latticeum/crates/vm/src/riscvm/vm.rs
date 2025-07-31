@@ -135,8 +135,8 @@ impl VM<Loaded> {
         let trace = self.execute_step(&inst);
 
         // halt when program enters an infinite loop by jumping to itself
-        if trace.pc == trace.new_pc {
-            tracing::trace!("halting on instruction {} at 0x{:x}", inst, trace.pc);
+        if trace.input.pc == trace.output.pc {
+            tracing::trace!("halting on instruction {} at 0x{:x}", inst, trace.input.pc);
             return Ok((ExecutionState::Halt, trace));
         }
 
@@ -252,7 +252,8 @@ mod tests {
                     rs1: reg::X0,
                     imm: 0x0
                 },
-                size: 2
+                size: 2,
+                raw_word: 0x4581
             }
         );
         assert_eq!(
@@ -263,7 +264,8 @@ mod tests {
                     rs1: reg::X0,
                     imm: 0x1
                 },
-                size: 2
+                size: 2,
+                raw_word: 0x4505
             }
         );
         assert_eq!(
@@ -273,7 +275,8 @@ mod tests {
                     rd: reg::X12,
                     imm: 0x18
                 },
-                size: 2
+                size: 2,
+                raw_word: 0x6661
             }
         );
         assert_eq!(
@@ -284,7 +287,8 @@ mod tests {
                     rs1: reg::X12,
                     imm: 1695
                 },
-                size: 4
+                size: 4,
+                raw_word: 0x69f60613
             }
         );
         assert_eq!(
@@ -295,7 +299,8 @@ mod tests {
                     rs1: reg::X0,
                     rs2: reg::X10
                 },
-                size: 2
+                size: 2,
+                raw_word: 0x86aa
             }
         );
         assert_eq!(
@@ -306,7 +311,8 @@ mod tests {
                     rs1: reg::X12,
                     imm: -1
                 },
-                size: 2
+                size: 2,
+                raw_word: 0x167d
             }
         );
         assert_eq!(
@@ -317,7 +323,8 @@ mod tests {
                     rs1: reg::X10,
                     rs2: reg::X11
                 },
-                size: 2
+                size: 2,
+                raw_word: 0x952e
             }
         );
         assert_eq!(
@@ -328,7 +335,8 @@ mod tests {
                     rs1: reg::X0,
                     rs2: reg::X13
                 },
-                size: 2
+                size: 2,
+                raw_word: 0x85b6
             }
         );
         assert_eq!(
@@ -339,7 +347,8 @@ mod tests {
                     rs2: reg::X0,
                     offset: -8
                 },
-                size: 2
+                size: 2,
+                raw_word: 0xfe65
             }
         );
         assert_eq!(
@@ -349,7 +358,8 @@ mod tests {
                     rd: reg::X6,
                     imm: 0x0
                 },
-                size: 4
+                size: 4,
+                raw_word: 0x00000317
             }
         );
         assert_eq!(
@@ -360,7 +370,8 @@ mod tests {
                     rs1: reg::X6,
                     offset: 42
                 },
-                size: 4
+                size: 4,
+                raw_word: 0x02a30067
             }
         );
 
@@ -372,7 +383,8 @@ mod tests {
                     rd: reg::X3,
                     imm: 0xfffff
                 },
-                size: 4
+                size: 4,
+                raw_word: 0xfffff197
             }
         );
         assert_eq!(
@@ -383,7 +395,8 @@ mod tests {
                     rs1: reg::X3,
                     imm: 1808
                 },
-                size: 4
+                size: 4,
+                raw_word: 0x71018193
             }
         );
         assert_eq!(
@@ -393,7 +406,8 @@ mod tests {
                     rd: reg::X2,
                     imm: 0x300
                 },
-                size: 4
+                size: 4,
+                raw_word: 0x00300137
             }
         );
         assert_eq!(
@@ -403,7 +417,8 @@ mod tests {
                     rd: reg::X1,
                     imm: 0
                 },
-                size: 4
+                size: 4,
+                raw_word: 0x00000097
             }
         );
         assert_eq!(
@@ -414,9 +429,11 @@ mod tests {
                     rs1: reg::X1,
                     offset: 8
                 },
-                size: 4
+                size: 4,
+                raw_word: 0x008080e7
             }
         );
+
         // rust_main function
         assert_eq!(
             insts[&0x11104],
@@ -426,7 +443,8 @@ mod tests {
                     rs1: reg::X2,
                     imm: -16
                 },
-                size: 2
+                size: 2,
+                raw_word: 0x1141
             }
         );
         assert_eq!(
@@ -437,7 +455,8 @@ mod tests {
                     rs2: reg::X1,
                     offset: 12
                 },
-                size: 2
+                size: 2,
+                raw_word: 0xc606
             }
         );
         assert_eq!(
@@ -447,7 +466,8 @@ mod tests {
                     rd: reg::X1,
                     imm: 0
                 },
-                size: 4
+                size: 4,
+                raw_word: 0x00000097
             }
         );
         assert_eq!(
@@ -458,7 +478,8 @@ mod tests {
                     rs1: reg::X1,
                     offset: -52
                 },
-                size: 4
+                size: 4,
+                raw_word: 0xfcc080e7
             }
         );
         assert_eq!(
@@ -468,7 +489,8 @@ mod tests {
                     rd: reg::X0,
                     offset: 0
                 },
-                size: 2
+                size: 2,
+                raw_word: 0xa001
             }
         );
 
@@ -480,7 +502,8 @@ mod tests {
                     rd: reg::X11,
                     imm: 0xff000
                 },
-                size: 4
+                size: 4,
+                raw_word: 0xff0005b7
             }
         );
         assert_eq!(
@@ -491,10 +514,10 @@ mod tests {
                     rs2: reg::X10,
                     offset: 0
                 },
-                size: 2
+                size: 2,
+                raw_word: 0xc188
             }
         );
-
         assert_eq!(
             insts[&0x11118],
             DecodedInstruction {
@@ -503,7 +526,8 @@ mod tests {
                     rs1: reg::X1,
                     offset: 0
                 },
-                size: 2
+                size: 2,
+                raw_word: 0x8082
             }
         );
     }

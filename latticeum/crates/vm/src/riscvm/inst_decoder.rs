@@ -15,9 +15,10 @@ pub struct Decoder<'a> {
     valid_size: usize,
 }
 
-/// A tuple containing a decoded RISC-V instruction and its length in bytes.
+/// A struct containing a raw word, decoded RISC-V instruction and its length in bytes.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct DecodedInstruction {
+    pub raw_word: u32,
     pub inst: Instruction,
     pub size: usize,
 }
@@ -51,7 +52,31 @@ impl Iterator for Decoder<'_> {
 
         let (inst, size) = riscv_isa::decode_le_bytes(self.bytes, &self.target)?;
         self.valid_size -= size;
+
+        let (raw_inst, _) = self
+            .bytes
+            .split_at_checked(size)
+            .expect("bytes should have enough size");
+
+        let raw_word = if size == 2 {
+            let raw: [u8; 2] = raw_inst.try_into().expect("there should be 2 elements");
+            let full_word: [u8; 4] = [raw, [0, 0]]
+                .concat()
+                .try_into()
+                .expect("there should be 2 elements in `raw`");
+            u32::from_le_bytes(full_word)
+        } else {
+            let raw: [u8; 4] = raw_inst
+                .try_into()
+                .expect("conversion to array of size 4 failed");
+            u32::from_le_bytes(raw)
+        };
+
         self.bytes = &self.bytes[size..];
-        Some(DecodedInstruction { inst, size })
+        Some(DecodedInstruction {
+            raw_word,
+            inst,
+            size,
+        })
     }
 }
