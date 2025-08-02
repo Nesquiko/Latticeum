@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-configuration = { path = "../configuration" }
+configuration = { workspace = true }
 
-elf = "0.8.0"
-riscv-isa = "0.3.1"
-test-log = { version = "0.2.18", features = ["trace"] }
-thiserror = "2.0.12"
-tracing = "0.1.41"
+elf = { workspace = true }
+riscv-isa = { workspace = true }
+test-log = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

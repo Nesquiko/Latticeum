@@ -96,7 +96,7 @@ impl VM<Loaded> {
     /// Also mutates `pc`.
     ///
     /// Only handles instructions from the RV32IMAC set.
-    pub fn execute_step(&mut self, inst: &DecodedInstruction) -> ExectionTrace {
+    pub(crate) fn execute_step(&mut self, inst: &DecodedInstruction) -> ExectionTrace {
         let mut trace = ExectionTrace {
             input: ExectionSnapshot {
                 pc: self.pc,

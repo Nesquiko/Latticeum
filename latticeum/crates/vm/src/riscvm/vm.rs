@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
 };
 
+use configuration::RESULT_ADDRESS;
 use thiserror::Error;
 
 use crate::riscvm::{
@@ -14,11 +15,11 @@ use crate::riscvm::{
 
 pub trait VmProgram {}
 
-struct Uninitialized {}
+pub struct Uninitialized {}
 
 impl VmProgram for Uninitialized {}
 
-pub(crate) struct Loaded {
+pub struct Loaded {
     elf: Elf,
     instructions: HashMap<usize, DecodedInstruction>,
 }
@@ -52,6 +53,10 @@ pub struct VM<Program: VmProgram> {
     memory: HashMap<usize, u32>,
 
     program: Program,
+}
+
+pub fn new_vm() -> VM<Uninitialized> {
+    VM::<Uninitialized>::new()
 }
 
 impl<Program: VmProgram> VM<Program> {
@@ -117,6 +122,12 @@ impl VM<Loaded> {
                 }
             }
         }
+    }
+
+    pub fn result(&self) -> u32 {
+        let result_addr = RESULT_ADDRESS as usize;
+        assert!(self.memory.contains_key(&result_addr));
+        self.memory[&result_addr]
     }
 
     /// Fetches instruction pointed at by `pc`, executes it and updates `pc`.

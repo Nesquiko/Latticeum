@@ -1,0 +1,11 @@
+[package]
+name = "zkvm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+vm = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+latticefold = { workspace = true }
+cyclotomic-rings = { workspace = true }

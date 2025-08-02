@@ -1,1 +1,1 @@
-mod riscvm;
+pub mod riscvm;

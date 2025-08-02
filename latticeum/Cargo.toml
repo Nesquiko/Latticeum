@@ -1,8 +1,28 @@
 [workspace]
 resolver = "3"
-members = [ "crates/configuration",
+members = [
+	"crates/configuration",
 	"crates/guest",
 	"crates/vm",
 	"crates/zkvm",
-	"guests/fibonacci"
+	"guests/fibonacci",
 ]
+
+[workspace.dependencies]
+vm = { path = "./crates/vm" }
+configuration = { path = "./crates/configuration" }
+
+elf = "0.8.0"
+riscv-isa = "0.3.1"
+thiserror = "2.0.12"
+
+tracing = "0.1.41"
+tracing-subscriber = "0.3.18"
+test-log = { version = "0.2.18", features = ["trace"] }
+
+latticefold = { git = "https://github.com/NethermindEth/latticefold.git", rev = "62669ab1" }
+cyclotomic-rings = { git = "https://github.com/NethermindEth/latticefold.git", rev = "62669ab1" }
+
+stark-rings = { git = "https://github.com/NethermindEth/stark-rings.git", rev = "c6b248f3bf1003e932386bc200faf3ca911a7b48" }
+stark-rings-poly = { git = "https://github.com/NethermindEth/stark-rings.git", rev = "c6b248f3bf1003e932386bc200faf3ca911a7b48" }
+stark-rings-linalg = { git = "https://github.com/NethermindEth/stark-rings.git", rev = "c6b248f3bf1003e932386bc200faf3ca911a7b48" }
