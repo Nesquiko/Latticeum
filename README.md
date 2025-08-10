@@ -2,9 +2,7 @@
 
 ## TODOs
 
-1. Prepare code for easier creation of hosts, like the `zkvm_entry` macro and so on.
-2. Write CCS for the instructions that I have
-3. Compare against https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
+1. Compare against https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
 
 A ZkVM build with lattice based cryptography.
 

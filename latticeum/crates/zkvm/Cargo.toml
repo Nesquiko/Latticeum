@@ -4,8 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+configuration = { workspace = true }
 vm = { workspace = true }
+
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+num-traits = { workspace = true }
 latticefold = { workspace = true }
 cyclotomic-rings = { workspace = true }
+stark-rings = { workspace = true }
+stark-rings-poly = { workspace = true }
+stark-rings-linalg = { workspace = true }
+ark-std = { workspace = true }

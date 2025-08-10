@@ -20,9 +20,12 @@ tracing = "0.1.41"
 tracing-subscriber = "0.3.18"
 test-log = { version = "0.2.18", features = ["trace"] }
 
-latticefold = { git = "https://github.com/NethermindEth/latticefold.git", rev = "62669ab1" }
-cyclotomic-rings = { git = "https://github.com/NethermindEth/latticefold.git", rev = "62669ab1" }
+num-traits = "0.2"
 
-stark-rings = { git = "https://github.com/NethermindEth/stark-rings.git", rev = "c6b248f3bf1003e932386bc200faf3ca911a7b48" }
-stark-rings-poly = { git = "https://github.com/NethermindEth/stark-rings.git", rev = "c6b248f3bf1003e932386bc200faf3ca911a7b48" }
-stark-rings-linalg = { git = "https://github.com/NethermindEth/stark-rings.git", rev = "c6b248f3bf1003e932386bc200faf3ca911a7b48" }
+latticefold = { git = "https://github.com/NethermindEth/latticefold.git", branch = "main" }
+cyclotomic-rings = { git = "https://github.com/NethermindEth/latticefold.git", branch = "main" }
+stark-rings = { git = "https://github.com/NethermindEth/stark-rings.git", branch = "main", default-features = false }
+stark-rings-linalg = { git = "https://github.com/NethermindEth/stark-rings.git", branch = "main", default-features = false }
+stark-rings-poly = { git = "https://github.com/NethermindEth/stark-rings.git", branch = "main", default-features = false }
+
+ark-std = "0.5.0"
