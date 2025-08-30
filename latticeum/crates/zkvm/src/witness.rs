@@ -12,7 +12,6 @@ pub struct ZVectorLayout {
     pub regs_in: Range<usize>,
 
     // instruction & decoding
-    // pub inst_word: usize,
     pub is_compressed: usize,
 
     // opcode selectors
@@ -29,6 +28,10 @@ pub struct ZVectorLayout {
     pub val_rs1: usize,
     pub val_rs2: usize,
     pub imm: usize,
+
+    // alu
+    pub has_overflown: usize,
+    pub has_branched: usize,
 
     // output State
     pub pc_out: usize,
@@ -80,6 +83,11 @@ impl ZVectorLayout {
         let val_rs2 = cursor;
         cursor += 1;
 
+        let has_overflown = cursor;
+        cursor += 1;
+        let has_branched = cursor;
+        cursor += 1;
+
         let pc_out = cursor;
         cursor += 1;
 
@@ -106,6 +114,8 @@ impl ZVectorLayout {
             is_sw,
             val_rs1,
             val_rs2,
+            has_overflown,
+            has_branched,
             pc_out,
             regs_out,
             val_rd_out,
@@ -146,6 +156,7 @@ pub fn to_witness(trace: &ExectionTrace) -> (Vec<u32>, ZVectorLayout) {
             z[Z_LAYOUT.is_jal] = 1;
             z[Z_LAYOUT.imm] = offset as u32;
             z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
+            z[Z_LAYOUT.has_branched] = trace.side_effects.has_branched as u32;
         }
         Instruction::JALR { rd, rs1, offset } => {
             z[Z_LAYOUT.is_jalr] = 1;
@@ -153,24 +164,13 @@ pub fn to_witness(trace: &ExectionTrace) -> (Vec<u32>, ZVectorLayout) {
             z[Z_LAYOUT.imm] = offset as u32;
             z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
         }
-        Instruction::BEQ { rs1, rs2, offset } => todo!(),
         Instruction::BNE { rs1, rs2, offset } => {
             z[Z_LAYOUT.is_bne] = 1;
             z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
             z[Z_LAYOUT.val_rs2] = trace.input.regs[rs2 as usize];
             z[Z_LAYOUT.imm] = offset as u32;
+            z[Z_LAYOUT.has_branched] = trace.side_effects.has_branched.into();
         }
-        Instruction::BLT { rs1, rs2, offset } => todo!(),
-        Instruction::BGE { rs1, rs2, offset } => todo!(),
-        Instruction::BLTU { rs1, rs2, offset } => todo!(),
-        Instruction::BGEU { rs1, rs2, offset } => todo!(),
-        Instruction::LB { rd, rs1, offset } => todo!(),
-        Instruction::LH { rd, rs1, offset } => todo!(),
-        Instruction::LW { rd, rs1, offset } => todo!(),
-        Instruction::LBU { rd, rs1, offset } => todo!(),
-        Instruction::LHU { rd, rs1, offset } => todo!(),
-        Instruction::SB { rs1, rs2, offset } => todo!(),
-        Instruction::SH { rs1, rs2, offset } => todo!(),
         Instruction::SW { rs1, rs2, offset } => {
             z[Z_LAYOUT.is_sw] = 1;
             z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
@@ -179,121 +179,22 @@ pub fn to_witness(trace: &ExectionTrace) -> (Vec<u32>, ZVectorLayout) {
         }
         Instruction::ADDI { rd, rs1, imm } => {
             z[Z_LAYOUT.is_addi] = 1;
+
             z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
             z[Z_LAYOUT.imm] = imm as u32;
             z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
+
+            z[Z_LAYOUT.has_overflown] = trace.side_effects.has_overflown.into();
         }
-        Instruction::SLTI { rd, rs1, imm } => todo!(),
-        Instruction::SLTIU { rd, rs1, imm } => todo!(),
-        Instruction::XORI { rd, rs1, imm } => todo!(),
-        Instruction::ORI { rd, rs1, imm } => todo!(),
-        Instruction::ANDI { rd, rs1, imm } => todo!(),
-        Instruction::SLLI { rd, rs1, shamt } => todo!(),
-        Instruction::SRLI { rd, rs1, shamt } => todo!(),
-        Instruction::SRAI { rd, rs1, shamt } => todo!(),
         Instruction::ADD { rd, rs1, rs2 } => {
             z[Z_LAYOUT.is_add] = 1;
+
             z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
             z[Z_LAYOUT.val_rs2] = trace.input.regs[rs2 as usize];
             z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
+
+            z[Z_LAYOUT.has_overflown] = trace.side_effects.has_overflown.into();
         }
-        Instruction::SUB { rd, rs1, rs2 } => todo!(),
-        Instruction::SLL { rd, rs1, rs2 } => todo!(),
-        Instruction::SLT { rd, rs1, rs2 } => todo!(),
-        Instruction::SLTU { rd, rs1, rs2 } => todo!(),
-        Instruction::XOR { rd, rs1, rs2 } => todo!(),
-        Instruction::SRL { rd, rs1, rs2 } => todo!(),
-        Instruction::SRA { rd, rs1, rs2 } => todo!(),
-        Instruction::OR { rd, rs1, rs2 } => todo!(),
-        Instruction::AND { rd, rs1, rs2 } => todo!(),
-        Instruction::FENCE { pred, succ } => todo!(),
-        Instruction::ECALL => todo!(),
-        Instruction::EBREAK => todo!(),
-        Instruction::UNIMP => todo!(),
-
-        // --- M Standard Extension ---
-        Instruction::MUL { rd, rs1, rs2 } => todo!(),
-        Instruction::MULH { rd, rs1, rs2 } => todo!(),
-        Instruction::MULHSU { rd, rs1, rs2 } => todo!(),
-        Instruction::MULHU { rd, rs1, rs2 } => todo!(),
-        Instruction::DIV { rd, rs1, rs2 } => todo!(),
-        Instruction::DIVU { rd, rs1, rs2 } => todo!(),
-        Instruction::REM { rd, rs1, rs2 } => todo!(),
-        Instruction::REMU { rd, rs1, rs2 } => todo!(),
-
-        // --- A Standard Extension ---
-        Instruction::LR_W { rd, rs1, rl, aq } => todo!(),
-        Instruction::SC_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-        Instruction::AMOSWAP_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-        Instruction::AMOADD_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-        Instruction::AMOXOR_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-        Instruction::AMOAND_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-        Instruction::AMOOR_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-        Instruction::AMOMIN_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-        Instruction::AMOMAX_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-        Instruction::AMOMINU_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-        Instruction::AMOMAXU_W {
-            rd,
-            rs1,
-            rs2,
-            rl,
-            aq,
-        } => todo!(),
-
         _ => panic!("unsupported instruction: {:?}", trace.instruction.inst),
     };
 

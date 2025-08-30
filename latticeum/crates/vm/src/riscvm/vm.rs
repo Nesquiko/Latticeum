@@ -553,7 +553,7 @@ mod tests {
             Err(e) => panic!("failed to loaed samples/fibonacci elf, {}", e),
         };
 
-        vm.run(|trace| tracing::debug!("{:?}", trace));
+        vm.run(|_| {});
 
         let result_addr = RESULT_ADDRESS as usize;
         let expected_value = 0x34164a7b;

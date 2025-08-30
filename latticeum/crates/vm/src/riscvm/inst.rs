@@ -83,12 +83,19 @@ pub struct ExectionTrace {
     pub input: ExectionSnapshot,
     pub output: ExectionSnapshot,
     pub instruction: DecodedInstruction,
+    pub side_effects: SideEffects,
 }
 
 #[derive(Debug)]
 pub struct ExectionSnapshot {
     pub pc: usize,
     pub regs: [u32; 32],
+}
+
+#[derive(Debug, Default)]
+pub struct SideEffects {
+    pub has_overflown: bool,
+    pub has_branched: bool,
 }
 
 impl VM<Loaded> {
@@ -107,6 +114,7 @@ impl VM<Loaded> {
                 regs: [0; 32],
             },
             instruction: inst.clone(),
+            side_effects: SideEffects::default(),
         };
 
         tracing::trace!("executing 0x{:x} - {}", self.pc, inst);
@@ -115,14 +123,20 @@ impl VM<Loaded> {
             // --- RV32I: Base Integer Instructions ---
             Instruction::LUI { rd, imm } => self.inst_lui(UTypeArgs { rd, imm }),
             Instruction::AUIPC { rd, imm } => self.inst_auipc(UTypeArgs { rd, imm }),
-            Instruction::JAL { rd, offset } => self.inst_jal(JTypeArgs { rd, offset }, inst.size),
-            Instruction::JALR { rd, rs1, offset } => {
-                self.inst_jalr(JalrArgs { rd, rs1, offset }, inst.size)
+            Instruction::JAL { rd, offset } => {
+                self.inst_jal(JTypeArgs { rd, offset }, inst.size, &mut trace.side_effects)
             }
+            Instruction::JALR { rd, rs1, offset } => self.inst_jalr(
+                JalrArgs { rd, rs1, offset },
+                inst.size,
+                &mut trace.side_effects,
+            ),
             Instruction::BEQ { rs1, rs2, offset } => self.inst_beq(BTypeArgs { rs1, rs2, offset }),
-            Instruction::BNE { rs1, rs2, offset } => {
-                self.inst_bne(BTypeArgs { rs1, rs2, offset }, inst.size)
-            }
+            Instruction::BNE { rs1, rs2, offset } => self.inst_bne(
+                BTypeArgs { rs1, rs2, offset },
+                inst.size,
+                &mut trace.side_effects,
+            ),
             Instruction::BLT { rs1, rs2, offset } => self.inst_blt(BTypeArgs { rs1, rs2, offset }),
             Instruction::BGE { rs1, rs2, offset } => self.inst_bge(BTypeArgs { rs1, rs2, offset }),
             Instruction::BLTU { rs1, rs2, offset } => {
@@ -139,7 +153,9 @@ impl VM<Loaded> {
             Instruction::SB { rs1, rs2, offset } => self.inst_sb(STypeArgs { rs1, rs2, offset }),
             Instruction::SH { rs1, rs2, offset } => self.inst_sh(STypeArgs { rs1, rs2, offset }),
             Instruction::SW { rs1, rs2, offset } => self.inst_sw(STypeArgs { rs1, rs2, offset }),
-            Instruction::ADDI { rd, rs1, imm } => self.inst_addi(ITypeArgs { rd, rs1, imm }),
+            Instruction::ADDI { rd, rs1, imm } => {
+                self.inst_addi(ITypeArgs { rd, rs1, imm }, &mut trace.side_effects)
+            }
             Instruction::SLTI { rd, rs1, imm } => self.inst_slti(ITypeArgs { rd, rs1, imm }),
             Instruction::SLTIU { rd, rs1, imm } => self.inst_sltiu(ITypeArgs { rd, rs1, imm }),
             Instruction::XORI { rd, rs1, imm } => self.inst_xori(ITypeArgs { rd, rs1, imm }),
@@ -148,7 +164,9 @@ impl VM<Loaded> {
             Instruction::SLLI { rd, rs1, shamt } => self.inst_slli(IShiftArgs { rd, rs1, shamt }),
             Instruction::SRLI { rd, rs1, shamt } => self.inst_srli(IShiftArgs { rd, rs1, shamt }),
             Instruction::SRAI { rd, rs1, shamt } => self.inst_srai(IShiftArgs { rd, rs1, shamt }),
-            Instruction::ADD { rd, rs1, rs2 } => self.inst_add(RTypeArgs { rd, rs1, rs2 }),
+            Instruction::ADD { rd, rs1, rs2 } => {
+                self.inst_add(RTypeArgs { rd, rs1, rs2 }, &mut trace.side_effects)
+            }
             Instruction::SUB { rd, rs1, rs2 } => self.inst_sub(RTypeArgs { rd, rs1, rs2 }),
             Instruction::SLL { rd, rs1, rs2 } => self.inst_sll(RTypeArgs { rd, rs1, rs2 }),
             Instruction::SLT { rd, rs1, rs2 } => self.inst_slt(RTypeArgs { rd, rs1, rs2 }),
@@ -344,16 +362,28 @@ impl VM<Loaded> {
         self.write_reg(rd, val);
         tracing::trace!("\tAUIPC value 0x{:x}", val);
     }
-    fn inst_jal(&mut self, JTypeArgs { rd, offset }: JTypeArgs, inst_len: usize) {
+    fn inst_jal(
+        &mut self,
+        JTypeArgs { rd, offset }: JTypeArgs,
+        inst_len: usize,
+        side_effects: &mut SideEffects,
+    ) {
         let link = self.pc.wrapping_add(inst_len) as u32;
         let new_pc = self.pc.wrapping_add(offset as usize);
 
         self.write_reg(rd, link);
         self.pc = new_pc;
+        side_effects.has_branched = true;
 
         tracing::trace!("\tJAL link 0x{:x}, new pc 0x{:x}", link, new_pc);
     }
-    fn inst_jalr(&mut self, JalrArgs { rd, rs1, offset }: JalrArgs, inst_len: usize) {
+
+    fn inst_jalr(
+        &mut self,
+        JalrArgs { rd, rs1, offset }: JalrArgs,
+        inst_len: usize,
+        side_effects: &mut SideEffects,
+    ) {
         let rs1_data = self.read_reg(rs1);
         let link = self
             .pc
@@ -365,12 +395,18 @@ impl VM<Loaded> {
 
         self.pc = new_pc as usize;
         self.write_reg(rd, link);
+        side_effects.has_branched = true;
         tracing::trace!("\tJALR link 0x{:x}, new pc 0x{:x}", link, new_pc);
     }
     fn inst_beq(&mut self, BTypeArgs { rs1, rs2, offset }: BTypeArgs) {
         println!("BEQ: rs1={}, rs2={}, offset={}", rs1, rs2, offset);
     }
-    fn inst_bne(&mut self, BTypeArgs { rs1, rs2, offset }: BTypeArgs, inst_len: usize) {
+    fn inst_bne(
+        &mut self,
+        BTypeArgs { rs1, rs2, offset }: BTypeArgs,
+        inst_len: usize,
+        side_effects: &mut SideEffects,
+    ) {
         // if rs1 != rs2 then pc += offset else pc += inst_len
         let rs1_data = self.read_reg(rs1);
         let rs2_data = self.read_reg(rs2);
@@ -378,6 +414,7 @@ impl VM<Loaded> {
             let new_pc = self.pc.wrapping_add(offset as usize);
             tracing::trace!("\tBNE branching from pc 0x{:x} to 0x{:x}", self.pc, new_pc);
             self.pc = new_pc;
+            side_effects.has_branched = true;
         } else {
             let new_pc = self.pc.wrapping_add(inst_len);
             tracing::trace!(
@@ -430,10 +467,11 @@ impl VM<Loaded> {
 
         tracing::trace!("\tSW addr 0x{:x} - value 0x{:x}", addr, rs2_data);
     }
-    fn inst_addi(&mut self, ITypeArgs { rd, rs1, imm }: ITypeArgs) {
+    fn inst_addi(&mut self, ITypeArgs { rd, rs1, imm }: ITypeArgs, side_effects: &mut SideEffects) {
         let rs1_data = self.read_reg(rs1) as i32;
-        let value = rs1_data.wrapping_add(imm);
+        let (value, has_overflown) = rs1_data.overflowing_add(imm);
         self.write_reg(rd, value as u32);
+        side_effects.has_overflown = has_overflown;
         tracing::trace!("\tADDI value 0x{:x}", value);
     }
     fn inst_slti(&mut self, ITypeArgs { rd, rs1, imm }: ITypeArgs) {
@@ -460,12 +498,13 @@ impl VM<Loaded> {
     fn inst_srai(&mut self, IShiftArgs { rd, rs1, shamt }: IShiftArgs) {
         println!("SRAI: rd={}, rs1={}, shamt={}", rd, rs1, shamt);
     }
-    fn inst_add(&mut self, RTypeArgs { rd, rs1, rs2 }: RTypeArgs) {
+    fn inst_add(&mut self, RTypeArgs { rd, rs1, rs2 }: RTypeArgs, side_effects: &mut SideEffects) {
         //  regs[rd] = regs[rs1] + regs[rs2]
-        let rs1_data = self.read_reg(rs1) as i32;
-        let rs2_data = self.read_reg(rs2) as i32;
-        let value = rs1_data.wrapping_add(rs2_data);
-        self.write_reg(rd, value as u32);
+        let rs1_data = self.read_reg(rs1);
+        let rs2_data = self.read_reg(rs2);
+        let (value, has_overflown) = rs1_data.overflowing_add(rs2_data);
+        self.write_reg(rd, value);
+        side_effects.has_overflown = has_overflown;
 
         tracing::trace!("\tADD 0x{:x} + 0x{:x} = 0x{:x} ", rs1_data, rs2_data, value);
     }

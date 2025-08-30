@@ -43,23 +43,26 @@ impl<'a> CCSBuilder<'a> {
         builder.build()
     }
 
-    /// Adds and ADD constraint: z[IS_ADD] * (z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2]) = 0
+    /// Adds an ADD constraint that handles 32-bit overflow:
+    /// z[IS_ADD] * (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2]) = 0
     pub fn add_constraint(&mut self) {
+        let last_matrix_idx = self.matrices.len();
+
         // Matrix A: selects z[IS_ADD]
         let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size);
         m_a.coeffs[ADD_CONSTR].push((Ring::one(), self.z_layout.is_add));
 
-        // Matrix B: selects (z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2])
+        // Matrix B: selects (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2])
         let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size);
-        m_b.coeffs[ADD_CONSTR].push((Ring::one(), self.z_layout.val_rd_out));
-        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.z_layout.val_rs1));
-        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.z_layout.val_rs2));
+        m_b.coeffs[ADD_CONSTR].push((Ring::from(1u64 << 32), self.z_layout.has_overflown)); // +2^32 * has_overflown
+        m_b.coeffs[ADD_CONSTR].push((Ring::one(), self.z_layout.val_rd_out)); // +val_rd_out
+        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.z_layout.val_rs1)); // -val_rs1
+        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.z_layout.val_rs2)); // -val_rs2
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
 
         // Add multiset: A * B
-        let last_matrix_idx = self.matrices.len();
         self.multisets
             .push(vec![last_matrix_idx, last_matrix_idx + 1]);
         self.coeffs.push(Ring::one());
@@ -67,7 +70,7 @@ impl<'a> CCSBuilder<'a> {
     }
 
     pub fn build(self) -> CCS<Ring> {
-        assert_eq!(
+        debug_assert_eq!(
             self.used_constraints_counter, self.m,
             "Expected {} constraints, but {} were added",
             self.used_constraints_counter, self.m
