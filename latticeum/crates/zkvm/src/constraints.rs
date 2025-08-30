@@ -38,15 +38,21 @@ impl<'a> CCSBuilder<'a> {
     }
 
     pub fn create_riscv_ccs(z_layout: &'a ZVectorLayout) -> CCS<Ring> {
-        let mut builder = Self::new(1, z_layout);
+        let total_constraints = 3;
+
+        let mut builder = Self::new(total_constraints, z_layout);
+
         builder.add_constraint();
+        builder.pc_non_branching_constraint();
+        builder.pc_branching_constraint();
+
         builder.build()
     }
 
     /// Adds an ADD constraint that handles 32-bit overflow:
     /// z[IS_ADD] * (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2]) = 0
     pub fn add_constraint(&mut self) {
-        let last_matrix_idx = self.matrices.len();
+        let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_ADD]
         let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size);
@@ -64,7 +70,57 @@ impl<'a> CCSBuilder<'a> {
 
         // Add multiset: A * B
         self.multisets
-            .push(vec![last_matrix_idx, last_matrix_idx + 1]);
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(Ring::one());
+        self.used_constraints_counter += 1;
+    }
+
+    /// Adds a PC constraint for non-branching instructions:
+    /// (1 - z[IS_BRANCHING]) * (z[PC_OUT] - z[PC_IN] - z[INST_SIZE]) = 0
+    pub fn pc_non_branching_constraint(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        // Matrix A: selects (1 - z[IS_BRANCHING])
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), self.z_layout.one_constant));
+        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.z_layout.is_branching));
+
+        // Matrix B: selects (z[PC_OUT] - z[PC_IN] - z[INSTUCTION_SIZE])
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), self.z_layout.pc_out));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.z_layout.pc_in));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.z_layout.instruction_size));
+
+        self.matrices.push(m_a);
+        self.matrices.push(m_b);
+
+        // Add multiset: A * B
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(Ring::one());
+        self.used_constraints_counter += 1;
+    }
+
+    /// Adds a PC constraint for branching instructions:
+    /// z[IS_BRANCHING] * (z[PC_OUT] - z[BRANCHED_TO]) = 0
+    pub fn pc_branching_constraint(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        // Matrix A: selects z[IS_BRANCHING]
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_a.coeffs[PC_BRANCH_CONSTR].push((Ring::one(), self.z_layout.is_branching));
+
+        // Matrix B: selects (z[PC_OUT] - z[BRANCHED_TO])
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_b.coeffs[PC_BRANCH_CONSTR].push((Ring::one(), self.z_layout.pc_out));
+        m_b.coeffs[PC_BRANCH_CONSTR].push((Ring::one().neg(), self.z_layout.branched_to));
+
+        self.matrices.push(m_a);
+        self.matrices.push(m_b);
+
+        // Add multiset: A * B
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
         self.coeffs.push(Ring::one());
         self.used_constraints_counter += 1;
     }
@@ -102,3 +158,5 @@ fn empty_sparse_matrix(m: usize, n: usize) -> SparseMatrix<GoldilocksRingNTT> {
 
 // Indices of the constraints
 const ADD_CONSTR: usize = 0;
+const PC_NON_BRANCH_CONSTR: usize = 1;
+const PC_BRANCH_CONSTR: usize = 2;

@@ -12,17 +12,21 @@ pub struct ZVectorLayout {
     pub regs_in: Range<usize>,
 
     // instruction & decoding
-    pub is_compressed: usize,
+    pub instruction_size: usize,
+    pub is_branching: usize,
+    pub branched_to: usize,
 
     // opcode selectors
     pub is_add: usize,
     pub is_addi: usize,
-    pub is_bne: usize,
-    pub is_lui: usize,
     pub is_auipc: usize,
+
+    pub is_lui: usize,
+    pub is_sw: usize,
+
+    pub is_bne: usize,
     pub is_jal: usize,
     pub is_jalr: usize,
-    pub is_sw: usize,
 
     // operands
     pub val_rs1: usize,
@@ -31,7 +35,9 @@ pub struct ZVectorLayout {
 
     // alu
     pub has_overflown: usize,
-    pub has_branched: usize,
+
+    // constants
+    pub one_constant: usize,
 
     // output State
     pub pc_out: usize,
@@ -43,7 +49,6 @@ pub struct ZVectorLayout {
 }
 
 impl ZVectorLayout {
-    // This is a compile-time function that builds the layout.
     pub const fn new() -> Self {
         let mut cursor = 0;
 
@@ -54,10 +59,13 @@ impl ZVectorLayout {
         cursor += N_REGS;
         let regs_in = regs_in_start..cursor;
 
-        // let inst_word = cursor;
-        // cursor += 1;
-        let is_compressed = cursor;
+        let instruction_size = cursor;
         cursor += 1;
+        let is_branching = cursor;
+        cursor += 1;
+        let branched_to = cursor;
+        cursor += 1;
+
         let imm = cursor;
         cursor += 1;
 
@@ -85,7 +93,8 @@ impl ZVectorLayout {
 
         let has_overflown = cursor;
         cursor += 1;
-        let has_branched = cursor;
+
+        let one_constant = cursor;
         cursor += 1;
 
         let pc_out = cursor;
@@ -101,8 +110,9 @@ impl ZVectorLayout {
         Self {
             pc_in,
             regs_in,
-            // inst_word,
-            is_compressed,
+            instruction_size,
+            is_branching,
+            branched_to,
             imm,
             is_add,
             is_addi,
@@ -115,7 +125,7 @@ impl ZVectorLayout {
             val_rs1,
             val_rs2,
             has_overflown,
-            has_branched,
+            one_constant,
             pc_out,
             regs_out,
             val_rd_out,
@@ -129,6 +139,8 @@ const Z_LAYOUT: ZVectorLayout = ZVectorLayout::new();
 pub fn to_witness(trace: &ExectionTrace) -> (Vec<u32>, ZVectorLayout) {
     let mut z = vec![0u32; Z_LAYOUT.size];
 
+    z[Z_LAYOUT.one_constant] = 1;
+
     z[Z_LAYOUT.pc_in] = trace
         .input
         .pc
@@ -138,8 +150,7 @@ pub fn to_witness(trace: &ExectionTrace) -> (Vec<u32>, ZVectorLayout) {
         z[z_idx] = trace.input.regs[i];
     }
 
-    // z[Z_LAYOUT.inst_word] = trace.instruction.raw_word;
-    z[Z_LAYOUT.is_compressed] = if trace.instruction.size == 2 { 1 } else { 0 };
+    z[Z_LAYOUT.instruction_size] = trace.instruction.size as u32;
 
     match trace.instruction.inst {
         Instruction::LUI { rd, imm } => {
@@ -156,20 +167,24 @@ pub fn to_witness(trace: &ExectionTrace) -> (Vec<u32>, ZVectorLayout) {
             z[Z_LAYOUT.is_jal] = 1;
             z[Z_LAYOUT.imm] = offset as u32;
             z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
-            z[Z_LAYOUT.has_branched] = trace.side_effects.has_branched as u32;
+            z[Z_LAYOUT.is_branching] = 1;
+            z[Z_LAYOUT.branched_to] = trace.side_effects.branched_to.expect("JAL must branch");
         }
         Instruction::JALR { rd, rs1, offset } => {
             z[Z_LAYOUT.is_jalr] = 1;
             z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
             z[Z_LAYOUT.imm] = offset as u32;
             z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
+            z[Z_LAYOUT.is_branching] = 1;
+            z[Z_LAYOUT.branched_to] = trace.side_effects.branched_to.expect("JALR must branch");
         }
         Instruction::BNE { rs1, rs2, offset } => {
             z[Z_LAYOUT.is_bne] = 1;
             z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
             z[Z_LAYOUT.val_rs2] = trace.input.regs[rs2 as usize];
             z[Z_LAYOUT.imm] = offset as u32;
-            z[Z_LAYOUT.has_branched] = trace.side_effects.has_branched.into();
+            z[Z_LAYOUT.is_branching] = 1;
+            z[Z_LAYOUT.branched_to] = trace.side_effects.branched_to.expect("BNE must branch");
         }
         Instruction::SW { rs1, rs2, offset } => {
             z[Z_LAYOUT.is_sw] = 1;

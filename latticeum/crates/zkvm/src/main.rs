@@ -34,10 +34,10 @@ fn trace_step(trace: &ExectionTrace) {
 
 fn arithmetize(trace: &ExectionTrace) -> CCS<GoldilocksRingNTT> {
     let (raw_z, z_layout) = to_witness(trace);
-    let z: Vec<GoldilocksRingNTT> = to_F_vec(raw_z.iter().map(|&x| x as usize).collect());
-    // TODO transform z let wit_acc = Witness::from_w_ccs::<DP>(rand_w_ccs);
 
     let ccs = CCSBuilder::create_riscv_ccs(&z_layout);
+
+    let z: Vec<GoldilocksRingNTT> = to_F_vec(raw_z.iter().map(|&x| x as usize).collect());
 
     #[cfg(feature = "debug")]
     {
