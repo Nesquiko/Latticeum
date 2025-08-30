@@ -160,13 +160,9 @@ impl VM<Loaded> {
         side_effects: &mut SideEffects,
     ) {
         let rs1_data = self.read_reg(rs1);
-        let link = self
-            .pc
-            .wrapping_add(inst_len)
-            .try_into()
-            .expect("can't convert usize to u32");
+        let link = self.pc.wrapping_add(inst_len) as u32;
 
-        let new_pc = (rs1_data.wrapping_add(offset as u32)) & !1;
+        let new_pc = (rs1_data.wrapping_add(offset as u32)) & !1; // clear bit 0 to enforce 2-byte alignment
 
         self.pc = new_pc as usize;
         self.write_reg(rd, link);
@@ -196,7 +192,6 @@ impl VM<Loaded> {
                 new_pc
             );
             self.pc = new_pc;
-            side_effects.branched_to = Some(new_pc as u32);
         }
     }
 

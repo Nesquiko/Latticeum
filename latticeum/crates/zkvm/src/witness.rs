@@ -183,8 +183,8 @@ pub fn to_witness(trace: &ExectionTrace) -> (Vec<u32>, ZVectorLayout) {
             z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
             z[Z_LAYOUT.val_rs2] = trace.input.regs[rs2 as usize];
             z[Z_LAYOUT.imm] = offset as u32;
-            z[Z_LAYOUT.is_branching] = 1;
-            z[Z_LAYOUT.branched_to] = trace.side_effects.branched_to.expect("BNE must branch");
+            z[Z_LAYOUT.is_branching] = trace.side_effects.branched_to.is_some().into();
+            z[Z_LAYOUT.branched_to] = trace.side_effects.branched_to.unwrap_or(0);
         }
         Instruction::SW { rs1, rs2, offset } => {
             z[Z_LAYOUT.is_sw] = 1;

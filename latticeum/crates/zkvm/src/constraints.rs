@@ -38,13 +38,16 @@ impl<'a> CCSBuilder<'a> {
     }
 
     pub fn create_riscv_ccs(z_layout: &'a ZVectorLayout) -> CCS<Ring> {
-        let total_constraints = 3;
+        let total_constraints = 5;
 
         let mut builder = Self::new(total_constraints, z_layout);
 
-        builder.add_constraint();
         builder.pc_non_branching_constraint();
-        builder.pc_branching_constraint();
+
+        builder.add_constraint();
+        builder.jal_constraint();
+        builder.jalr_constraint();
+        builder.bne_constraint();
 
         builder.build()
     }
@@ -101,19 +104,20 @@ impl<'a> CCSBuilder<'a> {
         self.used_constraints_counter += 1;
     }
 
-    /// Adds a PC constraint for branching instructions:
-    /// z[IS_BRANCHING] * (z[PC_OUT] - z[BRANCHED_TO]) = 0
-    pub fn pc_branching_constraint(&mut self) {
+    /// Adds a JAL constraint that ensures the return address is written correctly:
+    /// z[IS_JAL] * (z[VAL_RD_OUT] - (z[PC_IN] + z[INSTUCTION_SIZE])) = 0
+    pub fn jal_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
-        // Matrix A: selects z[IS_BRANCHING]
+        // Matrix A: selects z[IS_JAL]
         let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size);
-        m_a.coeffs[PC_BRANCH_CONSTR].push((Ring::one(), self.z_layout.is_branching));
+        m_a.coeffs[JAL_CONSTR].push((Ring::one(), self.z_layout.is_jal));
 
-        // Matrix B: selects (z[PC_OUT] - z[BRANCHED_TO])
+        // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTUCTION_SIZE])
         let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size);
-        m_b.coeffs[PC_BRANCH_CONSTR].push((Ring::one(), self.z_layout.pc_out));
-        m_b.coeffs[PC_BRANCH_CONSTR].push((Ring::one().neg(), self.z_layout.branched_to));
+        m_b.coeffs[JAL_CONSTR].push((Ring::one(), self.z_layout.val_rd_out));
+        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.z_layout.pc_in));
+        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.z_layout.instruction_size));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -121,6 +125,71 @@ impl<'a> CCSBuilder<'a> {
         // Add multiset: A * B
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(Ring::one());
+        self.used_constraints_counter += 1;
+    }
+
+    /// Adds a JALR constraint that ensures the return address is written correctly:
+    /// z[IS_JALR] * (z[VAL_RD_OUT] - (z[PC_IN] + z[INSTUCTION_SIZE])) = 0
+    pub fn jalr_constraint(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        // Matrix A: selects z[IS_JALR]
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_a.coeffs[JALR_CONSTR].push((Ring::one(), self.z_layout.is_jalr));
+
+        // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTUCTION_SIZE])
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_b.coeffs[JALR_CONSTR].push((Ring::one(), self.z_layout.val_rd_out));
+        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.z_layout.pc_in));
+        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.z_layout.instruction_size));
+
+        self.matrices.push(m_a);
+        self.matrices.push(m_b);
+
+        // Add multiset: A * B
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(Ring::one());
+        self.used_constraints_counter += 1;
+    }
+
+    /// Adds a BNE constraint that ensures the branch condition is correct:
+    /// z[IS_BNE] * (1 - z[IS_BRANCHING]) * (z[VAL_RS1] - z[VAL_RS2]) = 0
+    ///
+    /// This constraint ensures that:
+    /// - If is_branching = 0 (branch not taken), then rs1 - rs2 = 0, so rs1 = rs2
+    /// - If is_branching = 1 (branch taken), then rs1 - rs2 != 0 and constraint becomes 0 * (...) = 0
+    ///
+    /// Since the Goldilocks field is used and it is proving a 32-bit machine,
+    /// the rs1 - rs2 = 0 can be directly constrained.
+    pub fn bne_constraint(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        // Matrix A: selects z[IS_BNE]
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_a.coeffs[BNE_CONSTR].push((Ring::one(), self.z_layout.is_bne));
+
+        // Matrix B: selects (1 - z[IS_BRANCHING])
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_b.coeffs[BNE_CONSTR].push((Ring::one(), self.z_layout.one_constant));
+        m_b.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.z_layout.is_branching));
+
+        // Matrix C: selects (z[VAL_RS1] - z[VAL_RS2])
+        let mut m_c = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_c.coeffs[BNE_CONSTR].push((Ring::one(), self.z_layout.val_rs1));
+        m_c.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.z_layout.val_rs2));
+
+        self.matrices.push(m_a);
+        self.matrices.push(m_b);
+        self.matrices.push(m_c);
+
+        // Multiset: A * B * C = IS_BNE * (1 - IS_BRANCHING) * (RS1 - RS2)
+        self.multisets.push(vec![
+            matrix_base_idx,
+            matrix_base_idx + 1,
+            matrix_base_idx + 2,
+        ]);
         self.coeffs.push(Ring::one());
         self.used_constraints_counter += 1;
     }
@@ -159,4 +228,6 @@ fn empty_sparse_matrix(m: usize, n: usize) -> SparseMatrix<GoldilocksRingNTT> {
 // Indices of the constraints
 const ADD_CONSTR: usize = 0;
 const PC_NON_BRANCH_CONSTR: usize = 1;
-const PC_BRANCH_CONSTR: usize = 2;
+const JAL_CONSTR: usize = 2;
+const JALR_CONSTR: usize = 3;
+const BNE_CONSTR: usize = 4;
