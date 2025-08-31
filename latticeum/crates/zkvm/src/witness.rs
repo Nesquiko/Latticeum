@@ -19,10 +19,11 @@ pub struct ZVectorLayout {
     // opcode selectors
     pub is_add: usize,
     pub is_addi: usize,
-    pub is_auipc: usize,
 
-    pub is_lui: usize,
     pub is_sw: usize,
+
+    pub is_auipc: usize,
+    pub is_lui: usize,
 
     pub is_bne: usize,
     pub is_jal: usize,
@@ -162,6 +163,7 @@ pub fn to_witness(trace: &ExectionTrace) -> (Vec<u32>, ZVectorLayout) {
             z[Z_LAYOUT.is_auipc] = 1;
             z[Z_LAYOUT.imm] = imm;
             z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
+            z[Z_LAYOUT.has_overflown] = trace.side_effects.has_overflown.into();
         }
         Instruction::JAL { rd, offset } => {
             z[Z_LAYOUT.is_jal] = 1;

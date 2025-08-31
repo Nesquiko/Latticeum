@@ -85,7 +85,9 @@ impl VM<Loaded> {
         match inst.inst {
             // Implemented RV32I instructions
             Instruction::LUI { rd, imm } => self.inst_lui(UTypeArgs { rd, imm }),
-            Instruction::AUIPC { rd, imm } => self.inst_auipc(UTypeArgs { rd, imm }),
+            Instruction::AUIPC { rd, imm } => {
+                self.inst_auipc(UTypeArgs { rd, imm }, &mut trace.side_effects)
+            }
             Instruction::JAL { rd, offset } => {
                 self.inst_jal(JTypeArgs { rd, offset }, inst.size, &mut trace.side_effects)
             }
@@ -129,11 +131,12 @@ impl VM<Loaded> {
         self.write_reg(rd, imm << 12);
     }
 
-    fn inst_auipc(&mut self, UTypeArgs { rd, imm }: UTypeArgs) {
-        let val = TryInto::<u32>::try_into(self.pc)
+    fn inst_auipc(&mut self, UTypeArgs { rd, imm }: UTypeArgs, side_effects: &mut SideEffects) {
+        let (val, has_overflown) = TryInto::<u32>::try_into(self.pc)
             .expect("can't convert pc to u32")
-            .wrapping_add(imm << 12);
+            .overflowing_add(imm << 12);
         self.write_reg(rd, val);
+        side_effects.has_overflown = has_overflown;
         tracing::trace!("\tAUIPC value 0x{:x}", val);
     }
 

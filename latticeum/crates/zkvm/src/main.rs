@@ -29,7 +29,6 @@ fn main() {
 
 fn trace_step(trace: &ExectionTrace) {
     let ccs = arithmetize(trace);
-    // TODO its time for folding
 }
 
 fn arithmetize(trace: &ExectionTrace) -> CCS<GoldilocksRingNTT> {

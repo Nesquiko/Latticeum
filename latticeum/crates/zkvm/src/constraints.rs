@@ -38,7 +38,7 @@ impl<'a> CCSBuilder<'a> {
     }
 
     pub fn create_riscv_ccs(z_layout: &'a ZVectorLayout) -> CCS<Ring> {
-        let total_constraints = 5;
+        let total_constraints = 7;
 
         let mut builder = Self::new(total_constraints, z_layout);
 
@@ -48,13 +48,15 @@ impl<'a> CCSBuilder<'a> {
         builder.jal_constraint();
         builder.jalr_constraint();
         builder.bne_constraint();
+        builder.auipc_constraint();
+        builder.lui_constraint();
 
         builder.build()
     }
 
     /// Adds an ADD constraint that handles 32-bit overflow:
     /// z[IS_ADD] * (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2]) = 0
-    pub fn add_constraint(&mut self) {
+    fn add_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_ADD]
@@ -80,7 +82,7 @@ impl<'a> CCSBuilder<'a> {
 
     /// Adds a PC constraint for non-branching instructions:
     /// (1 - z[IS_BRANCHING]) * (z[PC_OUT] - z[PC_IN] - z[INST_SIZE]) = 0
-    pub fn pc_non_branching_constraint(&mut self) {
+    fn pc_non_branching_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects (1 - z[IS_BRANCHING])
@@ -106,7 +108,7 @@ impl<'a> CCSBuilder<'a> {
 
     /// Adds a JAL constraint that ensures the return address is written correctly:
     /// z[IS_JAL] * (z[VAL_RD_OUT] - (z[PC_IN] + z[INSTUCTION_SIZE])) = 0
-    pub fn jal_constraint(&mut self) {
+    fn jal_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_JAL]
@@ -131,7 +133,7 @@ impl<'a> CCSBuilder<'a> {
 
     /// Adds a JALR constraint that ensures the return address is written correctly:
     /// z[IS_JALR] * (z[VAL_RD_OUT] - (z[PC_IN] + z[INSTUCTION_SIZE])) = 0
-    pub fn jalr_constraint(&mut self) {
+    fn jalr_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_JALR]
@@ -163,7 +165,7 @@ impl<'a> CCSBuilder<'a> {
     ///
     /// Since the Goldilocks field is used and it is proving a 32-bit machine,
     /// the rs1 - rs2 = 0 can be directly constrained.
-    pub fn bne_constraint(&mut self) {
+    fn bne_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_BNE]
@@ -190,6 +192,63 @@ impl<'a> CCSBuilder<'a> {
             matrix_base_idx + 1,
             matrix_base_idx + 2,
         ]);
+        self.coeffs.push(Ring::one());
+        self.used_constraints_counter += 1;
+    }
+
+    /// Adds an AUIPC constraint that handles 32-bit overflow:
+    /// z[IS_AUIPC] * (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[PC_IN] - (z[IMM] * 2^12)) = 0
+    ///
+    /// AUIPC computes: rd = pc + (imm << 12) with 32-bit wrapping
+    /// The constraint ensures this computation is performed correctly, including overflow handling.
+    pub fn auipc_constraint(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        // Matrix A: selects z[IS_AUIPC]
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_a.coeffs[AUIPC_CONSTR].push((Ring::one(), self.z_layout.is_auipc));
+
+        // Matrix B: selects (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[PC_IN] - (z[IMM] * 2^12))
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 32), self.z_layout.has_overflown)); // +2^32 * has_overflown
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::one(), self.z_layout.val_rd_out)); // +rd_out
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::one().neg(), self.z_layout.pc_in)); // -pc_in
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 12).neg(), self.z_layout.imm)); // -(imm * 2^12)
+
+        self.matrices.push(m_a);
+        self.matrices.push(m_b);
+
+        // Multiset: A * B
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(Ring::one());
+        self.used_constraints_counter += 1;
+    }
+
+    /// Adds a LUI constraint that ensures the computation is correct:
+    /// z[IS_LUI] * (z[VAL_RD_OUT] - (z[IMM] * 2^12)) = 0
+    ///
+    /// LUI computes: rd = imm << 12 (load upper immediate)
+    /// where z[IMM] contains the unshifted immediate value
+    /// and the constraint performs the shift by multiplying by 2^12
+    fn lui_constraint(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        // Matrix A: selects z[IS_LUI]
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_a.coeffs[LUI_CONSTR].push((Ring::one(), self.z_layout.is_lui));
+
+        // Matrix B: selects (z[VAL_RD_OUT] - (z[IMM] * 2^12))
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size);
+        m_b.coeffs[LUI_CONSTR].push((Ring::one(), self.z_layout.val_rd_out)); // +rd_out
+        m_b.coeffs[LUI_CONSTR].push((Ring::from(1u64 << 12).neg(), self.z_layout.imm)); // -(imm * 2^12)
+
+        self.matrices.push(m_a);
+        self.matrices.push(m_b);
+
+        // Multiset: A * B
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
         self.coeffs.push(Ring::one());
         self.used_constraints_counter += 1;
     }
@@ -231,3 +290,5 @@ const PC_NON_BRANCH_CONSTR: usize = 1;
 const JAL_CONSTR: usize = 2;
 const JALR_CONSTR: usize = 3;
 const BNE_CONSTR: usize = 4;
+const AUIPC_CONSTR: usize = 5;
+const LUI_CONSTR: usize = 6;
