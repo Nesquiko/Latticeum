@@ -132,7 +132,7 @@ impl VM<Loaded> {
     fn inst_auipc(&mut self, UTypeArgs { rd, imm }: UTypeArgs) {
         let val = TryInto::<u32>::try_into(self.pc)
             .expect("can't convert pc to u32")
-            .wrapping_add(imm);
+            .wrapping_add(imm << 12);
         self.write_reg(rd, val);
         tracing::trace!("\tAUIPC value 0x{:x}", val);
     }
