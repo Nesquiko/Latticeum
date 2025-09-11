@@ -135,94 +135,92 @@ impl ZVectorLayout {
     }
 }
 
-const Z_LAYOUT: ZVectorLayout = ZVectorLayout::new();
+pub fn to_witness(trace: &ExectionTrace, z_layout: &ZVectorLayout) -> Vec<u32> {
+    let mut z = vec![0u32; z_layout.size];
 
-pub fn to_witness(trace: &ExectionTrace) -> (Vec<u32>, ZVectorLayout) {
-    let mut z = vec![0u32; Z_LAYOUT.size];
+    z[z_layout.one_constant] = 1;
 
-    z[Z_LAYOUT.one_constant] = 1;
-
-    z[Z_LAYOUT.pc_in] = trace
+    z[z_layout.pc_in] = trace
         .input
         .pc
         .try_into()
         .expect("can't fit input pc: usize to u32");
-    for (i, z_idx) in Z_LAYOUT.regs_in.enumerate() {
+    for (i, z_idx) in z_layout.regs_in.clone().enumerate() {
         z[z_idx] = trace.input.regs[i];
     }
 
-    z[Z_LAYOUT.instruction_size] = trace.instruction.size as u32;
+    z[z_layout.instruction_size] = trace.instruction.size as u32;
 
     match trace.instruction.inst {
         Instruction::LUI { rd, imm } => {
-            z[Z_LAYOUT.is_lui] = 1;
-            z[Z_LAYOUT.imm] = imm;
-            z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
+            z[z_layout.is_lui] = 1;
+            z[z_layout.imm] = imm;
+            z[z_layout.val_rd_out] = trace.output.regs[rd as usize];
         }
         Instruction::AUIPC { rd, imm } => {
-            z[Z_LAYOUT.is_auipc] = 1;
-            z[Z_LAYOUT.imm] = imm;
-            z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
-            z[Z_LAYOUT.has_overflown] = trace.side_effects.has_overflown.into();
+            z[z_layout.is_auipc] = 1;
+            z[z_layout.imm] = imm;
+            z[z_layout.val_rd_out] = trace.output.regs[rd as usize];
+            z[z_layout.has_overflown] = trace.side_effects.has_overflown.into();
         }
         Instruction::JAL { rd, offset } => {
-            z[Z_LAYOUT.is_jal] = 1;
-            z[Z_LAYOUT.imm] = offset as u32;
-            z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
-            z[Z_LAYOUT.is_branching] = 1;
-            z[Z_LAYOUT.branched_to] = trace.side_effects.branched_to.expect("JAL must branch");
+            z[z_layout.is_jal] = 1;
+            z[z_layout.imm] = offset as u32;
+            z[z_layout.val_rd_out] = trace.output.regs[rd as usize];
+            z[z_layout.is_branching] = 1;
+            z[z_layout.branched_to] = trace.side_effects.branched_to.expect("JAL must branch");
         }
         Instruction::JALR { rd, rs1, offset } => {
-            z[Z_LAYOUT.is_jalr] = 1;
-            z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
-            z[Z_LAYOUT.imm] = offset as u32;
-            z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
-            z[Z_LAYOUT.is_branching] = 1;
-            z[Z_LAYOUT.branched_to] = trace.side_effects.branched_to.expect("JALR must branch");
+            z[z_layout.is_jalr] = 1;
+            z[z_layout.val_rs1] = trace.input.regs[rs1 as usize];
+            z[z_layout.imm] = offset as u32;
+            z[z_layout.val_rd_out] = trace.output.regs[rd as usize];
+            z[z_layout.is_branching] = 1;
+            z[z_layout.branched_to] = trace.side_effects.branched_to.expect("JALR must branch");
         }
         Instruction::BNE { rs1, rs2, offset } => {
-            z[Z_LAYOUT.is_bne] = 1;
-            z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
-            z[Z_LAYOUT.val_rs2] = trace.input.regs[rs2 as usize];
-            z[Z_LAYOUT.imm] = offset as u32;
-            z[Z_LAYOUT.is_branching] = trace.side_effects.branched_to.is_some().into();
-            z[Z_LAYOUT.branched_to] = trace.side_effects.branched_to.unwrap_or(0);
+            z[z_layout.is_bne] = 1;
+            z[z_layout.val_rs1] = trace.input.regs[rs1 as usize];
+            z[z_layout.val_rs2] = trace.input.regs[rs2 as usize];
+            z[z_layout.imm] = offset as u32;
+            z[z_layout.is_branching] = trace.side_effects.branched_to.is_some().into();
+            z[z_layout.branched_to] = trace.side_effects.branched_to.unwrap_or(0);
         }
         Instruction::SW { rs1, rs2, offset } => {
-            z[Z_LAYOUT.is_sw] = 1;
-            z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
-            z[Z_LAYOUT.val_rs2] = trace.input.regs[rs2 as usize];
-            z[Z_LAYOUT.imm] = offset as u32;
+            z[z_layout.is_sw] = 1;
+            z[z_layout.val_rs1] = trace.input.regs[rs1 as usize];
+            z[z_layout.val_rs2] = trace.input.regs[rs2 as usize];
+            z[z_layout.imm] = offset as u32;
         }
         Instruction::ADDI { rd, rs1, imm } => {
-            z[Z_LAYOUT.is_addi] = 1;
+            z[z_layout.is_addi] = 1;
 
-            z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
-            z[Z_LAYOUT.imm] = imm as u32;
-            z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
+            z[z_layout.val_rs1] = trace.input.regs[rs1 as usize];
+            z[z_layout.imm] = imm as u32;
+            z[z_layout.val_rd_out] = trace.output.regs[rd as usize];
 
-            z[Z_LAYOUT.has_overflown] = trace.side_effects.has_overflown.into();
+            z[z_layout.has_overflown] = trace.side_effects.has_overflown.into();
         }
         Instruction::ADD { rd, rs1, rs2 } => {
-            z[Z_LAYOUT.is_add] = 1;
+            z[z_layout.is_add] = 1;
 
-            z[Z_LAYOUT.val_rs1] = trace.input.regs[rs1 as usize];
-            z[Z_LAYOUT.val_rs2] = trace.input.regs[rs2 as usize];
-            z[Z_LAYOUT.val_rd_out] = trace.output.regs[rd as usize];
+            z[z_layout.val_rs1] = trace.input.regs[rs1 as usize];
+            z[z_layout.val_rs2] = trace.input.regs[rs2 as usize];
+            z[z_layout.val_rd_out] = trace.output.regs[rd as usize];
 
-            z[Z_LAYOUT.has_overflown] = trace.side_effects.has_overflown.into();
+            z[z_layout.has_overflown] = trace.side_effects.has_overflown.into();
         }
         _ => panic!("unsupported instruction: {:?}", trace.instruction.inst),
     };
 
-    z[Z_LAYOUT.pc_out] = trace
+    z[z_layout.pc_out] = trace
         .output
         .pc
         .try_into()
         .expect("can't fit output pc: usize to u32");
-    for (i, z_idx) in Z_LAYOUT.regs_out.enumerate() {
+    for (i, z_idx) in z_layout.regs_out.clone().enumerate() {
         z[z_idx] = trace.output.regs[i];
     }
 
-    (z, Z_LAYOUT)
+    z
 }
