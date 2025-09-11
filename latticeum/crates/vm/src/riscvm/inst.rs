@@ -46,6 +46,7 @@ struct JalrArgs {
 
 #[derive(Debug)]
 pub struct ExectionTrace {
+    pub cycle: usize,
     pub input: ExectionSnapshot,
     pub output: ExectionSnapshot,
     pub instruction: DecodedInstruction,
@@ -63,11 +64,21 @@ pub struct SideEffects {
     pub has_overflown: bool,
 
     pub branched_to: Option<u32>,
+    pub memory_op: Option<MemoryOperation>,
+}
+
+#[derive(Debug, Default)]
+pub struct MemoryOperation {
+    pub cycle: usize,
+    pub address: u32,
+    pub value: u32,
+    pub is_write: bool,
 }
 
 impl VM<Loaded> {
-    pub(crate) fn execute_step(&mut self, inst: &DecodedInstruction) -> ExectionTrace {
+    pub fn execute_step(&mut self, inst: &DecodedInstruction, cycle: usize) -> ExectionTrace {
         let mut trace = ExectionTrace {
+            cycle,
             input: ExectionSnapshot {
                 pc: self.pc,
                 regs: self.regs.clone(),
@@ -101,7 +112,9 @@ impl VM<Loaded> {
                 inst.size,
                 &mut trace.side_effects,
             ),
-            Instruction::SW { rs1, rs2, offset } => self.inst_sw(STypeArgs { rs1, rs2, offset }),
+            Instruction::SW { rs1, rs2, offset } => {
+                self.inst_sw(STypeArgs { rs1, rs2, offset }, &mut trace)
+            }
             Instruction::ADDI { rd, rs1, imm } => {
                 self.inst_addi(ITypeArgs { rd, rs1, imm }, &mut trace.side_effects)
             }
@@ -198,11 +211,18 @@ impl VM<Loaded> {
         }
     }
 
-    fn inst_sw(&mut self, STypeArgs { rs1, rs2, offset }: STypeArgs) {
+    fn inst_sw(&mut self, STypeArgs { rs1, rs2, offset }: STypeArgs, trace: &mut ExectionTrace) {
         let rs1_data = self.read_reg(rs1) as i32;
         let rs2_data = self.read_reg(rs2);
         let addr = rs1_data.wrapping_add(offset) as u32;
         self.write_mem(addr, rs2_data);
+
+        trace.side_effects.memory_op = Some(MemoryOperation {
+            cycle: trace.cycle,
+            address: addr,
+            value: rs2_data,
+            is_write: true,
+        });
 
         tracing::trace!("\tSW addr 0x{:x} - value 0x{:x}", addr, rs2_data);
     }
