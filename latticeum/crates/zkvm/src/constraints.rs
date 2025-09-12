@@ -60,15 +60,15 @@ impl<'a> CCSBuilder<'a> {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_ADD]
-        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_a.coeffs[ADD_CONSTR].push((Ring::one(), 1 + self.z_layout.is_add));
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_a.coeffs[ADD_CONSTR].push((Ring::one(), self.z_layout.is_add()));
 
         // Matrix B: selects (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2])
-        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_b.coeffs[ADD_CONSTR].push((Ring::from(1u64 << 32), 1 + self.z_layout.has_overflown)); // +2^32 * has_overflown
-        m_b.coeffs[ADD_CONSTR].push((Ring::one(), 1 + self.z_layout.val_rd_out)); // +val_rd_out
-        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.val_rs1)); // -val_rs1
-        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.val_rs2)); // -val_rs2
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_b.coeffs[ADD_CONSTR].push((Ring::from(1u64 << 32), self.z_layout.has_overflown())); // +2^32 * has_overflown
+        m_b.coeffs[ADD_CONSTR].push((Ring::one(), self.z_layout.val_rd_out())); // +val_rd_out
+        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.z_layout.val_rs1())); // -val_rs1
+        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.z_layout.val_rs2())); // -val_rs2
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -86,15 +86,16 @@ impl<'a> CCSBuilder<'a> {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects (1 - z[IS_BRANCHING])
-        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size + 1);
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
         m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), 0)); // constant 1 is at index 0 in z-vector
-        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.is_branching));
+        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.z_layout.is_branching()));
 
-        // Matrix B: selects (z[PC_OUT] - z[PC_IN] - z[INSTUCTION_SIZE])
-        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), 1 + self.z_layout.pc_out));
-        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.pc_in));
-        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.instruction_size));
+        // Matrix B: selects (z[PC_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), self.z_layout.pc_out()));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.z_layout.pc_in()));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR]
+            .push((Ring::one().neg(), self.z_layout.instruction_size()));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -107,20 +108,19 @@ impl<'a> CCSBuilder<'a> {
     }
 
     /// Adds a JAL constraint that ensures the return address is written correctly:
-    /// z[IS_JAL] * (z[VAL_RD_OUT] - (z[PC_IN] + z[INSTUCTION_SIZE])) = 0
+    /// z[IS_JAL] * (z[VAL_RD_OUT] - (z[PC_IN] + z[INSTRUCTION_SIZE])) = 0
     fn jal_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_JAL]
-        // Note: z-vector structure is [x_ccs(0), 1, w_ccs(83)], so witness indices need +1 offset
-        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_a.coeffs[JAL_CONSTR].push((Ring::one(), 1 + self.z_layout.is_jal));
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_a.coeffs[JAL_CONSTR].push((Ring::one(), self.z_layout.is_jal()));
 
-        // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTUCTION_SIZE])
-        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_b.coeffs[JAL_CONSTR].push((Ring::one(), 1 + self.z_layout.val_rd_out));
-        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.pc_in));
-        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.instruction_size));
+        // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_b.coeffs[JAL_CONSTR].push((Ring::one(), self.z_layout.val_rd_out()));
+        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.z_layout.pc_in()));
+        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.z_layout.instruction_size()));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -133,19 +133,19 @@ impl<'a> CCSBuilder<'a> {
     }
 
     /// Adds a JALR constraint that ensures the return address is written correctly:
-    /// z[IS_JALR] * (z[VAL_RD_OUT] - (z[PC_IN] + z[INSTUCTION_SIZE])) = 0
+    /// z[IS_JALR] * (z[VAL_RD_OUT] - (z[PC_IN] + z[INSTRUCTION_SIZE])) = 0
     fn jalr_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_JALR]
-        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_a.coeffs[JALR_CONSTR].push((Ring::one(), 1 + self.z_layout.is_jalr));
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_a.coeffs[JALR_CONSTR].push((Ring::one(), self.z_layout.is_jalr()));
 
-        // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTUCTION_SIZE])
-        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_b.coeffs[JALR_CONSTR].push((Ring::one(), 1 + self.z_layout.val_rd_out));
-        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.pc_in));
-        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.instruction_size));
+        // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_b.coeffs[JALR_CONSTR].push((Ring::one(), self.z_layout.val_rd_out()));
+        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.z_layout.pc_in()));
+        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.z_layout.instruction_size()));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -170,18 +170,18 @@ impl<'a> CCSBuilder<'a> {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_BNE]
-        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_a.coeffs[BNE_CONSTR].push((Ring::one(), 1 + self.z_layout.is_bne));
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_a.coeffs[BNE_CONSTR].push((Ring::one(), self.z_layout.is_bne()));
 
         // Matrix B: selects (1 - z[IS_BRANCHING])
-        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_b.coeffs[BNE_CONSTR].push((Ring::one(), 0)); // constant 1 is at index 0 in z-vector
-        m_b.coeffs[BNE_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.is_branching));
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_b.coeffs[BNE_CONSTR].push((Ring::one(), 0)); // constant 1 is at() index 0() in z-vector
+        m_b.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.z_layout.is_branching()));
 
         // Matrix C: selects (z[VAL_RS1] - z[VAL_RS2])
-        let mut m_c = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_c.coeffs[BNE_CONSTR].push((Ring::one(), 1 + self.z_layout.val_rs1));
-        m_c.coeffs[BNE_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.val_rs2));
+        let mut m_c = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_c.coeffs[BNE_CONSTR].push((Ring::one(), self.z_layout.val_rs1()));
+        m_c.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.z_layout.val_rs2()));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -206,15 +206,15 @@ impl<'a> CCSBuilder<'a> {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_AUIPC]
-        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_a.coeffs[AUIPC_CONSTR].push((Ring::one(), 1 + self.z_layout.is_auipc));
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_a.coeffs[AUIPC_CONSTR].push((Ring::one(), self.z_layout.is_auipc()));
 
         // Matrix B: selects (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[PC_IN] - (z[IMM] * 2^12))
-        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 32), 1 + self.z_layout.has_overflown)); // +2^32 * has_overflown
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::one(), 1 + self.z_layout.val_rd_out)); // +rd_out
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::one().neg(), 1 + self.z_layout.pc_in)); // -pc_in
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 12).neg(), 1 + self.z_layout.imm)); // -(imm * 2^12)
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 32), self.z_layout.has_overflown())); // +2^32 * has_overflown
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::one(), self.z_layout.val_rd_out())); // +rd_out
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::one().neg(), self.z_layout.pc_in())); // -pc_in
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 12).neg(), self.z_layout.imm())); // -(imm * 2^12)
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -236,13 +236,13 @@ impl<'a> CCSBuilder<'a> {
         let matrix_base_idx = self.matrices.len();
 
         // Matrix A: selects z[IS_LUI]
-        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_a.coeffs[LUI_CONSTR].push((Ring::one(), 1 + self.z_layout.is_lui));
+        let mut m_a = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_a.coeffs[LUI_CONSTR].push((Ring::one(), self.z_layout.is_lui()));
 
         // Matrix B: selects (z[VAL_RD_OUT] - (z[IMM] * 2^12))
-        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.size + 1);
-        m_b.coeffs[LUI_CONSTR].push((Ring::one(), 1 + self.z_layout.val_rd_out)); // +rd_out
-        m_b.coeffs[LUI_CONSTR].push((Ring::from(1u64 << 12).neg(), 1 + self.z_layout.imm)); // -(imm * 2^12)
+        let mut m_b = empty_sparse_matrix(self.m, self.z_layout.z_vector_size());
+        m_b.coeffs[LUI_CONSTR].push((Ring::one(), self.z_layout.val_rd_out())); // +rd_out
+        m_b.coeffs[LUI_CONSTR].push((Ring::from(1u64 << 12).neg(), self.z_layout.imm())); // -(imm * 2^12)
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -265,7 +265,7 @@ impl<'a> CCSBuilder<'a> {
 
         let mut ccs = CCS::<Ring> {
             m: self.m,
-            n: self.z_layout.size + 1, // z-vector structure: [x_ccs(0), 1, w_ccs(z_layout.size)] = z_layout.size + 1 total
+            n: self.z_layout.z_vector_size(), // z-vector structure: [x_ccs(0), 1, w_ccs(z_layout.size)] = z_layout.size + 1 total
             l: 0,
             t: self.matrices.len(),
             q: self.multisets.len(),
@@ -282,7 +282,8 @@ impl<'a> CCSBuilder<'a> {
         // With our values: n=z_layout.size+1, l=0, L=1, m=original_m
         // This gives: len = max(z_layout.size, original_m).next_power_of_two()
         // So we need to set our dimensions to match this expected padding
-        let latticefold_padded_size = usize::max((ccs.n - ccs.l - 1) * 1, self.m).next_power_of_two();
+        let latticefold_padded_size =
+            usize::max((ccs.n - ccs.l - 1) * 1, self.m).next_power_of_two();
 
         ccs.m = latticefold_padded_size;
         ccs.s = log2(latticefold_padded_size) as usize;

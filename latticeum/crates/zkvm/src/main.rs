@@ -22,7 +22,7 @@ use crate::{
 
 const Z_LAYOUT: ZVectorLayout = ZVectorLayout::new();
 const C: usize = 4;
-const W: usize = Z_LAYOUT.size; // Match the actual witness size from ZVectorLayout
+const W: usize = Z_LAYOUT.w_size;
 
 fn main() {
     tracing_subscriber::fmt::init();
@@ -70,34 +70,9 @@ fn initialize_accumulator<const C: usize, const W: usize>(
     // The z-vector structure is [x_ccs(0), 1, w_ccs(z_layout.size)] = z_layout.size + 1 total
     // So the private witness (w_ccs) should be z_layout.size elements
     let dummy_w_ccs = vec![GoldilocksRingNTT::zero(); ccs.n - ccs.l - 1];
-    tracing::info!(
-        "Creating witness with w_ccs.len={}, ccs.n={}, ccs.l={}",
-        dummy_w_ccs.len(),
-        ccs.n,
-        ccs.l
-    );
+    debug_assert_eq!(ccs.n - ccs.l - 1, Z_LAYOUT.w_size);
 
     let dummy_wit = Witness::from_w_ccs::<GoldiLocksDP>(dummy_w_ccs.clone());
-    tracing::info!("CCS: m={}, n={}, l={}, t={}", ccs.m, ccs.n, ccs.l, ccs.t);
-    tracing::info!(
-        "Z_LAYOUT.size={}, dummy_w_ccs.len={}",
-        Z_LAYOUT.size,
-        ccs.n - ccs.l
-    );
-
-    // Let's manually calculate the expected size
-    let expected_size =
-        1 + 32 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 32 + 1;
-    tracing::info!(
-        "Expected Z_LAYOUT.size: {}, actual: {}",
-        expected_size,
-        Z_LAYOUT.size
-    );
-
-    // Debug the witness creation
-    tracing::info!("dummy_w_ccs input length: {}", dummy_w_ccs.len());
-    // Let's check what the witness looks like after creation
-    tracing::info!("dummy_wit created, checking its internal structure...");
     let dummy_x_ccs = vec![GoldilocksRingNTT::zero(); ccs.l];
 
     let dummy_cm_i = CCCS {
