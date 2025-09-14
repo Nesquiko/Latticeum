@@ -7,11 +7,14 @@ use latticefold::{
     arith::{Arith, CCCS, CCS, LCCCS, Witness, r1cs::to_F_vec},
     commitment::AjtaiCommitmentScheme,
     decomposition_parameters::DecompositionParams,
-    nifs::linearization::{LFLinearizationProver, LinearizationProver},
+    nifs::{
+        NIFSProver,
+        linearization::{LFLinearizationProver, LinearizationProver},
+    },
     transcript::poseidon::PoseidonTranscript,
 };
 use num_traits::identities::Zero;
-use std::{path::PathBuf, usize};
+use std::{path::PathBuf, sync::atomic::AtomicU64, usize};
 
 use vm::riscvm::{
     inst::{ExectionTrace, MemoryOperation},
@@ -44,7 +47,9 @@ fn main() {
     tracing_subscriber::fmt::init();
 
     let vm = new_vm();
-    let program = PathBuf::from("/home/nesquiko/fiit/dp/latticeum/crates/vm/samples/fibonacci");
+    let program = PathBuf::from(
+        "/home/nesquiko/fiit/dp/latticeum/target/riscv32imac-unknown-none-elf/release/fibonacci",
+    );
     let mut vm = match vm.load_elf(program) {
         Ok(vm) => vm,
         Err(e) => panic!("failed to load samples/fibonacci elf, {}", e),
@@ -61,22 +66,42 @@ fn main() {
 
     let (mut acc, mut w_acc) = initialize_accumulator(&ccs, &CCS_LAYOUT, &scheme);
 
+    let start_vm_run = std::time::Instant::now();
+
     vm.run(|trace| {
-        trace_step(trace, &CCS_LAYOUT, &ccs, &scheme);
+        let (cm_i, w_i) = arithmetize(trace, &CCS_LAYOUT, &ccs, &scheme);
+
+        let mut prover_transcript =
+            PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
+
+        let (folded_acc, folded_w_acc, _proof) = NIFSProver::<
+            C,
+            W,
+            GoldilocksRingNTT,
+            GoldiLocksDP,
+            PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
+        >::prove(
+            &acc,
+            &w_acc,
+            &cm_i,
+            &w_i,
+            &mut prover_transcript,
+            &ccs,
+            &scheme,
+        )
+        .expect("NIFS proving failed for a step");
+
+        // D. Update the state for the next iteration.
+        // acc = folded_acc;
+        // w_acc = folded_w_acc;
     });
 
-    let expected_value = 0x34164a7b;
-    println!("expected: 0x{:x}, got 0x{:x}", expected_value, vm.result());
+    let expected_value = 0xc594bfc3;
+    tracing::info!("expected: 0x{:x}, got 0x{:x}", expected_value, vm.result());
     assert_eq!(expected_value, vm.result());
-}
 
-fn trace_step(
-    trace: &ExectionTrace,
-    layout: &CCSLayout,
-    ccs: &CCS<GoldilocksRingNTT>,
-    scheme: &AjtaiCommitmentScheme<C, W, GoldilocksRingNTT>,
-) {
-    arithmetize(trace, layout, ccs, scheme);
+    let vm_run_time = start_vm_run.elapsed();
+    tracing::info!("ZkVM execution completed: {:?}", vm_run_time,);
 }
 
 fn arithmetize(
@@ -85,6 +110,8 @@ fn arithmetize(
     ccs: &CCS<GoldilocksRingNTT>,
     scheme: &AjtaiCommitmentScheme<C, W, GoldilocksRingNTT>,
 ) -> (CCCS<C, GoldilocksRingNTT>, Witness<GoldilocksRingNTT>) {
+    let start_witness_creation = std::time::Instant::now();
+
     let raw_z = to_witness(trace, layout);
     // convert raw z to proper z-vector structure: [x_ccs, 1, w_ccs]
     let mut z_vec = Vec::new();
@@ -107,11 +134,27 @@ fn arithmetize(
     // 3. create the Witness struct
     let wit = Witness::from_w_ccs::<GoldiLocksDP>(w_ccs);
 
-    // // 4. create the CCCS (Committed CCS) instance.
+    tracing::debug!(
+        "witness creation: {:?} (size: {} elements)",
+        start_witness_creation.elapsed(),
+        layout.w_size
+    );
+
+    // 4. create the CCCS (Committed CCS) instance.
+    let start_commitment = std::time::Instant::now();
     let cm = wit
         .commit::<C, W, GoldiLocksDP>(scheme)
         .expect("failed to commit");
     let cccs_instance = CCCS { cm, x_ccs };
+
+    tracing::debug!(
+        "commitment: {:?} (C={}, W={}, B={}, L={})",
+        start_commitment.elapsed(),
+        C,
+        W,
+        GoldiLocksDP::B,
+        GoldiLocksDP::L
+    );
 
     #[cfg(feature = "debug")]
     check_relation_debug(&ccs, &z_as_ring, trace);
