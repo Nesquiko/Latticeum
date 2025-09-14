@@ -107,14 +107,14 @@ impl VM<Uninitialized> {
 
 impl VM<Loaded> {
     /// Runs the VM's execution loop
-    pub fn run(&mut self, intercept: impl Fn(&ExectionTrace) -> ()) {
+    pub fn run(&mut self, intercept: impl Fn(ExectionTrace) -> ()) {
         let mut cycle: usize = 0;
         loop {
             match self.fetch_execute(cycle) {
-                Ok((ExecutionState::Continue, trace)) => intercept(&trace),
+                Ok((ExecutionState::Continue, trace)) => intercept(trace),
                 Ok((ExecutionState::Halt, trace)) => {
                     tracing::info!("execution halted");
-                    intercept(&trace);
+                    intercept(trace);
                     break;
                 }
                 Err(err) => {

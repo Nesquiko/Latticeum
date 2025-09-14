@@ -8,33 +8,30 @@ use latticefold::{
     commitment::AjtaiCommitmentScheme,
     decomposition_parameters::DecompositionParams,
     nifs::{
-        NIFSProver,
+        NIFSProver, NIFSVerifier,
         linearization::{LFLinearizationProver, LinearizationProver},
     },
     transcript::poseidon::PoseidonTranscript,
 };
 use num_traits::identities::Zero;
-use std::{path::PathBuf, sync::atomic::AtomicU64, usize};
+use std::{path::PathBuf, sync::Mutex, usize};
 
-use vm::riscvm::{
-    inst::{ExectionTrace, MemoryOperation},
-    riscv_isa::Instruction,
-    vm::new_vm,
-};
+use vm::riscvm::{inst::ExectionTrace, riscv_isa::Instruction, vm::new_vm};
 
 use crate::{ccs::CCSLayout, constraints::CCSBuilder};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
 
+// Default params from latticefold examples
 impl DecompositionParams for GoldiLocksDP {
-    const B: u128 = 1 << 32;
+    const B: u128 = 1 << 15;
     /// Ring modulus is GoldiLocks (little less than 2^64), thus GoldiLocks modulus < B^L
-    const L: usize = 2;
+    const L: usize = 5;
     /// Standard binary decomposition
     const B_SMALL: usize = 2;
-    /// Log(B) (base 2 log)
-    const K: usize = 32;
+    /// log₂(B)
+    const K: usize = 15;
 }
 
 const CCS_LAYOUT: CCSLayout = CCSLayout::new();
@@ -46,35 +43,53 @@ const W: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 fn main() {
     tracing_subscriber::fmt::init();
 
+    tracing::info!(
+        "Starting zkVM with decomposition params: B={}, L={}, B_SMALL={}, K={}",
+        GoldiLocksDP::B,
+        GoldiLocksDP::L,
+        GoldiLocksDP::B_SMALL,
+        GoldiLocksDP::K
+    );
+
     let vm = new_vm();
     let program = PathBuf::from(
         "/home/nesquiko/fiit/dp/latticeum/target/riscv32imac-unknown-none-elf/release/fibonacci",
     );
     let mut vm = match vm.load_elf(program) {
         Ok(vm) => vm,
-        Err(e) => panic!("failed to load samples/fibonacci elf, {}", e),
+        Err(e) => panic!("failed to load `fibonacci` elf, {}", e),
     };
 
     // Define the universal CCS for a single RISC-V step.
     let ccs = CCSBuilder::create_riscv_ccs::<W>(&CCS_LAYOUT);
 
     // Create the Ajtai commitment scheme.
-    // The constants C and W need to be defined based on your CCS and witness size.
     let mut rng = ark_std::test_rng();
     let scheme: AjtaiCommitmentScheme<C, W, GoldilocksRingNTT> =
         AjtaiCommitmentScheme::rand(&mut rng);
 
+    tracing::info!("initializing accumulator...");
     let (mut acc, mut w_acc) = initialize_accumulator(&ccs, &CCS_LAYOUT, &scheme);
+    tracing::info!("accumulator initialized, starting VM execution...");
 
     let start_vm_run = std::time::Instant::now();
 
+    // collect all traces first, then process them
+    let traces = Mutex::new(Vec::new());
     vm.run(|trace| {
+        traces.lock().unwrap().push(trace);
+    });
+    let traces = traces.into_inner().unwrap();
+    let step_count = traces.len() as u32;
+
+    // process each trace and fold into accumulator
+    for trace in &traces {
         let (cm_i, w_i) = arithmetize(trace, &CCS_LAYOUT, &ccs, &scheme);
 
         let mut prover_transcript =
             PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
 
-        let (folded_acc, folded_w_acc, _proof) = NIFSProver::<
+        let (folded_acc, folded_w_acc, _) = NIFSProver::<
             C,
             W,
             GoldilocksRingNTT,
@@ -91,17 +106,89 @@ fn main() {
         )
         .expect("NIFS proving failed for a step");
 
-        // D. Update the state for the next iteration.
-        // acc = folded_acc;
-        // w_acc = folded_w_acc;
-    });
+        acc = folded_acc;
+        w_acc = folded_w_acc;
+    }
+
+    let vm_run_time = start_vm_run.elapsed();
+    tracing::info!(
+        "VM execution completed: {:?} ({} steps, avg {:?}/step)",
+        vm_run_time,
+        step_count,
+        vm_run_time / step_count
+    );
 
     let expected_value = 0xc594bfc3;
     tracing::info!("expected: 0x{:x}, got 0x{:x}", expected_value, vm.result());
     assert_eq!(expected_value, vm.result());
 
-    let vm_run_time = start_vm_run.elapsed();
-    tracing::info!("ZkVM execution completed: {:?}", vm_run_time,);
+    tracing::info!("generating final folding proof...");
+    let start_final_proof = std::time::Instant::now();
+
+    // create a dummy CCCS instance to fold with the final accumulator
+    // This demonstrates the final proof generation similar to goldilocks.rs
+    let zero_w_ccs = vec![GoldilocksRingNTT::zero(); CCS_LAYOUT.w_size];
+    let dummy_wit = Witness::from_w_ccs::<GoldiLocksDP>(zero_w_ccs);
+    let dummy_cm = CCCS {
+        cm: dummy_wit
+            .commit::<C, W, GoldiLocksDP>(&scheme)
+            .expect("failed to commit dummy witness"),
+        x_ccs: vec![GoldilocksRingNTT::zero(); ccs.l],
+    };
+
+    let mut final_prover_transcript =
+        PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
+    let mut final_verifier_transcript =
+        PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
+
+    let (_final_acc, _final_wit, final_proof) = NIFSProver::<
+        C,
+        W,
+        GoldilocksRingNTT,
+        GoldiLocksDP,
+        PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
+    >::prove(
+        &acc,
+        &w_acc,
+        &dummy_cm,
+        &dummy_wit,
+        &mut final_prover_transcript,
+        &ccs,
+        &scheme,
+    )
+    .expect("Final NIFS proving failed");
+
+    let final_proof_time = start_final_proof.elapsed();
+    tracing::info!("final proof generated: {:?}", final_proof_time);
+
+    tracing::info!("verifying final proof...");
+    let start_verification = std::time::Instant::now();
+
+    NIFSVerifier::<
+        C,
+        GoldilocksRingNTT,
+        GoldiLocksDP,
+        PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
+    >::verify(
+        &acc,
+        &dummy_cm,
+        &final_proof,
+        &mut final_verifier_transcript,
+        &ccs,
+    )
+    .expect("Final proof verification failed");
+
+    let verification_time = start_verification.elapsed();
+    tracing::info!("final proof verified: {:?}", verification_time);
+
+    tracing::info!(
+        "zkVM execution summary: {} steps in {:?} (avg {:?}/step), proof: {:?}, verify: {:?}",
+        step_count,
+        vm_run_time,
+        vm_run_time / step_count.max(1),
+        final_proof_time,
+        verification_time
+    );
 }
 
 fn arithmetize(
