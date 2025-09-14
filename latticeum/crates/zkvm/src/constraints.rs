@@ -20,27 +20,21 @@ pub struct CCSBuilder<'a> {
     multisets: Vec<Vec<usize>>,
     /// vector of coefficients to be used in constraint (otherwise known as `c`)
     coeffs: Vec<Ring>,
-    /// used to perform final check that the predefined number of constraints
-    /// is how much of them were used
-    used_constraints_counter: usize,
 }
 
 impl<'a> CCSBuilder<'a> {
-    fn new(m: usize, z_layout: &'a ZVectorLayout) -> Self {
+    fn new<const W: usize>(z_layout: &'a ZVectorLayout) -> Self {
         Self {
-            m,
+            m: W,
             z_layout,
             matrices: Vec::new(),
             multisets: Vec::new(),
             coeffs: Vec::new(),
-            used_constraints_counter: 0,
         }
     }
 
-    pub fn create_riscv_ccs(z_layout: &'a ZVectorLayout) -> CCS<Ring> {
-        let total_constraints = 7;
-
-        let mut builder = Self::new(total_constraints, z_layout);
+    pub fn create_riscv_ccs<const W: usize>(z_layout: &'a ZVectorLayout) -> CCS<Ring> {
+        let mut builder = Self::new::<W>(z_layout);
 
         builder.pc_non_branching_constraint();
 
@@ -77,7 +71,6 @@ impl<'a> CCSBuilder<'a> {
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
         self.coeffs.push(Ring::one());
-        self.used_constraints_counter += 1;
     }
 
     /// Adds a PC constraint for non-branching instructions:
@@ -104,7 +97,6 @@ impl<'a> CCSBuilder<'a> {
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
         self.coeffs.push(Ring::one());
-        self.used_constraints_counter += 1;
     }
 
     /// Adds a JAL constraint that ensures the return address is written correctly:
@@ -129,7 +121,6 @@ impl<'a> CCSBuilder<'a> {
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
         self.coeffs.push(Ring::one());
-        self.used_constraints_counter += 1;
     }
 
     /// Adds a JALR constraint that ensures the return address is written correctly:
@@ -154,7 +145,6 @@ impl<'a> CCSBuilder<'a> {
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
         self.coeffs.push(Ring::one());
-        self.used_constraints_counter += 1;
     }
 
     /// Adds a BNE constraint that ensures the branch condition is correct:
@@ -194,7 +184,6 @@ impl<'a> CCSBuilder<'a> {
             matrix_base_idx + 2,
         ]);
         self.coeffs.push(Ring::one());
-        self.used_constraints_counter += 1;
     }
 
     /// Adds an AUIPC constraint that handles 32-bit overflow:
@@ -223,7 +212,6 @@ impl<'a> CCSBuilder<'a> {
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
         self.coeffs.push(Ring::one());
-        self.used_constraints_counter += 1;
     }
 
     /// Adds a LUI constraint that ensures the computation is correct:
@@ -251,16 +239,9 @@ impl<'a> CCSBuilder<'a> {
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
         self.coeffs.push(Ring::one());
-        self.used_constraints_counter += 1;
     }
 
     pub fn build(self) -> CCS<Ring> {
-        debug_assert_eq!(
-            self.used_constraints_counter, self.m,
-            "Expected {} constraints, but {} were added",
-            self.used_constraints_counter, self.m
-        );
-
         let s_prime_val = log2(130) as usize;
 
         let mut ccs = CCS::<Ring> {

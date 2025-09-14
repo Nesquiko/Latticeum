@@ -20,9 +20,23 @@ use crate::{
     witness::ZVectorLayout,
 };
 
+#[derive(Clone, Copy)]
+pub struct GoldiLocksDP;
+
+impl DecompositionParams for GoldiLocksDP {
+    /// Half of word in 32 bit VM
+    const B: u128 = 1 << 16;
+    /// Ring modulus is GoldiLocks so little less than 2^64, thus GoldiLocks modulus < B^L (which is `2^(16 * 4)`)
+    const L: usize = 4;
+    /// Standard binary decomposition
+    const B_SMALL: usize = 2;
+    /// Log(B) = Log(1 << 16) = Log(2 ^ 16) = 16
+    const K: usize = 16;
+}
+
 const Z_LAYOUT: ZVectorLayout = ZVectorLayout::new();
 const C: usize = 4;
-const W: usize = Z_LAYOUT.w_size;
+const W: usize = Z_LAYOUT.w_size * GoldiLocksDP::L;
 
 fn main() {
     tracing_subscriber::fmt::init();
@@ -35,7 +49,7 @@ fn main() {
     };
 
     // Define the universal CCS for a single RISC-V step.
-    let ccs = CCSBuilder::create_riscv_ccs(&Z_LAYOUT);
+    let ccs = CCSBuilder::create_riscv_ccs::<W>(&Z_LAYOUT);
 
     // Create the Ajtai commitment scheme.
     // The constants C and W need to be defined based on your CCS and witness size.
@@ -50,16 +64,6 @@ fn main() {
     let expected_value = 0x34164a7b;
     println!("expected: 0x{:x}, got 0x{:x}", expected_value, vm.result());
     assert_eq!(expected_value, vm.result());
-}
-
-#[derive(Clone, Copy)]
-pub struct GoldiLocksDP;
-
-impl DecompositionParams for GoldiLocksDP {
-    const B: u128 = 4;
-    const L: usize = 1;
-    const B_SMALL: usize = 2;
-    const K: usize = 2;
 }
 
 fn initialize_accumulator<const C: usize, const W: usize>(
