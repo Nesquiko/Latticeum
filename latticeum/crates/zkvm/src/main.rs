@@ -1,6 +1,7 @@
+mod ccs;
 mod constraints;
-mod witness;
 
+use ccs::to_witness;
 use cyclotomic_rings::rings::{GoldilocksChallengeSet, GoldilocksRingNTT};
 use latticefold::{
     arith::{Arith, CCCS, CCS, LCCCS, Witness, r1cs::to_F_vec},
@@ -11,14 +12,10 @@ use latticefold::{
 };
 use num_traits::identities::Zero;
 use std::{path::PathBuf, usize};
-use witness::to_witness;
 
 use vm::riscvm::{inst::ExectionTrace, riscv_isa::Instruction, vm::new_vm};
 
-use crate::{
-    constraints::{CCSBuilder, Ring},
-    witness::ZVectorLayout,
-};
+use crate::{ccs::CCSLayout, constraints::CCSBuilder};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
@@ -34,9 +31,11 @@ impl DecompositionParams for GoldiLocksDP {
     const K: usize = 16;
 }
 
-const Z_LAYOUT: ZVectorLayout = ZVectorLayout::new();
+const CCS_LAYOUT: CCSLayout = CCSLayout::new();
+/// Length of Ajtai commitment vectors (rows in commitment matrix)
 const C: usize = 4;
-const W: usize = Z_LAYOUT.w_size * GoldiLocksDP::L;
+/// Number of columns in the Ajtai commitment matrix
+const W: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 
 fn main() {
     tracing_subscriber::fmt::init();
@@ -49,7 +48,7 @@ fn main() {
     };
 
     // Define the universal CCS for a single RISC-V step.
-    let ccs = CCSBuilder::create_riscv_ccs::<W>(&Z_LAYOUT);
+    let ccs = CCSBuilder::create_riscv_ccs::<W>(&CCS_LAYOUT);
 
     // Create the Ajtai commitment scheme.
     // The constants C and W need to be defined based on your CCS and witness size.
@@ -57,9 +56,9 @@ fn main() {
     let scheme: AjtaiCommitmentScheme<C, W, GoldilocksRingNTT> =
         AjtaiCommitmentScheme::rand(&mut rng);
 
-    let (mut acc, mut w_acc) = initialize_accumulator(&ccs, &scheme);
+    let (mut acc, mut w_acc) = initialize_accumulator(&ccs, &CCS_LAYOUT, &scheme);
 
-    vm.run(|trace| trace_step(trace, &Z_LAYOUT, &ccs));
+    vm.run(|trace| trace_step(trace, &CCS_LAYOUT, &ccs));
 
     let expected_value = 0x34164a7b;
     println!("expected: 0x{:x}, got 0x{:x}", expected_value, vm.result());
@@ -68,39 +67,40 @@ fn main() {
 
 fn initialize_accumulator<const C: usize, const W: usize>(
     ccs: &CCS<GoldilocksRingNTT>,
+    layout: &CCSLayout,
     scheme: &AjtaiCommitmentScheme<C, W, GoldilocksRingNTT>,
 ) -> (LCCCS<C, GoldilocksRingNTT>, Witness<GoldilocksRingNTT>) {
     // Create witness with private witness part only
     // The z-vector structure is [x_ccs(0), 1, w_ccs(z_layout.size)] = z_layout.size + 1 total
     // So the private witness (w_ccs) should be z_layout.size elements
-    let dummy_w_ccs = vec![GoldilocksRingNTT::zero(); ccs.n - ccs.l - 1];
-    debug_assert_eq!(ccs.n - ccs.l - 1, Z_LAYOUT.w_size);
+    debug_assert_eq!(ccs.n - ccs.l - 1, layout.w_size);
+    let zero_w_ccs = vec![GoldilocksRingNTT::zero(); layout.w_size];
 
-    let dummy_wit = Witness::from_w_ccs::<GoldiLocksDP>(dummy_w_ccs.clone());
-    let dummy_x_ccs = vec![GoldilocksRingNTT::zero(); ccs.l];
+    let zero_wit = Witness::from_w_ccs::<GoldiLocksDP>(zero_w_ccs.clone());
+    let zero_x_ccs = vec![GoldilocksRingNTT::zero(); ccs.l];
 
-    let dummy_cm_i = CCCS {
-        cm: dummy_wit
+    let zero_cm_i = CCCS {
+        cm: zero_wit
             .commit::<C, W, GoldiLocksDP>(scheme)
-            .expect("didn't commit to dummy witness"),
-        x_ccs: dummy_x_ccs,
+            .expect("didn't commit to zero witness"),
+        x_ccs: zero_x_ccs,
     };
 
     let mut transcript = PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
     let (acc, _) = LFLinearizationProver::<
         _,
         PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
-    >::prove(&dummy_cm_i, &dummy_wit, &mut transcript, ccs)
+    >::prove(&zero_cm_i, &zero_wit, &mut transcript, ccs)
     .expect("failed to create initial accumulator");
 
-    (acc, dummy_wit)
+    (acc, zero_wit)
 }
 
-fn trace_step(trace: &ExectionTrace, z_layout: &ZVectorLayout, ccs: &CCS<GoldilocksRingNTT>) {
+fn trace_step(trace: &ExectionTrace, z_layout: &CCSLayout, ccs: &CCS<GoldilocksRingNTT>) {
     arithmetize(trace, z_layout, ccs);
 }
 
-fn arithmetize(trace: &ExectionTrace, z_layout: &ZVectorLayout, ccs: &CCS<GoldilocksRingNTT>) {
+fn arithmetize(trace: &ExectionTrace, z_layout: &CCSLayout, ccs: &CCS<GoldilocksRingNTT>) {
     let raw_z = to_witness(trace, z_layout);
 
     // Convert raw witness to proper z-vector structure: [x_ccs, 1, w_ccs]
