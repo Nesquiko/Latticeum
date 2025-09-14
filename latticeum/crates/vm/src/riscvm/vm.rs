@@ -107,13 +107,14 @@ impl VM<Uninitialized> {
 
 impl VM<Loaded> {
     /// Runs the VM's execution loop
-    pub fn run(&mut self, intercept: fn(trace: &ExectionTrace)) {
+    pub fn run(&mut self, intercept: impl Fn(ExectionTrace) -> ()) {
+        let mut cycle: usize = 0;
         loop {
-            match self.fetch_execute() {
-                Ok((ExecutionState::Continue, trace)) => intercept(&trace),
+            match self.fetch_execute(cycle) {
+                Ok((ExecutionState::Continue, trace)) => intercept(trace),
                 Ok((ExecutionState::Halt, trace)) => {
                     tracing::info!("execution halted");
-                    intercept(&trace);
+                    intercept(trace);
                     break;
                 }
                 Err(err) => {
@@ -121,6 +122,7 @@ impl VM<Loaded> {
                     break;
                 }
             }
+            cycle += 1;
         }
     }
 
@@ -131,7 +133,10 @@ impl VM<Loaded> {
     }
 
     /// Fetches instruction pointed at by `pc`, executes it and updates `pc`.
-    fn fetch_execute(&mut self) -> Result<(ExecutionState, ExectionTrace), ExecutionError> {
+    fn fetch_execute(
+        &mut self,
+        cycle: usize,
+    ) -> Result<(ExecutionState, ExectionTrace), ExecutionError> {
         let inst = match self.program.instructions.get(&self.pc) {
             Some(inst) => inst.clone(),
             None => {
@@ -143,7 +148,7 @@ impl VM<Loaded> {
             }
         };
 
-        let trace = self.execute_step(&inst);
+        let trace = self.execute_step(&inst, cycle);
 
         // halt when program enters an infinite loop by jumping to itself
         if trace.input.pc == trace.output.pc {

@@ -2,3 +2,4 @@ latex-builds
 _minted-main
 *.aux
 latticeum/target
+latticeum/.idea
