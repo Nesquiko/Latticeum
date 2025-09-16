@@ -3,20 +3,25 @@ mod constraints;
 
 use ccs::to_witness;
 use cyclotomic_rings::rings::{GoldilocksChallengeSet, GoldilocksRingNTT};
+#[cfg(feature = "debug")]
+use latticefold::arith::Arith;
 use latticefold::{
-    arith::{Arith, CCCS, CCS, LCCCS, Witness, r1cs::to_F_vec},
+    arith::{r1cs::to_F_vec, Witness, CCCS, CCS, LCCCS},
     commitment::AjtaiCommitmentScheme,
     decomposition_parameters::DecompositionParams,
     nifs::{
-        NIFSProver, NIFSVerifier,
-        linearization::{LFLinearizationProver, LinearizationProver},
+        linearization::{LFLinearizationProver, LinearizationProver}, NIFSProver,
+        NIFSVerifier,
     },
     transcript::poseidon::PoseidonTranscript,
 };
+#[cfg(feature = "debug")]
+use vm::riscvm::riscv_isa::Instruction;
+
 use num_traits::identities::Zero;
 use std::{path::PathBuf, sync::Mutex, usize};
 
-use vm::riscvm::{inst::ExectionTrace, riscv_isa::Instruction, vm::new_vm};
+use vm::riscvm::{inst::ExectionTrace, vm::new_vm};
 
 use crate::{ccs::CCSLayout, constraints::CCSBuilder};
 
@@ -40,6 +45,7 @@ const C: usize = 4;
 /// Number of columns in the Ajtai commitment matrix
 const W: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 
+// TODO then finally memory ops and poseidon CCS
 fn main() {
     tracing_subscriber::fmt::init();
 
