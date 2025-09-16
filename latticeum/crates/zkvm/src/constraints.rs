@@ -245,8 +245,8 @@ impl<'a> CCSBuilder<'a> {
 
         let mut ccs = CCS::<Ring> {
             m: self.m,
-            n: self.layout.z_vector_size(), // z-vector structure: [x_ccs(0), 1, w_ccs(layout.size)] = layout.size + 1 total
-            l: 0,
+            n: self.layout.z_vector_size(), // z-vector structure: [x_ccs(1), 1, w_ccs(layout.size)] = layout.size + 2 total
+            l: CCSLayout::X_ELEMS_SIZE, // Number of public inputs (memory commitment)
             t: self.matrices.len(),
             q: self.multisets.len(),
             d: self.multisets.iter().map(|s| s.len()).max().unwrap_or(1),

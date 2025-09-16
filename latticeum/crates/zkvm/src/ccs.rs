@@ -50,7 +50,7 @@ pub struct CCSLayout {
 
 impl CCSLayout {
     pub const CONST_ELEMS_SIZE: usize = 1;
-    pub const X_ELEMS_SIZE: usize = 0; // for now no public inputs/outputs
+    pub const X_ELEMS_SIZE: usize = 1; // memory commitment as public input
     pub const W_IDX_DELTA: usize = Self::X_ELEMS_SIZE + Self::CONST_ELEMS_SIZE;
 
     pub const fn new() -> Self {
@@ -137,13 +137,18 @@ impl CCSLayout {
     ///
     /// The z-vector in the CCS has the structure: [x_ccs, 1, w_ccs]
     /// where:
-    /// - x_ccs: public inputs (empty in our case, so l=0)
-    /// - 1: constant element (always 1) at index 0
-    /// - w_ccs: private witness elements starting at index 1
+    /// - x_ccs: public inputs (memory commitment in our case, so l=1)
+    /// - 1: constant element (always 1) at index 1
+    /// - w_ccs: private witness elements starting at index 2
     ///
     /// This is the 'n' parameter in the CCS structure.
     pub const fn z_vector_size(&self) -> usize {
         Self::X_ELEMS_SIZE + Self::CONST_ELEMS_SIZE + self.w_size
+    }
+
+    // Public input getter functions (x_ccs indices)
+    pub const fn memory_commitment(&self) -> usize {
+        0 // Memory commitment is at index 0 in the z-vector
     }
 
     // Getter functions that return the z-vector indices

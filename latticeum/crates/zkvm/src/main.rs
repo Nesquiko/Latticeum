@@ -6,12 +6,12 @@ use cyclotomic_rings::rings::{GoldilocksChallengeSet, GoldilocksRingNTT};
 #[cfg(feature = "debug")]
 use latticefold::arith::Arith;
 use latticefold::{
-    arith::{r1cs::to_F_vec, Witness, CCCS, CCS, LCCCS},
+    arith::{CCCS, CCS, LCCCS, Witness, r1cs::to_F_vec},
     commitment::AjtaiCommitmentScheme,
     decomposition_parameters::DecompositionParams,
     nifs::{
-        linearization::{LFLinearizationProver, LinearizationProver}, NIFSProver,
-        NIFSVerifier,
+        NIFSProver, NIFSVerifier,
+        linearization::{LFLinearizationProver, LinearizationProver},
     },
     transcript::poseidon::PoseidonTranscript,
 };
@@ -208,8 +208,10 @@ fn arithmetize(
     let raw_z = to_witness(trace, layout);
     // convert raw z to proper z-vector structure: [x_ccs, 1, w_ccs]
     let mut z_vec = Vec::new();
-    // x_ccs: public inputs (empty since ccs.l = 0)
-    // (no elements to add)
+
+    // x_ccs: public inputs (memory commitment placeholder)
+    let memory_commitment_placeholder = 42usize; // TODO: Replace with actual memory commitment
+    z_vec.push(memory_commitment_placeholder);
 
     // Add constant 1
     z_vec.push(1usize);
@@ -221,16 +223,17 @@ fn arithmetize(
     let z_as_ring: Vec<GoldilocksRingNTT> = to_F_vec(z_vec);
 
     // 2. split the z vector into public IO (x_ccs) and private witness (w_ccs)
-    let x_ccs = z_as_ring[0..ccs.l].to_vec();
+    let x_ccs = z_as_ring[0..ccs.l].to_vec(); // Memory commitment (l=1)
     let w_ccs = z_as_ring[ccs.l + 1..].to_vec(); // +1 to skip the constant '1'
 
     // 3. create the Witness struct
     let wit = Witness::from_w_ccs::<GoldiLocksDP>(w_ccs);
 
     tracing::debug!(
-        "witness creation: {:?} (size: {} elements)",
+        "witness creation: {:?} (size: {} elements, memory_commitment: {})",
         start_witness_creation.elapsed(),
-        layout.w_size
+        layout.w_size,
+        memory_commitment_placeholder
     );
 
     // 4. create the CCCS (Committed CCS) instance.
@@ -267,7 +270,8 @@ fn initialize_accumulator<const C: usize, const W: usize>(
     let zero_w_ccs = vec![GoldilocksRingNTT::zero(); layout.w_size];
 
     let zero_wit = Witness::from_w_ccs::<GoldiLocksDP>(zero_w_ccs.clone());
-    let zero_x_ccs = vec![GoldilocksRingNTT::zero(); ccs.l];
+    // Initialize public inputs empty memory commitment
+    let zero_x_ccs = vec![GoldilocksRingNTT::from(0u64); ccs.l]; // Same placeholder as in arithmetize
 
     let zero_cm_i = CCCS {
         cm: zero_wit
