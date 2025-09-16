@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use configuration::N_REGS;
-use vm::riscvm::{inst::ExectionTrace, riscv_isa::Instruction};
+use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 
 /// This struct holds the *indices* for CCS layout. It doesn't hold the data itself,
 /// just the indexes/layout map.
@@ -281,7 +281,7 @@ impl CCSLayout {
 }
 
 /// Returns only private witness vector `w_ccs`
-pub fn to_witness(trace: &ExectionTrace, layout: &CCSLayout) -> Vec<u32> {
+pub fn to_witness(trace: &ExecutionTrace, layout: &CCSLayout) -> Vec<u32> {
     // The witness vector contains only the witness elements
     let mut z = vec![0u32; layout.w_size];
 

@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::riscvm::{
     elf::{Elf, ElfLoadingError},
-    inst::ExectionTrace,
+    inst::ExecutionTrace,
     inst_decoder::{DecodedInstruction, Decoder},
 };
 
@@ -107,7 +107,7 @@ impl VM<Uninitialized> {
 
 impl VM<Loaded> {
     /// Runs the VM's execution loop
-    pub fn run(&mut self, intercept: impl Fn(ExectionTrace) -> ()) {
+    pub fn run(&mut self, intercept: impl Fn(ExecutionTrace) -> ()) {
         let mut cycle: usize = 0;
         loop {
             match self.fetch_execute(cycle) {
@@ -136,7 +136,7 @@ impl VM<Loaded> {
     fn fetch_execute(
         &mut self,
         cycle: usize,
-    ) -> Result<(ExecutionState, ExectionTrace), ExecutionError> {
+    ) -> Result<(ExecutionState, ExecutionTrace), ExecutionError> {
         let inst = match self.program.instructions.get(&self.pc) {
             Some(inst) => inst.clone(),
             None => {

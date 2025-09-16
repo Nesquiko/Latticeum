@@ -45,16 +45,16 @@ struct JalrArgs {
 }
 
 #[derive(Debug)]
-pub struct ExectionTrace {
+pub struct ExecutionTrace {
     pub cycle: usize,
-    pub input: ExectionSnapshot,
-    pub output: ExectionSnapshot,
+    pub input: ExecutionSnapshot,
+    pub output: ExecutionSnapshot,
     pub instruction: DecodedInstruction,
     pub side_effects: SideEffects,
 }
 
 #[derive(Debug)]
-pub struct ExectionSnapshot {
+pub struct ExecutionSnapshot {
     pub pc: usize,
     pub regs: [u32; 32],
 }
@@ -67,7 +67,7 @@ pub struct SideEffects {
     pub memory_op: Option<MemoryOperation>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MemoryOperation {
     pub cycle: usize,
     pub address: u32,
@@ -76,14 +76,14 @@ pub struct MemoryOperation {
 }
 
 impl VM<Loaded> {
-    pub fn execute_step(&mut self, inst: &DecodedInstruction, cycle: usize) -> ExectionTrace {
-        let mut trace = ExectionTrace {
+    pub fn execute_step(&mut self, inst: &DecodedInstruction, cycle: usize) -> ExecutionTrace {
+        let mut trace = ExecutionTrace {
             cycle,
-            input: ExectionSnapshot {
+            input: ExecutionSnapshot {
                 pc: self.pc,
                 regs: self.regs.clone(),
             },
-            output: ExectionSnapshot {
+            output: ExecutionSnapshot {
                 pc: 0,
                 regs: [0; 32],
             },
@@ -211,7 +211,7 @@ impl VM<Loaded> {
         }
     }
 
-    fn inst_sw(&mut self, STypeArgs { rs1, rs2, offset }: STypeArgs, trace: &mut ExectionTrace) {
+    fn inst_sw(&mut self, STypeArgs { rs1, rs2, offset }: STypeArgs, trace: &mut ExecutionTrace) {
         let rs1_data = self.read_reg(rs1) as i32;
         let rs2_data = self.read_reg(rs2);
         let addr = rs1_data.wrapping_add(offset) as u32;
