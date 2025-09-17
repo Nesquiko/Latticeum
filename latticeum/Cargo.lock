@@ -304,7 +304,7 @@ dependencies = [
 [[package]]
 name = "cyclotomic-rings"
 version = "0.1.0"
-source = "git+https://github.com/NethermindEth/latticefold.git?branch=main#4e803061fe31c6f1994aa9ac52006738fd5d73fd"
+source = "git+https://github.com/NethermindEth/latticefold.git?branch=main#3c5cd68764cf190e9611e9b291fd3a4700a3df1f"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ff",
@@ -502,7 +502,7 @@ dependencies = [
 [[package]]
 name = "latticefold"
 version = "0.1.0"
-source = "git+https://github.com/NethermindEth/latticefold.git?branch=main#4e803061fe31c6f1994aa9ac52006738fd5d73fd"
+source = "git+https://github.com/NethermindEth/latticefold.git?branch=main#3c5cd68764cf190e9611e9b291fd3a4700a3df1f"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ff",
@@ -813,7 +813,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 [[package]]
 name = "stark-rings"
 version = "0.0.1-alpha"
-source = "git+https://github.com/NethermindEth/stark-rings.git?branch=main#face28ce3357ee755724b521e12340c229b7e1ae"
+source = "git+https://github.com/NethermindEth/stark-rings.git?branch=main#886a89f1febb45822b0ff453e39b640f755382b6"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ff",
@@ -836,7 +836,7 @@ dependencies = [
 [[package]]
 name = "stark-rings-linalg"
 version = "0.0.1-alpha"
-source = "git+https://github.com/NethermindEth/stark-rings.git?branch=main#face28ce3357ee755724b521e12340c229b7e1ae"
+source = "git+https://github.com/NethermindEth/stark-rings.git?branch=main#886a89f1febb45822b0ff453e39b640f755382b6"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -852,7 +852,7 @@ dependencies = [
 [[package]]
 name = "stark-rings-poly"
 version = "0.0.1-alpha"
-source = "git+https://github.com/NethermindEth/stark-rings.git?branch=main#face28ce3357ee755724b521e12340c229b7e1ae"
+source = "git+https://github.com/NethermindEth/stark-rings.git?branch=main#886a89f1febb45822b0ff453e39b640f755382b6"
 dependencies = [
  "ark-ff",
  "ark-serialize",
