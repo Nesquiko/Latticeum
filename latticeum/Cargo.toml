@@ -28,4 +28,7 @@ stark-rings = { git = "https://github.com/NethermindEth/stark-rings.git", branch
 stark-rings-linalg = { git = "https://github.com/NethermindEth/stark-rings.git", branch = "main", default-features = false }
 stark-rings-poly = { git = "https://github.com/NethermindEth/stark-rings.git", branch = "main", default-features = false }
 
+p3-poseidon2 = { git = "https://github.com/Plonky3/Plonky3.git" }
+p3-goldilocks = { git = "https://github.com/Plonky3/Plonky3.git" }
+
 ark-std = "0.5.0"

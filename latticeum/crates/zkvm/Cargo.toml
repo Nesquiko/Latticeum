@@ -17,5 +17,8 @@ stark-rings-poly = { workspace = true }
 stark-rings-linalg = { workspace = true }
 ark-std = { workspace = true }
 
+p3-poseidon2 = { workspace = true }
+p3-goldilocks = { workspace = true }
+
 [features]
 debug = []
