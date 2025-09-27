@@ -50,7 +50,7 @@ pub struct CCSLayout {
 }
 
 impl CCSLayout {
-    pub const X_ELEMS_SIZE: usize = 1; // memory commitment as public input
+    pub const X_ELEMS_SIZE: usize = 2; // memory commitment as public input
     pub const CONST_ELEMS_SIZE: usize = 1;
     pub const W_IDX_DELTA: usize = Self::X_ELEMS_SIZE + Self::CONST_ELEMS_SIZE;
 
@@ -147,11 +147,6 @@ impl CCSLayout {
     /// This is the 'n' parameter in the CCS structure.
     pub const fn z_vector_size(&self) -> usize {
         Self::X_ELEMS_SIZE + Self::CONST_ELEMS_SIZE + self.w_size
-    }
-
-    // Public input getter functions (x_ccs indices)
-    pub const fn memory_commitment(&self) -> usize {
-        0 // Memory commitment is at index 0 in the z-vector
     }
 
     // Getter functions that return the z-vector indices
