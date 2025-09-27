@@ -107,7 +107,7 @@ impl VM<Uninitialized> {
 
 impl VM<Loaded> {
     /// Runs the VM's execution loop
-    pub fn run(&mut self, intercept: impl Fn(ExecutionTrace) -> ()) {
+    pub fn run(&mut self, mut intercept: impl FnMut(ExecutionTrace) -> ()) {
         let mut cycle: usize = 0;
         loop {
             match self.fetch_execute(cycle) {

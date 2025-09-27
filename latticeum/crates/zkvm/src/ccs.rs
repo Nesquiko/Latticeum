@@ -9,6 +9,7 @@ use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 /// CCS/Z-vector structure: `[x_ccs..., 1, w_ccs...]`
 #[derive(Debug)]
 pub struct CCSLayout {
+    pub const_1_idx: usize,
     // input state
     pc_in_idx: usize,
     regs_in_idx: Range<usize>,
@@ -49,11 +50,12 @@ pub struct CCSLayout {
 }
 
 impl CCSLayout {
-    pub const CONST_ELEMS_SIZE: usize = 1;
     pub const X_ELEMS_SIZE: usize = 1; // memory commitment as public input
+    pub const CONST_ELEMS_SIZE: usize = 1;
     pub const W_IDX_DELTA: usize = Self::X_ELEMS_SIZE + Self::CONST_ELEMS_SIZE;
 
     pub const fn new() -> Self {
+        let const_1_idx = Self::X_ELEMS_SIZE;
         let mut w_cursor = CCSLayout::W_IDX_DELTA;
 
         let pc_in_idx = w_cursor;
@@ -109,6 +111,7 @@ impl CCSLayout {
         w_cursor += 1;
 
         Self {
+            const_1_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -281,8 +284,8 @@ impl CCSLayout {
 }
 
 /// Returns only private witness vector `w_ccs`
-pub fn to_witness(trace: &ExecutionTrace, layout: &CCSLayout) -> Vec<u32> {
-    // The witness vector contains only the witness elements
+pub fn to_raw_witness(trace: &ExecutionTrace, layout: &CCSLayout) -> Vec<u32> {
+    // The witness vector contains only the private witness elements
     let mut z = vec![0u32; layout.w_size];
 
     z[layout.w_pc_in()] = trace

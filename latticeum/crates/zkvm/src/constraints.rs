@@ -80,7 +80,7 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects (1 - z[IS_BRANCHING])
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), 0)); // constant 1 is at index 0 in z-vector
+        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), self.layout.const_1_idx));
         m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.layout.is_branching()));
 
         // Matrix B: selects (z[PC_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
@@ -246,7 +246,7 @@ impl<'a> CCSBuilder<'a> {
         let mut ccs = CCS::<Ring> {
             m: self.m,
             n: self.layout.z_vector_size(), // z-vector structure: [x_ccs(1), 1, w_ccs(layout.size)] = layout.size + 2 total
-            l: CCSLayout::X_ELEMS_SIZE, // Number of public inputs (memory commitment)
+            l: CCSLayout::X_ELEMS_SIZE,     // Number of public inputs (memory commitment)
             t: self.matrices.len(),
             q: self.multisets.len(),
             d: self.multisets.iter().map(|s| s.len()).max().unwrap_or(1),
@@ -291,3 +291,38 @@ const JALR_CONSTR: usize = 3;
 const BNE_CONSTR: usize = 4;
 const AUIPC_CONSTR: usize = 5;
 const LUI_CONSTR: usize = 6;
+
+#[cfg(feature = "debug")]
+use latticefold::arith::Arith;
+#[cfg(feature = "debug")]
+use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
+
+#[cfg(feature = "debug")]
+pub fn check_relation_debug(
+    ccs: &CCS<GoldilocksRingNTT>,
+    z: &Vec<GoldilocksRingNTT>,
+    trace: &ExecutionTrace,
+) {
+    let check_relation_start = std::time::Instant::now();
+
+    match trace.instruction.inst {
+        Instruction::ADD { .. }
+        | Instruction::ADDI { .. }
+        | Instruction::BNE { .. }
+        | Instruction::LUI { .. }
+        | Instruction::AUIPC { .. }
+        | Instruction::JAL { .. }
+        | Instruction::JALR { .. }
+        | Instruction::SW { .. } => {
+            ccs.check_relation(z).unwrap_or_else(|e| {
+                panic!(
+                    "CCS relation failed for {:?}: {:?}",
+                    trace.instruction.inst, e
+                );
+            });
+        }
+        _ => {}
+    }
+
+    tracing::debug!("checked relation in {:?}", check_relation_start.elapsed());
+}
