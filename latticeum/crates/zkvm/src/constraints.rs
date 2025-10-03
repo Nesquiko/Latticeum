@@ -241,8 +241,6 @@ impl<'a> CCSBuilder<'a> {
     }
 
     pub fn build(self) -> CCS<Ring> {
-        let s_prime_val = log2(130) as usize;
-
         let mut ccs = CCS::<Ring> {
             m: self.m,
             n: self.layout.z_vector_size(), // z-vector structure: [x_ccs(1), 1, w_ccs(layout.size)] = layout.size + 2 total
@@ -251,7 +249,7 @@ impl<'a> CCSBuilder<'a> {
             q: self.multisets.len(),
             d: self.multisets.iter().map(|s| s.len()).max().unwrap_or(1),
             s: log2(self.m) as usize,
-            s_prime: s_prime_val,
+            s_prime: log2(self.layout.z_vector_size()) as usize,
             M: self.matrices,
             S: self.multisets,
             c: self.coeffs,
@@ -321,7 +319,9 @@ pub fn check_relation_debug(
                 );
             });
         }
-        _ => {}
+        inst => {
+            panic!("unchecked instruction {:?}", inst);
+        }
     }
 
     tracing::debug!("checked relation in {:?}", check_relation_start.elapsed());

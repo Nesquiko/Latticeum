@@ -25,11 +25,7 @@ use vm::riscvm::{inst::ExecutionTrace, vm::new_vm};
 
 #[cfg(feature = "debug")]
 use crate::constraints::check_relation_debug;
-use crate::{
-    ccs::CCSLayout,
-    constraints::CCSBuilder,
-    memory_commitment::{PoseidonHasher, mem_comm},
-};
+use crate::{ccs::CCSLayout, constraints::CCSBuilder, memory_commitment::PoseidonHasher};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;

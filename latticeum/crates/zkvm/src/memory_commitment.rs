@@ -4,10 +4,6 @@ use p3_symmetric::{CompressionFunctionFromHasher, PaddingFreeSponge, PseudoCompr
 use rand::{SeedableRng, rngs::StdRng};
 use vm::riscvm::inst::MemoryOperation;
 
-pub fn mem_comm(previous_comm: u64, _mem_op: &MemoryOperation) -> u64 {
-    previous_comm + 1
-}
-
 /// Lowest width for Goldilocks is 8
 const WIDTH: usize = 8;
 type PoseidonHash = Poseidon2Goldilocks<WIDTH>;
