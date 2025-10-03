@@ -1,10 +1,21 @@
 # Latticeum
 
+A ZkVM build with lattice based cryptography.
+
 ## TODOs
 
-1. Compare against https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
+Ok, I was naive, RISC-V is an IVC, in order to have an IVC, I use folding scheme,
+but I must implement the IVC myself. The CCS of this IVC does:
 
-A ZkVM build with lattice based cryptography.
+1. constraints that the public input comm (poseidon2 hash) to `poseidon2(i, state_0, state_i, U_i)`
+2. constraints the RISC-V instruction execution
+3. constraints the LatticeFold's NIFS verifier INSIDE THE CCS
+
+The intermediate values (for the poseidon2 and for the NIFS verifier go to private
+state, because they are massive). At the end the zkvm calculates the input to
+the next step, the `poseidon2(i, state_0, ...`.
+
+Compare against https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
 
 ## Roadmap
 

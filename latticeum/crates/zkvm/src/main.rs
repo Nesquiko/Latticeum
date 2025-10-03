@@ -346,20 +346,14 @@ fn fold(
         use latticefold::nifs::NIFSVerifier;
 
         let verifying_start = std::time::Instant::now();
-        let mut final_verifier_transcript =
+        let mut verifier_transcript =
             PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
         NIFSVerifier::<
             C,
             GoldilocksRingNTT,
             GoldiLocksDP,
             PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
-        >::verify(
-            &acc,
-            &cm_i,
-            &folding_proof,
-            &mut final_verifier_transcript,
-            &ccs,
-        )
+        >::verify(&acc, &cm_i, &folding_proof, &mut verifier_transcript, &ccs)
         .expect("Final proof verification failed");
 
         tracing::debug!("verified folding in {:?}", verifying_start.elapsed());
