@@ -16,6 +16,8 @@ use latticefold::{
 };
 
 use num_traits::identities::Zero;
+use p3_field::{PrimeCharacteristicRing, PrimeField64};
+use p3_goldilocks::Goldilocks;
 use stark_rings::Ring;
 use std::{path::PathBuf, usize};
 
@@ -23,7 +25,11 @@ use vm::riscvm::{inst::ExecutionTrace, vm::new_vm};
 
 #[cfg(feature = "debug")]
 use crate::constraints::check_relation_debug;
-use crate::{ccs::CCSLayout, constraints::CCSBuilder, memory_commitment::mem_comm};
+use crate::{
+    ccs::CCSLayout,
+    constraints::CCSBuilder,
+    memory_commitment::{PoseidonHasher, mem_comm},
+};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
@@ -68,6 +74,8 @@ fn main() {
     let ccs = CCSBuilder::create_riscv_ccs::<W>(&CCS_LAYOUT);
 
     let mut rng = ark_std::test_rng();
+    let poseidon = PoseidonHasher::new();
+
     let scheme: AjtaiCommitmentScheme<C, W, GoldilocksRingNTT> =
         AjtaiCommitmentScheme::rand(&mut rng);
 
@@ -87,7 +95,7 @@ fn main() {
         let mut mem_comm_out = current_mem_comm;
 
         if let Some(memory_op) = trace.side_effects.memory_op.clone() {
-            mem_comm_out = mem_comm(current_mem_comm, &memory_op);
+            mem_comm_out = poseidon.mem_comm(current_mem_comm, &memory_op);
             memory_ops.push(memory_op);
         }
 
@@ -190,13 +198,17 @@ fn main() {
     // );
 }
 
-const INITIAL_MEM_COMM: u64 = 0;
+const INITIAL_MEM_COMM: Goldilocks = Goldilocks::ZERO;
 
 fn initialize_accumulator<const C: usize, const W: usize>(
     ccs: &CCS<GoldilocksRingNTT>,
     layout: &CCSLayout,
     scheme: &AjtaiCommitmentScheme<C, W, GoldilocksRingNTT>,
-) -> (LCCCS<C, GoldilocksRingNTT>, Witness<GoldilocksRingNTT>, u64) {
+) -> (
+    LCCCS<C, GoldilocksRingNTT>,
+    Witness<GoldilocksRingNTT>,
+    Goldilocks,
+) {
     // Create witness with private witness part only
     // The z-vector structure is [x_ccs, 1, w_ccs] = layout.size + 1 total
     // So the private witness (w_ccs) should be layout.size elements
@@ -206,8 +218,8 @@ fn initialize_accumulator<const C: usize, const W: usize>(
     let zero_wit = Witness::from_w_ccs::<GoldiLocksDP>(zero_w_ccs);
     // initialize public inputs and output to memory comm in and memory comm out
     let zero_x_ccs = vec![
-        GoldilocksRingNTT::from(INITIAL_MEM_COMM),
-        GoldilocksRingNTT::from(INITIAL_MEM_COMM),
+        GoldilocksRingNTT::from(INITIAL_MEM_COMM.as_canonical_u64()),
+        GoldilocksRingNTT::from(INITIAL_MEM_COMM.as_canonical_u64()),
     ];
 
     let zero_cm_i = CCCS {
@@ -230,8 +242,8 @@ fn initialize_accumulator<const C: usize, const W: usize>(
 fn arithmetize(
     trace: &ExecutionTrace,
     layout: &CCSLayout,
-    mem_comm_in: u64,
-    mem_comm_out: u64,
+    mem_comm_in: Goldilocks,
+    mem_comm_out: Goldilocks,
 ) -> Vec<GoldilocksRingNTT> {
     let start_witness_creation = std::time::Instant::now();
 
@@ -240,8 +252,8 @@ fn arithmetize(
     let mut z_vec = Vec::new();
 
     // x_ccs: public inputs - memory commitment in and out
-    z_vec.push(mem_comm_in as usize);
-    z_vec.push(mem_comm_out as usize);
+    z_vec.push(mem_comm_in.as_canonical_u64() as usize);
+    z_vec.push(mem_comm_out.as_canonical_u64() as usize);
 
     // Add constant 1
     z_vec.push(1usize);
