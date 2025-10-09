@@ -260,7 +260,7 @@ fn arithmetize(
     // generate the full witness vector `z`
     let z_as_ring: Vec<GoldilocksRingNTT> = to_F_vec(z_vec);
 
-    tracing::debug!(
+    tracing::trace!(
         "witness creation: {:?} (size: {} elements, mem_comm_in: {}, mem_comm_out: {})",
         start_witness_creation.elapsed(),
         layout.w_size,
@@ -291,7 +291,7 @@ fn commit(
         .expect("failed to commit");
     let cccs_instance = CCCS { cm, x_ccs };
 
-    tracing::debug!(
+    tracing::trace!(
         "commited to witnes in {:?} (C={}, W={}, B={}, L={})",
         start_commitment.elapsed(),
         C,
@@ -339,7 +339,7 @@ fn fold(
         >::prove(acc, w_acc, cm_i, w_i, &mut prover_transcript, ccs, scheme)
         .expect("NIFS proving failed for a step");
 
-    tracing::debug!("folded in {:?}", folding_start.elapsed());
+    tracing::trace!("folded in {:?}", folding_start.elapsed());
 
     #[cfg(feature = "debug")]
     {
@@ -356,7 +356,7 @@ fn fold(
         >::verify(&acc, &cm_i, &folding_proof, &mut verifier_transcript, &ccs)
         .expect("Final proof verification failed");
 
-        tracing::debug!("verified folding in {:?}", verifying_start.elapsed());
+        tracing::trace!("verified folding in {:?}", verifying_start.elapsed());
     }
 
     (folded_acc, folded_w_acc)

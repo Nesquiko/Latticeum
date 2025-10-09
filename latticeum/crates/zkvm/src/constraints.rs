@@ -324,5 +324,5 @@ pub fn check_relation_debug(
         }
     }
 
-    tracing::debug!("checked relation in {:?}", check_relation_start.elapsed());
+    tracing::trace!("checked relation in {:?}", check_relation_start.elapsed());
 }
