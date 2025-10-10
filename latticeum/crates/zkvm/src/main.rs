@@ -43,9 +43,9 @@ impl DecompositionParams for GoldiLocksDP {
 
 const CCS_LAYOUT: CCSLayout = CCSLayout::new();
 /// Length of Ajtai commitment vectors (rows in commitment matrix)
-const C: usize = 4;
+const KAPPA: usize = 4;
 /// Number of columns in the Ajtai commitment matrix
-const W: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
+const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 
 fn main() {
     tracing_subscriber::fmt::init();
@@ -67,13 +67,13 @@ fn main() {
         Err(e) => panic!("failed to load `fibonacci` elf, {}", e),
     };
 
-    let ccs = CCSBuilder::create_riscv_ccs::<W>(&CCS_LAYOUT);
+    let ccs = CCSBuilder::create_riscv_ccs::<N>(&CCS_LAYOUT);
 
     let mut rng = ark_std::test_rng();
     let poseidon = PoseidonHasher::new();
 
-    let scheme: AjtaiCommitmentScheme<C, W, GoldilocksRingNTT> =
-        AjtaiCommitmentScheme::rand(&mut rng);
+    let scheme: AjtaiCommitmentScheme<GoldilocksRingNTT> =
+        AjtaiCommitmentScheme::rand(KAPPA, N, &mut rng);
 
     tracing::debug!("initializing accumulator");
     let (mut acc, mut w_acc, mut current_mem_comm) =
@@ -196,12 +196,12 @@ fn main() {
 
 const INITIAL_MEM_COMM: Goldilocks = Goldilocks::ZERO;
 
-fn initialize_accumulator<const C: usize, const W: usize>(
+fn initialize_accumulator(
     ccs: &CCS<GoldilocksRingNTT>,
     layout: &CCSLayout,
-    scheme: &AjtaiCommitmentScheme<C, W, GoldilocksRingNTT>,
+    scheme: &AjtaiCommitmentScheme<GoldilocksRingNTT>,
 ) -> (
-    LCCCS<C, GoldilocksRingNTT>,
+    LCCCS<GoldilocksRingNTT>,
     Witness<GoldilocksRingNTT>,
     Goldilocks,
 ) {
@@ -220,7 +220,7 @@ fn initialize_accumulator<const C: usize, const W: usize>(
 
     let zero_cm_i = CCCS {
         cm: zero_wit
-            .commit::<C, W, GoldiLocksDP>(scheme)
+            .commit::<GoldiLocksDP>(scheme)
             .expect("didn't commit to zero witness"),
         x_ccs: zero_x_ccs,
     };
@@ -275,8 +275,8 @@ fn arithmetize(
 fn commit(
     z_as_ring: Vec<GoldilocksRingNTT>,
     ccs: &CCS<GoldilocksRingNTT>,
-    scheme: &AjtaiCommitmentScheme<C, W, GoldilocksRingNTT>,
-) -> (CCCS<C, GoldilocksRingNTT>, Witness<GoldilocksRingNTT>) {
+    scheme: &AjtaiCommitmentScheme<GoldilocksRingNTT>,
+) -> (CCCS<GoldilocksRingNTT>, Witness<GoldilocksRingNTT>) {
     let start_commitment = std::time::Instant::now();
     // split the z vector into public IO (x_ccs) and private witness (w_ccs)
     let x_ccs = z_as_ring[0..ccs.l].to_vec(); // contains memory commitment (l=1)
@@ -287,15 +287,15 @@ fn commit(
 
     // create the CCCS (Committed CCS) instance.
     let cm = wit
-        .commit::<C, W, GoldiLocksDP>(scheme)
+        .commit::<GoldiLocksDP>(scheme)
         .expect("failed to commit");
     let cccs_instance = CCCS { cm, x_ccs };
 
     tracing::trace!(
         "commited to witnes in {:?} (C={}, W={}, B={}, L={})",
         start_commitment.elapsed(),
-        C,
-        W,
+        KAPPA,
+        N,
         GoldiLocksDP::B,
         GoldiLocksDP::L
     );
@@ -305,11 +305,11 @@ fn commit(
 
 struct FoldingArgs<'a> {
     ccs: &'a CCS<GoldilocksRingNTT>,
-    scheme: &'a AjtaiCommitmentScheme<C, W, GoldilocksRingNTT>,
+    scheme: &'a AjtaiCommitmentScheme<GoldilocksRingNTT>,
 
-    acc: &'a LCCCS<C, GoldilocksRingNTT>,
+    acc: &'a LCCCS<GoldilocksRingNTT>,
     w_acc: &'a Witness<GoldilocksRingNTT>,
-    cm_i: &'a CCCS<C, GoldilocksRingNTT>,
+    cm_i: &'a CCCS<GoldilocksRingNTT>,
     w_i: &'a Witness<GoldilocksRingNTT>,
 }
 
@@ -322,7 +322,7 @@ fn fold(
         cm_i,
         w_i,
     }: FoldingArgs,
-) -> (LCCCS<C, GoldilocksRingNTT>, Witness<GoldilocksRingNTT>) {
+) -> (LCCCS<GoldilocksRingNTT>, Witness<GoldilocksRingNTT>) {
     let folding_start = std::time::Instant::now();
     let mut prover_transcript =
         PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
@@ -331,8 +331,6 @@ fn fold(
     // at the end of the whole folding
     let (folded_acc, folded_w_acc, folding_proof) =
         NIFSProver::<
-            C,
-            W,
             GoldilocksRingNTT,
             GoldiLocksDP,
             PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
@@ -349,7 +347,6 @@ fn fold(
         let mut verifier_transcript =
             PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
         NIFSVerifier::<
-            C,
             GoldilocksRingNTT,
             GoldiLocksDP,
             PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,

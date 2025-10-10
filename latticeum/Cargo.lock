@@ -304,7 +304,7 @@ dependencies = [
 [[package]]
 name = "cyclotomic-rings"
 version = "0.1.0"
-source = "git+https://github.com/NethermindEth/latticefold.git?branch=main#3c5cd68764cf190e9611e9b291fd3a4700a3df1f"
+source = "git+https://github.com/NethermindEth/latticefold.git?branch=main#194d4ac53aa432eff88fc3f60f5539a47dc32e11"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ff",
@@ -523,7 +523,7 @@ dependencies = [
 [[package]]
 name = "latticefold"
 version = "0.1.0"
-source = "git+https://github.com/NethermindEth/latticefold.git?branch=main#3c5cd68764cf190e9611e9b291fd3a4700a3df1f"
+source = "git+https://github.com/NethermindEth/latticefold.git?branch=main#194d4ac53aa432eff88fc3f60f5539a47dc32e11"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ff",
