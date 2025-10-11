@@ -2,18 +2,66 @@
 
 A ZkVM build with lattice based cryptography.
 
-## TODOs
+## RISC-V VM specs:
 
-Ok, I was naive, RISC-V is an IVC, in order to have an IVC, I use folding scheme,
-but I must implement the IVC myself. The CCS of this IVC does:
+- 32bit
+- 1MB of RAM
+  - page size 256B
+  - number of pages 4096
 
-1. constraints that the public input comm (poseidon2 hash) to `poseidon2(i, state_0, state_i, U_i)`
-2. constraints the RISC-V instruction execution
-3. constraints the LatticeFold's NIFS verifier INSIDE THE CCS
+## IVC of RISC-V
 
-The intermediate values (for the poseidon2 and for the NIFS verifier go to private
-state, because they are massive). At the end the zkvm calculates the input to
-the next step, the `poseidon2(i, state_0, ...`.
+The function `F` is defined by the RISC-V specification, then in order to instantiate
+an IVC for `F`, augmented circuit `F'`, represented by the CCS, folded inside LatticeFold
+must contain two parts, IVC part for verifying IVC advancement and then `F` specific
+part for verifying correct execution of `F`. In practice:
+
+1. The public state commitment passed to IVC step `i` from step `i-1`, `h_{i - 1} = poseidon2(i - 1, hash(state_0), hash(state_{i - 1}), hash(U_{i - 1}))`
+
+   - `i - 1` is just a step number in previous step
+   - `hash(state_0)`, where `state_0` is the public initial state of VM, it includes:
+     - commitment to the program's binary code
+       - Compute a Keccak hash of the binary, this is public, no need to constrain it in CCS.
+       - to get field elements, use the 256-bit Keccak digest to deterministically derive 4 Goldilocks elements (using it as a seed).
+       - **4 goldilocks elements**
+     - programs entrypoint, which is in `pc`
+       - **1 goldilocks element**
+     - Merkle root of all VM's memory pages (zeroes in all pages)
+       - **1 goldilocks element**
+     - all registers, all zeroes
+       - **32 goldilocks elements**
+     - Commitment to an empty memory ops vector `poseidon2(mem_ops_vec = 0, cycle = 0, address = 0, value = 0)`
+       - **1 goldilocks element**
+   - `hash(state_{i - 1})`, where `state_{i - 1}` is complete state of VM after step `i - 1`, it includes:
+     - VM's `pc`
+       - **1 goldilocks element**
+     - new Merkle root of VM memory
+       - **1 goldilocks element**
+     - all registers
+       - **32 goldilocks elements**
+     - commitment to an memory ops vector `poseidon2(mem_ops_vec_{i - 1}, cycle, address, value)`
+       - **1 goldilocks element**
+   - `hash(U_{i - 1})` binds the running instance
+     - TODO read from code how many elements this has
+
+2. The private witness for step `i` contains all necessary information for the
+   augmented circuit `F'` to prove the transition from state committed by `h_{i - 1}`
+   to new state commited by `h_i`. It must contain:
+
+   - preimage of the `h_{i - 1}`
+     - previous step counter `i - 1`
+     - the full VM state `z_{i - 1}`
+     - the full accumulator instance `U_{i - 1}`
+   - folding proof from step `i - 1`
+   - the merkle inclusion proof of the new memory merkle root
+   - the execution trace for the application circuit `F`
+
+3. The constraints of the `F'` for step `i`:
+   - recalculate the `h_{i - 1}` from its preimage and constraint that it equals the public input `h_{i - 1}`
+   - constraint that the input of the execution trace equals the output of `z_{i - 1}`
+   - constraint the RISC-V instruction execution
+   - if memory access/write, then constraint that the new memory merkle root is valid
+   - constraint the LatticeFold's NIFS verifier
 
 Compare against https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
 
