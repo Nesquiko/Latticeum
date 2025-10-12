@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use configuration::RESULT_ADDRESS;
+use configuration::{N_REGS, RESULT_ADDRESS};
 use thiserror::Error;
 
 use crate::riscvm::{
@@ -48,7 +48,7 @@ pub struct VM<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize, Program: VmP
     /// x12–17   | a2–7     | Function arguments                 | Caller
     /// x18–27   | s2–11    | Saved registers                    | Callee
     /// x28–31   | t3–6     | Temporaries                        | Caller
-    pub regs: [u32; 32],
+    pub regs: [u32; N_REGS],
 
     /// The program counter of width 32 bits.
     pub pc: usize,
@@ -233,7 +233,7 @@ impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> Display
             "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6"
         ];
 
-        for i in (0..32).step_by(4) {
+        for i in (0..N_REGS).step_by(4) {
             write!(f, "  ")?;
             for j in 0..4 {
                 if i + j < 32 {

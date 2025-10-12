@@ -1,4 +1,5 @@
 mod ccs;
+mod commitments;
 mod constraints;
 mod memory_commitment;
 
@@ -9,7 +10,7 @@ use latticefold::{
     commitment::AjtaiCommitmentScheme,
     decomposition_parameters::DecompositionParams,
     nifs::{
-        NIFSProver, NIFSVerifier,
+        NIFSProver,
         linearization::{LFLinearizationProver, LinearizationProver},
     },
     transcript::poseidon::PoseidonTranscript,
@@ -18,14 +19,16 @@ use latticefold::{
 use num_traits::identities::Zero;
 use p3_field::{PrimeCharacteristicRing, PrimeField64};
 use p3_goldilocks::Goldilocks;
-use stark_rings::Ring;
 use std::{path::PathBuf, usize};
 
-use vm::riscvm::{inst::ExecutionTrace, vm::new_vm};
+use vm::riscvm::{inst::ExecutionTrace, vm::new_vm_1mb};
 
 #[cfg(feature = "debug")]
 use crate::constraints::check_relation_debug;
-use crate::{ccs::CCSLayout, constraints::CCSBuilder, memory_commitment::PoseidonHasher};
+use crate::{
+    ccs::CCSLayout, commitments::ZkVmCommitter, constraints::CCSBuilder,
+    memory_commitment::PoseidonHasher,
+};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
@@ -47,6 +50,11 @@ const KAPPA: usize = 4;
 /// Number of columns in the Ajtai commitment matrix
 const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 
+// TODO
+// 1. add to the README, in the z_i (also z_0) state the memory_ops_vec_comm, so that
+//  it is locked and malicous prover can in step `i` insert whatever,
+// 2. Create the code for creating z_0
+// 3. Create code for z_i
 fn main() {
     tracing_subscriber::fmt::init();
 
@@ -58,7 +66,7 @@ fn main() {
         GoldiLocksDP::K
     );
 
-    let vm = new_vm();
+    let vm = new_vm_1mb();
     let program = PathBuf::from(
         "/home/nesquiko/fiit/dp/latticeum/target/riscv32imac-unknown-none-elf/release/fibonacci",
     );
@@ -66,6 +74,10 @@ fn main() {
         Ok(vm) => vm,
         Err(e) => panic!("failed to load `fibonacci` elf, {}", e),
     };
+
+    let zkvm_commiter = ZkVmCommitter::new();
+    let z_0_comm = zkvm_commiter.state_0_comm(&vm);
+    tracing::info!("{}", z_0_comm);
 
     let ccs = CCSBuilder::create_riscv_ccs::<N>(&CCS_LAYOUT);
 
@@ -75,10 +87,8 @@ fn main() {
     let scheme: AjtaiCommitmentScheme<GoldilocksRingNTT> =
         AjtaiCommitmentScheme::rand(KAPPA, N, &mut rng);
 
-    tracing::debug!("initializing accumulator");
     let (mut acc, mut w_acc, mut current_mem_comm) =
         initialize_accumulator(&ccs, &CCS_LAYOUT, &scheme);
-    tracing::debug!("accumulator initialized, starting VM execution");
 
     let start_vm_run = std::time::Instant::now();
 
@@ -110,6 +120,20 @@ fn main() {
             w_i: &w_i,
         });
 
+        // acc.r 9,
+        // acc.v 3,
+        // acc.cm 4,
+        // acc.u 15,
+        // acc.x_w 2,
+        // acc.h 1
+        // tracing::debug!(
+        //     "acc.r {:?},\nacc.v {:?},\nacc.cm {:?},\nacc.u {:?},\nacc.x_w {:?},\nacc.h 1",
+        //     acc.r.len(),
+        //     acc.v.len(),
+        //     acc.cm.len(),
+        //     acc.u.len(),
+        //     acc.x_w.len(),
+        // );
         current_mem_comm = mem_comm_out;
     });
 
