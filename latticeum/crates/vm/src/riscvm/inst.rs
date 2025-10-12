@@ -75,7 +75,7 @@ pub struct MemoryOperation {
     pub is_write: bool,
 }
 
-impl VM<Loaded> {
+impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded> {
     pub fn execute_step(&mut self, inst: &DecodedInstruction, cycle: usize) -> ExecutionTrace {
         let mut trace = ExecutionTrace {
             cycle,
@@ -91,7 +91,7 @@ impl VM<Loaded> {
             side_effects: SideEffects::default(),
         };
 
-        tracing::trace!("executing 0x{:x} - {}", self.pc, inst);
+        tracing::trace!("executing {:#0x} - {}", self.pc, inst);
 
         match inst.inst {
             // Implemented RV32I instructions
@@ -128,7 +128,7 @@ impl VM<Loaded> {
         if !inst.inst.branch() {
             self.pc = self.pc.wrapping_add(inst.size);
             tracing::trace!(
-                "non branching instruction incrementing pc 0x{:x} to 0x{:x}",
+                "non branching instruction incrementing pc {:#0x} to {:#0x}",
                 trace.input.pc,
                 self.pc
             );
@@ -150,7 +150,7 @@ impl VM<Loaded> {
             .overflowing_add(imm << 12);
         self.write_reg(rd, val);
         side_effects.has_overflown = has_overflown;
-        tracing::trace!("\tAUIPC value 0x{:x}", val);
+        tracing::trace!("\tAUIPC value {:#0x}", val);
     }
 
     fn inst_jal(
@@ -166,7 +166,7 @@ impl VM<Loaded> {
         self.pc = new_pc;
         side_effects.branched_to = Some(new_pc as u32);
 
-        tracing::trace!("\tJAL link 0x{:x}, new pc 0x{:x}", link, new_pc);
+        tracing::trace!("\tJAL link {:#0x}, new pc {:#0x}", link, new_pc);
     }
 
     fn inst_jalr(
@@ -184,7 +184,7 @@ impl VM<Loaded> {
         self.write_reg(rd, link);
         side_effects.branched_to = Some(new_pc);
 
-        tracing::trace!("\tJALR link 0x{:x}, new pc 0x{:x}", link, new_pc);
+        tracing::trace!("\tJALR link {:#0x}, new pc {:#0x}", link, new_pc);
     }
 
     fn inst_bne(
@@ -197,13 +197,13 @@ impl VM<Loaded> {
         let rs2_data = self.read_reg(rs2);
         if rs1_data != rs2_data {
             let new_pc = self.pc.wrapping_add(offset as usize);
-            tracing::trace!("\tBNE branching from pc 0x{:x} to 0x{:x}", self.pc, new_pc);
+            tracing::trace!("\tBNE branching from pc {:#0x} to {:#0x}", self.pc, new_pc);
             self.pc = new_pc;
             side_effects.branched_to = Some(new_pc as u32);
         } else {
             let new_pc = self.pc.wrapping_add(inst_len);
             tracing::trace!(
-                "\tBNE not equal, continuing pc 0x{:x} to 0x{:x}",
+                "\tBNE not equal, continuing pc {:#0x} to {:#0x}",
                 self.pc,
                 new_pc
             );
@@ -215,7 +215,7 @@ impl VM<Loaded> {
         let rs1_data = self.read_reg(rs1) as i32;
         let rs2_data = self.read_reg(rs2);
         let addr = rs1_data.wrapping_add(offset) as u32;
-        self.write_mem(addr, rs2_data);
+        self.write_mem(addr as usize, rs2_data);
 
         trace.side_effects.memory_op = Some(MemoryOperation {
             cycle: trace.cycle,
@@ -224,7 +224,7 @@ impl VM<Loaded> {
             is_write: true,
         });
 
-        tracing::trace!("\tSW addr 0x{:x} - value 0x{:x}", addr, rs2_data);
+        tracing::trace!("\tSW addr {:#0x} - value {:#0x}", addr, rs2_data);
     }
 
     fn inst_addi(&mut self, ITypeArgs { rd, rs1, imm }: ITypeArgs, side_effects: &mut SideEffects) {
@@ -232,7 +232,7 @@ impl VM<Loaded> {
         let (value, has_overflown) = rs1_data.overflowing_add(imm);
         self.write_reg(rd, value as u32);
         side_effects.has_overflown = has_overflown;
-        tracing::trace!("\tADDI value 0x{:x}", value);
+        tracing::trace!("\tADDI value {:#0x}", value);
     }
 
     fn inst_add(&mut self, RTypeArgs { rd, rs1, rs2 }: RTypeArgs, side_effects: &mut SideEffects) {
@@ -242,6 +242,6 @@ impl VM<Loaded> {
         self.write_reg(rd, value);
         side_effects.has_overflown = has_overflown;
 
-        tracing::trace!("\tADD 0x{:x} + 0x{:x} = 0x{:x} ", rs1_data, rs2_data, value);
+        tracing::trace!("\tADD {:#0x} + {:#0x} = {:#0x} ", rs1_data, rs2_data, value);
     }
 }

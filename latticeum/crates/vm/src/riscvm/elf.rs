@@ -49,7 +49,7 @@ impl Elf {
         }
 
         let entry_point = elf_file.ehdr.e_entry as usize;
-        tracing::trace!("entry_point is 0x{:x}", entry_point);
+        tracing::trace!("entry_point is {:#0x}", entry_point);
 
         if (entry_point as usize) % WORD_SIZE != 0 {
             return Err(ElfLoadingError::ElfValidation(
@@ -88,7 +88,7 @@ impl Elf {
             let is_text = (segment.p_flags & elf::abi::PF_X) != 0;
 
             tracing::trace!(
-                "parsing segment at vaddr 0x{:x}, offset 0x{:x}, file_size 0x{:x}, mem_size 0x{:x}, is .text = {}",
+                "parsing segment at vaddr {:#0x}, offset {:#0x}, file_size {:#0x}, mem_size {:#0x}, is .text = {}",
                 vaddr,
                 offset,
                 file_size,
@@ -98,13 +98,13 @@ impl Elf {
 
             if file_size > mem_size {
                 return Err(ElfLoadingError::InvalidSegment(format!(
-                    "segment at vaddr 0x{:x} has file_size > mem_size",
+                    "segment at vaddr {:#0x} has file_size > mem_size",
                     vaddr
                 )));
             }
             if offset + file_size > file_data.len() {
                 return Err(ElfLoadingError::InvalidSegment(format!(
-                    "segment at vaddr 0x{:x} reads past end of file",
+                    "segment at vaddr {:#0x} reads past end of file",
                     vaddr
                 )));
             }
@@ -124,7 +124,7 @@ impl Elf {
                 let word_bytes: [u8; WORD_SIZE] =
                     chunk.try_into().expect("slice with incorrect length");
                 let word = u32::from_le_bytes(word_bytes);
-                tracing::trace!("0x{:x} - 0x{:08x}", current_addr, word);
+                tracing::trace!("{:#0x} - {:#08x}", current_addr, word);
 
                 image.insert(current_addr, word);
                 if is_text {
@@ -142,7 +142,7 @@ impl Elf {
                 temp_word_bytes[..remainder.len()].copy_from_slice(remainder);
                 let word = u32::from_le_bytes(temp_word_bytes);
 
-                tracing::trace!("0x{:x} - 0x{:08x}", current_addr, word);
+                tracing::trace!("{:#0x} - {:#08x}", current_addr, word);
 
                 image.insert(current_addr, word);
                 if is_text {
@@ -155,7 +155,7 @@ impl Elf {
 
             if zero_fill_start != zero_fill_end {
                 tracing::trace!(
-                    "zero filling from 0x{:x} to 0x{:x}",
+                    "zero filling from {:#0x} to {:#0x}",
                     zero_fill_start,
                     zero_fill_end
                 );
@@ -170,7 +170,7 @@ impl Elf {
         }
 
         tracing::trace!(
-            "parsed {} pt_load segment, image size 0x{:x} words, raw code size 0x{:x} bytes",
+            "parsed {} pt_load segment, image size {:#0x} words, raw code size {:#0x} bytes",
             pt_load_segments_count,
             image.len(),
             raw_code.len()
