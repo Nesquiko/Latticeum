@@ -1519,6 +1519,7 @@ dependencies = [
  "cyclotomic-rings",
  "latticefold",
  "num-traits",
+ "p3-commit",
  "p3-field",
  "p3-goldilocks",
  "p3-keccak",

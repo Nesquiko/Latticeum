@@ -59,7 +59,10 @@ pub struct VM<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize, Program: VmP
     program: Program,
 }
 
-pub fn new_vm_1mb() -> VM<1024, 256, Uninitialized> {
+pub(crate) const PAGE_SIZE_1024: usize = 1024;
+pub(crate) const PAGE_COUNT_256: usize = 256;
+
+pub fn new_vm_1mb() -> VM<PAGE_SIZE_1024, PAGE_COUNT_256, Uninitialized> {
     VM::<_, _, _>::new()
 }
 
@@ -75,39 +78,13 @@ impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize, Program: VmProgram>
     }
 
     pub fn read_mem(&self, addr: usize) -> u32 {
-        let (page_index, word_index) = self.physical_addr(addr);
+        let (page_index, word_index) = physical_addr::<WORD_SIZE, WORDS_PER_PAGE, PAGE_COUNT>(addr);
         self.memory[page_index][word_index]
     }
 
     pub fn write_mem(&mut self, addr: usize, data: u32) {
-        let (page_index, word_index) = self.physical_addr(addr);
+        let (page_index, word_index) = physical_addr::<WORD_SIZE, WORDS_PER_PAGE, PAGE_COUNT>(addr);
         self.memory[page_index][word_index] = data;
-    }
-
-    fn physical_addr(&self, virt_addr: usize) -> (usize, usize) {
-        // bits in the virtual address, not how many bits does the thing have
-        let word_bits: usize = WORD_SIZE.trailing_zeros() as usize;
-        let word_in_page_bits: usize = WORDS_PER_PAGE.trailing_zeros() as usize;
-
-        let max_addr = WORDS_PER_PAGE * PAGE_COUNT * WORD_SIZE;
-        assert!(
-            virt_addr < max_addr,
-            "Memory access out of bounds, virtual address {:#0x}, max address {:#0x}",
-            virt_addr,
-            max_addr
-        );
-        assert!(
-            virt_addr % WORD_SIZE == 0,
-            "Unaligned memory access, virtual address {}",
-            virt_addr
-        );
-
-        // upper bits of the address determine the page
-        let page_index = virt_addr >> (word_in_page_bits + word_bits);
-        // middle bits of the address determine the word's index within the page
-        let word_index = (virt_addr >> word_bits) & (WORDS_PER_PAGE - 1); // `& (WORDS_PER_PAGE - 1)` is a fast mask
-
-        (page_index, word_index)
     }
 }
 
@@ -288,21 +265,66 @@ impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> Display
     }
 }
 
+pub fn physical_addr<
+    const WORD_SIZE: usize,
+    const WORDS_PER_PAGE: usize,
+    const PAGE_COUNT: usize,
+>(
+    virt_addr: usize,
+) -> (usize, usize) {
+    // bits in the virtual address, not how many bits does the thing have
+    let word_bits: usize = WORD_SIZE.trailing_zeros() as usize;
+    let word_in_page_bits: usize = WORDS_PER_PAGE.trailing_zeros() as usize;
+
+    let max_addr = WORDS_PER_PAGE * PAGE_COUNT * WORD_SIZE;
+    assert!(
+        virt_addr < max_addr,
+        "Memory access out of bounds, virtual address {:#0x}, max address {:#0x}",
+        virt_addr,
+        max_addr
+    );
+    assert!(
+        virt_addr % WORD_SIZE == 0,
+        "Unaligned memory access, virtual address {}",
+        virt_addr
+    );
+
+    // upper bits of the address determine the page
+    let page_index = virt_addr >> (word_in_page_bits + word_bits);
+    // middle bits of the address determine the word's index within the page
+    let word_index = (virt_addr >> word_bits) & (WORDS_PER_PAGE - 1);
+
+    (page_index, word_index)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::riscvm::{
         inst_decoder::DecodedInstruction,
         reg,
-        vm::{Uninitialized, VM, new_vm_1mb},
+        vm::{PAGE_COUNT_256, PAGE_SIZE_1024, WORD_SIZE, new_vm_1mb, physical_addr},
     };
-    use configuration::{RESULT_ADDRESS, STACK_TOP};
+    use configuration::RESULT_ADDRESS;
     use riscv_isa::Instruction;
     use std::path::PathBuf;
     use test_log::test;
 
     #[test]
+    fn page_index_32bit_vm() {
+        assert_eq!(WORD_SIZE, 4);
+
+        //              __ppwwwwwwwwwwii
+        let virt_addr = 0b11100000000100;
+        // WORD_SIZE shifts by 2 bits, PAGE_SIZE_1024 byt 10 bits
+        let (page_index, word_index) =
+            physical_addr::<WORD_SIZE, PAGE_SIZE_1024, PAGE_COUNT_256>(virt_addr);
+        assert_eq!(0b11, page_index);
+        assert_eq!(0b1000000001, word_index);
+    }
+
+    #[test]
     fn fibonacci_instructions() {
-        let vm = VM::<1024, 256, Uninitialized>::new();
+        let vm = new_vm_1mb();
 
         let program = PathBuf::from("samples/fibonacci_100_000");
         let vm = match vm.load_elf(program) {

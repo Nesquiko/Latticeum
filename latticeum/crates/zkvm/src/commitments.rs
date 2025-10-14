@@ -1,16 +1,17 @@
 use configuration::N_REGS;
+use p3_commit::{BatchOpening, BatchOpeningRef, Mmcs};
 use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::{Goldilocks, Poseidon2Goldilocks};
 use p3_keccak::Keccak256Hash;
-use p3_matrix::dense::RowMajorMatrix;
-use p3_merkle_tree::MerkleTree;
+use p3_matrix::{Dimensions, dense::RowMajorMatrix};
+use p3_merkle_tree::{MerkleTree, MerkleTreeError, MerkleTreeMmcs};
 use p3_symmetric::{
-    CryptographicHasher, PaddingFreeSponge, PseudoCompressionFunction, TruncatedPermutation,
+    CryptographicHasher, Hash, PaddingFreeSponge, PseudoCompressionFunction, TruncatedPermutation,
 };
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use vm::riscvm::{
     inst::{ExecutionTrace, MemoryOperation},
-    vm::{Loaded, VM},
+    vm::{Loaded, VM, WORD_SIZE, physical_addr},
 };
 
 const RNG_SEED: [u8; 32] = [
@@ -54,6 +55,14 @@ type MemCommPoseidon2Compression =
 type MemOpsVecCommPoseidon2Compression =
     TruncatedPermutation<MemCommPoseidon2Perm, 4, 1, MEM_COMM_POSEIDON2_WIDTH>;
 
+type MemCommMerkleTree = MerkleTreeMmcs<
+    Goldilocks,
+    Goldilocks,
+    MemCommPoseidon2Sponge,
+    MemCommPoseidon2Compression,
+    MEM_COMM_POSEIDON2_OUT,
+>;
+
 /// Total state size of the Poseidon2 permutation for state 0 commitment (rate + capacity).
 /// The permutation operates on arrays of WIDTH field elements.
 const STATE0_COMM_POSEIDON2_WIDTH: usize = 12;
@@ -77,10 +86,21 @@ type State0Poseidon2Sponge = PaddingFreeSponge<
     STATE0_COMM_POSEIDON2_OUT,
 >;
 
+/// Opening proof for a modified memory page.
+pub struct MemoryPageOpening<const WORDS_PER_PAGE: usize> {
+    /// The page data that was opened
+    pub page: [Goldilocks; WORDS_PER_PAGE],
+    /// The Merkle proof for this page
+    pub proof: Vec<[Goldilocks; MEM_COMM_POSEIDON2_OUT]>,
+    /// The page index that was opened
+    pub page_index: usize,
+}
+
 pub struct ZkVmCommitter {
     memory_hasher: MemCommPoseidon2Sponge,
     memory_compression: MemCommPoseidon2Compression,
     memory_ops_vec_compression: MemOpsVecCommPoseidon2Compression,
+    memory_mmcs: MemCommMerkleTree,
 }
 
 impl ZkVmCommitter {
@@ -90,31 +110,48 @@ impl ZkVmCommitter {
         let memory_hasher = MemCommPoseidon2Sponge::new(memory_perm.clone());
         let memory_compression = MemCommPoseidon2Compression::new(memory_perm.clone());
         let memory_ops_vec_compression = MemOpsVecCommPoseidon2Compression::new(memory_perm);
+        let memory_mmcs = MemCommMerkleTree::new(memory_hasher.clone(), memory_compression.clone());
 
         Self {
             memory_hasher,
             memory_compression,
             memory_ops_vec_compression,
+            memory_mmcs,
         }
     }
 
+    /// Commits to state_i and generates opening proof for modified memory page
+    ///
+    /// Returns: (state_i_commitment, optional_memory_page_opening)
     pub fn state_i_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
         trace: &ExecutionTrace,
-    ) -> Goldilocks {
+        previous_mem_ops_vec_comm: Goldilocks,
+    ) -> (Goldilocks, Option<MemoryPageOpening<WORDS_PER_PAGE>>) {
         let commit_start = std::time::Instant::now();
 
         let pc = Goldilocks::from_usize(vm.pc);
         let regs_comm = self.vm_regs_comm(vm);
 
-        if let Some(mem_op) = &trace.side_effects.memory_op {
-            // TODO update the comm to mem
-            // TODO update the comm to mem vec ops
-        }
+        // let (mem_comm, mem_page_opening) = if let Some(mem_op) = &trace.side_effects.memory_op {
+        //     // Generate memory commitment with opening proof for the modified page
+        //     self.vm_mem_comm_with_opening(vm, mem_op)
+        // } else {
+        //     // No memory operation, just compute the commitment
+        //     (self.vm_mem_comm(vm), None)
+        // };
+        //
+        // let mem_ops_vec_comm = if let Some(mem_op) = &trace.side_effects.memory_op {
+        //     self.vm_mem_ops_vec_comm(previous_mem_ops_vec_comm, mem_op)
+        // } else {
+        //     previous_mem_ops_vec_comm
+        // };
 
-        tracing::trace!("commited to state_0 in {:?}", commit_start.elapsed());
-        Goldilocks::ZERO
+        // TODO: test the memory commitments, only happy paths
+        // TODO: Compute state_i commitment using pc, regs_comm, mem_comm, mem_ops_vec_comm
+        tracing::trace!("commited to state_i in {:?}", commit_start.elapsed());
+        todo!()
     }
 
     pub fn state_0_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
@@ -214,6 +251,89 @@ impl ZkVmCommitter {
         let root_array: [Goldilocks; MEM_COMM_POSEIDON2_OUT] = tree.root().into();
         tracing::trace!("commited to vm's memory in {:?}", commit_start.elapsed());
         root_array[0]
+    }
+
+    /// Creates a Merkle tree commitment over the VM's memory and generates an opening proof
+    /// for the page that was modified by the memory operation.
+    fn vm_mem_comm_with_opening<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
+        &self,
+        vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
+        mem_op: &MemoryOperation,
+    ) -> (Goldilocks, Option<MemoryPageOpening<WORDS_PER_PAGE>>) {
+        let commit_start = std::time::Instant::now();
+
+        let (page_index, _) =
+            physical_addr::<WORD_SIZE, WORDS_PER_PAGE, PAGE_COUNT>(mem_op.address as usize);
+
+        let mut leaves = Vec::with_capacity(PAGE_COUNT);
+        for page in vm.memory.iter() {
+            let page_elements: Vec<Goldilocks> = page
+                .iter()
+                .map(|&word| Goldilocks::from_u32(word))
+                .collect();
+
+            let matrix = RowMajorMatrix::new(page_elements, WORDS_PER_PAGE);
+            leaves.push(matrix);
+        }
+
+        let (commitment, merkle_tree) = self.memory_mmcs.commit(leaves);
+
+        let batch_opening: BatchOpening<Goldilocks, MemCommMerkleTree> =
+            self.memory_mmcs.open_batch(page_index, &merkle_tree);
+
+        // there should be log2(PAGE_COUNT) elements in merkle proof
+        assert_eq!(
+            PAGE_COUNT.trailing_ones() as usize,
+            batch_opening.opening_proof.len()
+        );
+
+        let page_opening = MemoryPageOpening::<WORDS_PER_PAGE> {
+            page: batch_opening.opened_values[0]
+                .clone()
+                .try_into()
+                .expect("failed to convert page data"),
+            proof: batch_opening.opening_proof,
+            page_index,
+        };
+
+        let root_array: [Goldilocks; MEM_COMM_POSEIDON2_OUT] = commitment.into();
+        tracing::trace!(
+            "commited to vm's memory with opening for page {} in {:?}",
+            page_index,
+            commit_start.elapsed()
+        );
+        (root_array[0], Some(page_opening))
+    }
+
+    /// Verifies a memory page opening proof against a commitment.
+    pub fn verify_memory_opening<const WORDS_PER_PAGE: usize>(
+        &self,
+        commitment: Goldilocks,
+        opening: &MemoryPageOpening<WORDS_PER_PAGE>,
+    ) -> Result<(), MerkleTreeError> {
+        let commitment_array: Hash<Goldilocks, Goldilocks, 4> = Hash::from([
+            commitment,
+            Goldilocks::ZERO,
+            Goldilocks::ZERO,
+            Goldilocks::ZERO,
+        ]);
+
+        let dimensions = vec![Dimensions {
+            height: WORDS_PER_PAGE,
+            width: opening.page.len(),
+        }];
+
+        let batch_opening_ref = BatchOpeningRef {
+            opened_values: &[opening.page.to_vec()],
+            opening_proof: &opening.proof,
+        };
+
+        self.memory_mmcs.verify_batch(
+            &commitment_array,
+            &dimensions,
+            opening.page_index,
+            batch_opening_ref,
+        )
     }
 
     fn vm_mem_ops_vec_comm(
