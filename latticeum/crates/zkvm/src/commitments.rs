@@ -4,9 +4,14 @@ use p3_goldilocks::{Goldilocks, Poseidon2Goldilocks};
 use p3_keccak::Keccak256Hash;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_merkle_tree::MerkleTree;
-use p3_symmetric::{CryptographicHasher, PaddingFreeSponge, TruncatedPermutation};
+use p3_symmetric::{
+    CryptographicHasher, PaddingFreeSponge, PseudoCompressionFunction, TruncatedPermutation,
+};
 use rand::{Rng, SeedableRng, rngs::StdRng};
-use vm::riscvm::vm::{Loaded, VM};
+use vm::riscvm::{
+    inst::MemoryOperation,
+    vm::{Loaded, VM},
+};
 
 const RNG_SEED: [u8; 32] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
@@ -18,6 +23,9 @@ const ZERO_MEM_MERKLE_ROOT: u64 = 11048378538371949082;
 
 /// Calculated with [ZkVmCommitter::vm_regs_comm] on empty regs
 const ZERO_REGS_MERKLE_ROOT: u64 = 16244443006506064383;
+
+/// Calculated with [ZkVmCommitter::mem_ops_vec_comm] on empty/zero args
+const ZERO_MEM_OPS_VEC_COMM: u64 = 17155745924013818368;
 
 /// Total state size of the Poseidon2 permutation for memory and registers
 /// commitments (rate + capacity). The permutation operates on arrays of WIDTH
@@ -42,6 +50,9 @@ type MemCommPoseidon2Sponge = PaddingFreeSponge<
 >;
 type MemCommPoseidon2Compression =
     TruncatedPermutation<MemCommPoseidon2Perm, 2, MEM_COMM_POSEIDON2_OUT, MEM_COMM_POSEIDON2_WIDTH>;
+
+type MemOpsVecCommPoseidon2Compression =
+    TruncatedPermutation<MemCommPoseidon2Perm, 4, 1, MEM_COMM_POSEIDON2_WIDTH>;
 
 /// Total state size of the Poseidon2 permutation for state 0 commitment (rate + capacity).
 /// The permutation operates on arrays of WIDTH field elements.
@@ -69,21 +80,21 @@ type State0Poseidon2Sponge = PaddingFreeSponge<
 pub struct ZkVmCommitter {
     memory_hasher: MemCommPoseidon2Sponge,
     memory_compression: MemCommPoseidon2Compression,
+    memory_ops_vec_compression: MemOpsVecCommPoseidon2Compression,
 }
 
-// TODO research if using Poseidon2GoldilocksHL (horizen labs) poseidon doesn't
-// need rangomness, and has predefined inner matrices
-// Also change readme to include the merkle root of regs
 impl ZkVmCommitter {
     pub fn new() -> Self {
         let mut rng = StdRng::from_seed(RNG_SEED);
         let memory_perm = MemCommPoseidon2Perm::new_from_rng_128(&mut rng);
         let memory_hasher = MemCommPoseidon2Sponge::new(memory_perm.clone());
-        let memory_compression = MemCommPoseidon2Compression::new(memory_perm);
+        let memory_compression = MemCommPoseidon2Compression::new(memory_perm.clone());
+        let memory_ops_vec_compression = MemOpsVecCommPoseidon2Compression::new(memory_perm);
 
         Self {
             memory_hasher,
             memory_compression,
+            memory_ops_vec_compression,
         }
     }
 
@@ -93,11 +104,12 @@ impl ZkVmCommitter {
     ) -> Goldilocks {
         let commit_start = std::time::Instant::now();
 
-        // 7 elements
+        // 8 elements
         let code_comm = vm_code_comm(vm);
         let entrypoint = Goldilocks::from_usize(vm.elf().entry_point);
         let zero_mem_comm = Goldilocks::from_u64(ZERO_MEM_MERKLE_ROOT);
         let zero_regs_comm = Goldilocks::from_u64(ZERO_REGS_MERKLE_ROOT);
+        let zero_mem_ops_vec_comm = Goldilocks::from_u64(ZERO_MEM_OPS_VEC_COMM);
 
         let mut rng = StdRng::from_seed(RNG_SEED);
         let perm = State0Poseidon2Perm::new_from_rng_128(&mut rng);
@@ -110,6 +122,7 @@ impl ZkVmCommitter {
             entrypoint,
             zero_mem_comm,
             zero_regs_comm,
+            zero_mem_ops_vec_comm,
         ]);
 
         tracing::trace!("commited to state_0 in {:?}", commit_start.elapsed());
@@ -182,6 +195,21 @@ impl ZkVmCommitter {
         let root_array: [Goldilocks; MEM_COMM_POSEIDON2_OUT] = tree.root().into();
         tracing::trace!("commited to vm's memory in {:?}", commit_start.elapsed());
         root_array[0]
+    }
+
+    fn mem_ops_vec_comm(&self, previous_comm: Goldilocks, mem_op: &MemoryOperation) -> Goldilocks {
+        let commit_start = std::time::Instant::now();
+
+        let input = [
+            [previous_comm],
+            [Goldilocks::from_usize(mem_op.cycle)],
+            [Goldilocks::from_u32(mem_op.address)],
+            [Goldilocks::from_u32(mem_op.value)],
+        ];
+
+        let comm = self.memory_ops_vec_compression.compress(input)[0];
+        tracing::trace!("commited to memory ops vec in {:?}", commit_start.elapsed());
+        comm
     }
 }
 

@@ -6,8 +6,8 @@ A ZkVM build with lattice based cryptography.
 
 - 32bit
 - 1MB of RAM
-  - page size 256B
-  - number of pages 4096
+  - page size 4096B
+  - number of pages 256
 
 ## IVC of RISC-V
 
@@ -28,8 +28,8 @@ part for verifying correct execution of `F`. In practice:
        - **1 goldilocks element**
      - Merkle root of all VM's memory pages (zeroes in all pages)
        - **1 goldilocks element**
-     - all registers, all zeroes
-       - **32 goldilocks elements**
+     - Merkle root of all registers, all zeroes
+       - **1 goldilocks elements**
      - Commitment to an empty memory ops vector `poseidon2(mem_ops_vec = 0, cycle = 0, address = 0, value = 0)`
        - **1 goldilocks element**
    - `hash(state_{i - 1})`, where `state_{i - 1}` is complete state of VM after step `i - 1`, it includes:
@@ -37,8 +37,8 @@ part for verifying correct execution of `F`. In practice:
        - **1 goldilocks element**
      - new Merkle root of VM memory
        - **1 goldilocks element**
-     - all registers
-       - **32 goldilocks elements**
+     - Merkle root of registers
+       - **1 goldilocks elements**
      - commitment to an memory ops vector `poseidon2(mem_ops_vec_{i - 1}, cycle, address, value)`
        - **1 goldilocks element**
    - `hash(U_{i - 1})` binds the running instance
@@ -54,13 +54,16 @@ part for verifying correct execution of `F`. In practice:
      - the full accumulator instance `U_{i - 1}`
    - folding proof from step `i - 1`
    - the merkle inclusion proof of the new memory merkle root
+   - all registers so that the merkle tree of registers can be recomputed
    - the execution trace for the application circuit `F`
 
 3. The constraints of the `F'` for step `i`:
    - recalculate the `h_{i - 1}` from its preimage and constraint that it equals the public input `h_{i - 1}`
    - constraint that the input of the execution trace equals the output of `z_{i - 1}`
+     - including the merkle root recalculation in `z_{i - 1}.registers_comm`
    - constraint the RISC-V instruction execution
-   - if memory access/write, then constraint that the new memory merkle root is valid
+   - if memory op, then constraint that the memory ops vec commitment is correct
+   - if memory write, then constraint that the new memory merkle root is valid
    - constraint the LatticeFold's NIFS verifier
 
 Compare against https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
