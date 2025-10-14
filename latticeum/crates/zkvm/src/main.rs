@@ -1,7 +1,6 @@
 mod ccs;
 mod commitments;
 mod constraints;
-mod memory_commitment;
 
 use ccs::to_raw_witness;
 use cyclotomic_rings::rings::{GoldilocksChallengeSet, GoldilocksRingNTT};
@@ -25,10 +24,7 @@ use vm::riscvm::{inst::ExecutionTrace, vm::new_vm_1mb};
 
 #[cfg(feature = "debug")]
 use crate::constraints::check_relation_debug;
-use crate::{
-    ccs::CCSLayout, commitments::ZkVmCommitter, constraints::CCSBuilder,
-    memory_commitment::PoseidonHasher,
-};
+use crate::{ccs::CCSLayout, commitments::ZkVmCommitter, constraints::CCSBuilder};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
@@ -77,12 +73,10 @@ fn main() {
 
     let zkvm_commiter = ZkVmCommitter::new();
     let z_0_comm = zkvm_commiter.state_0_comm(&vm);
-    tracing::info!("{}", z_0_comm);
 
     let ccs = CCSBuilder::create_riscv_ccs::<N>(&CCS_LAYOUT);
 
     let mut rng = ark_std::test_rng();
-    let poseidon = PoseidonHasher::new();
 
     let scheme: AjtaiCommitmentScheme<GoldilocksRingNTT> =
         AjtaiCommitmentScheme::rand(KAPPA, N, &mut rng);
@@ -101,7 +95,7 @@ fn main() {
         let mut mem_comm_out = current_mem_comm;
 
         if let Some(memory_op) = trace.side_effects.memory_op.clone() {
-            mem_comm_out = poseidon.mem_comm(current_mem_comm, &memory_op);
+            //     mem_comm_out = poseidon.mem_comm(current_mem_comm, &memory_op);
             memory_ops.push(memory_op);
         }
 

@@ -9,7 +9,7 @@ use p3_symmetric::{
 };
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use vm::riscvm::{
-    inst::MemoryOperation,
+    inst::{ExecutionTrace, MemoryOperation},
     vm::{Loaded, VM},
 };
 
@@ -96,6 +96,25 @@ impl ZkVmCommitter {
             memory_compression,
             memory_ops_vec_compression,
         }
+    }
+
+    pub fn state_i_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
+        &self,
+        vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
+        trace: &ExecutionTrace,
+    ) -> Goldilocks {
+        let commit_start = std::time::Instant::now();
+
+        let pc = Goldilocks::from_usize(vm.pc);
+        let regs_comm = self.vm_regs_comm(vm);
+
+        if let Some(mem_op) = &trace.side_effects.memory_op {
+            // TODO update the comm to mem
+            // TODO update the comm to mem vec ops
+        }
+
+        tracing::trace!("commited to state_0 in {:?}", commit_start.elapsed());
+        Goldilocks::ZERO
     }
 
     pub fn state_0_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
@@ -197,7 +216,11 @@ impl ZkVmCommitter {
         root_array[0]
     }
 
-    fn mem_ops_vec_comm(&self, previous_comm: Goldilocks, mem_op: &MemoryOperation) -> Goldilocks {
+    fn vm_mem_ops_vec_comm(
+        &self,
+        previous_comm: Goldilocks,
+        mem_op: &MemoryOperation,
+    ) -> Goldilocks {
         let commit_start = std::time::Instant::now();
 
         let input = [
