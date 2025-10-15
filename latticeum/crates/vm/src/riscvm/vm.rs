@@ -8,7 +8,7 @@ use configuration::{N_REGS, RESULT_ADDRESS};
 use thiserror::Error;
 
 use crate::riscvm::{
-    elf::{Elf, ElfLoadingError},
+    elf::{Code, Elf, ElfLoadingError},
     inst::ExecutionTrace,
     inst_decoder::{DecodedInstruction, Decoder},
 };
@@ -59,11 +59,31 @@ pub struct VM<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize, Program: VmP
     program: Program,
 }
 
-pub(crate) const PAGE_SIZE_1024: usize = 1024;
-pub(crate) const PAGE_COUNT_256: usize = 256;
+pub(crate) const WORDS_PER_PAGE_256: usize = 256;
+pub(crate) const PAGE_COUNT_1024: usize = 1024;
 
-pub fn new_vm_1mb() -> VM<PAGE_SIZE_1024, PAGE_COUNT_256, Uninitialized> {
+pub fn new_vm_1mb() -> VM<WORDS_PER_PAGE_256, PAGE_COUNT_1024, Uninitialized> {
     VM::<_, _, _>::new()
+}
+
+pub fn dummy_loaded_vm_1mb() -> VM<WORDS_PER_PAGE_256, PAGE_COUNT_1024, Loaded> {
+    VM {
+        regs: [0; 32],
+        pc: 0,
+        memory: Box::new([[0; WORDS_PER_PAGE_256]; PAGE_COUNT_1024]),
+        program: Loaded {
+            elf: Elf {
+                image: HashMap::new(),
+                entry_point: 0x0,
+                raw_code: Code {
+                    start: 0x0,
+                    size: 0x0,
+                    bytes: Box::new([]),
+                },
+            },
+            instructions: HashMap::new(),
+        },
+    }
 }
 
 impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize, Program: VmProgram>
@@ -302,7 +322,7 @@ mod tests {
     use crate::riscvm::{
         inst_decoder::DecodedInstruction,
         reg,
-        vm::{PAGE_COUNT_256, PAGE_SIZE_1024, WORD_SIZE, new_vm_1mb, physical_addr},
+        vm::{PAGE_COUNT_1024, WORD_SIZE, WORDS_PER_PAGE_256, new_vm_1mb, physical_addr},
     };
     use configuration::RESULT_ADDRESS;
     use riscv_isa::Instruction;
@@ -310,16 +330,16 @@ mod tests {
     use test_log::test;
 
     #[test]
-    fn page_index_32bit_vm() {
+    fn physical_addr_32bit_vm() {
         assert_eq!(WORD_SIZE, 4);
 
-        //              __ppwwwwwwwwwwii
-        let virt_addr = 0b11100000000100;
-        // WORD_SIZE shifts by 2 bits, PAGE_SIZE_1024 byt 10 bits
+        //              __ppppwwwwwwwwii
+        let virt_addr = 0b00011000000100;
+        // WORD_SIZE shifts by 2 bits, PAGE_SIZE_1024 by 8 bits
         let (page_index, word_index) =
-            physical_addr::<WORD_SIZE, PAGE_SIZE_1024, PAGE_COUNT_256>(virt_addr);
-        assert_eq!(0b11, page_index);
-        assert_eq!(0b1000000001, word_index);
+            physical_addr::<WORD_SIZE, WORDS_PER_PAGE_256, PAGE_COUNT_1024>(virt_addr);
+        assert_eq!(0b1, page_index);
+        assert_eq!(0b10000001, word_index);
     }
 
     #[test]
