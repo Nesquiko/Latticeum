@@ -19,15 +19,6 @@ const RNG_SEED: [u8; 32] = [
     26, 27, 28, 29, 30, 31,
 ];
 
-/// Calculated with [ZkVmCommitter::vm_mem_comm] on empty memory
-const ZERO_MEM_MERKLE_ROOT: u64 = 11048378538371949082;
-
-/// Calculated with [ZkVmCommitter::vm_regs_comm] on empty regs
-const ZERO_REGS_MERKLE_ROOT: u64 = 16244443006506064383;
-
-/// Calculated with [ZkVmCommitter::mem_ops_vec_comm] on empty/zero args
-const ZERO_MEM_OPS_VEC_COMM: u64 = 17155745924013818368;
-
 /// Total state size of the Poseidon2 permutation for memory and registers
 /// commitments (rate + capacity). The permutation operates on arrays of WIDTH
 /// field elements.
@@ -53,7 +44,7 @@ type MemCommPoseidon2Compression =
     TruncatedPermutation<MemCommPoseidon2Perm, 2, MEM_COMM_POSEIDON2_OUT, MEM_COMM_POSEIDON2_WIDTH>;
 
 type MemOpsVecCommPoseidon2Compression =
-    TruncatedPermutation<MemCommPoseidon2Perm, 4, 1, MEM_COMM_POSEIDON2_WIDTH>;
+    TruncatedPermutation<MemCommPoseidon2Perm, 1, 4, MEM_COMM_POSEIDON2_WIDTH>;
 
 type MemCommMerkleTree = MerkleTreeMmcs<
     Goldilocks,
@@ -65,14 +56,15 @@ type MemCommMerkleTree = MerkleTreeMmcs<
 
 /// Total state size of the Poseidon2 permutation for state 0 commitment (rate + capacity).
 /// The permutation operates on arrays of WIDTH field elements.
-const STATE0_COMM_POSEIDON2_WIDTH: usize = 12;
+/// WIDTH = RATE + CAPACITY
+const STATE0_COMM_POSEIDON2_WIDTH: usize = 16;
 
 /// Number of field elements that can be absorbed per permutation call. This is
-/// the "input size" of the sponge construction. Higher rate = faster hashing,
-/// but lower security. In order to keep 128 bits of security, subtract 4 from
-/// the [STATE0_COMM_POSEIDON2_WIDTH]:
+/// the "input size" of the sponge construction.
+/// Higher rate = faster hashing, but lower security.
 /// Security is (Capacity * field bits) / 2 = (4 * 64) / 2 = 128 bits of security
-const STATE0_COMM_POSEIDON2_RATE: usize = STATE0_COMM_POSEIDON2_WIDTH - 4;
+/// With CAPACITY=4 for 128-bit security, RATE = WIDTH - CAPACITY = 16 - 4 = 12
+const STATE0_COMM_POSEIDON2_RATE: usize = 12;
 
 /// Number of field elements in the output digest. This determines the size of
 /// hash outputs.
@@ -121,8 +113,6 @@ impl ZkVmCommitter {
     }
 
     /// Commits to state_i and generates opening proof for modified memory page
-    ///
-    /// Returns: (state_i_commitment, optional_memory_page_opening)
     pub fn state_i_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
@@ -156,17 +146,30 @@ impl ZkVmCommitter {
     pub fn state_0_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
-    ) -> Goldilocks {
+    ) -> [Goldilocks; STATE0_COMM_POSEIDON2_OUT] {
         let commit_start = std::time::Instant::now();
 
-        // 8 elements
         let code_comm = vm_code_comm(vm);
         let entrypoint = Goldilocks::from_usize(vm.elf().entry_point);
         let zero_mem_comm = self.vm_mem_comm(vm);
-        // assert_eq!(zero_mem_comm, Goldilocks::from_u64(ZERO_MEM_MERKLE_ROOT));
+        // calculated with [ZkVmCommitter::vm_mem_comm] on empty memory
+        let const_zero_mem_merkle_root = [
+            Goldilocks::from_u64(11048378538371949082),
+            Goldilocks::from_u64(17790278716442129820),
+            Goldilocks::from_u64(1567578095375187627),
+            Goldilocks::from_u64(16514699081104724142),
+        ];
+        assert_eq!(zero_mem_comm, const_zero_mem_merkle_root);
 
         let zero_regs_comm = self.vm_regs_comm(vm);
-        // assert_eq!(zero_regs_comm, Goldilocks::from_u64(ZERO_REGS_MERKLE_ROOT));
+        // calculated with [ZkVmCommitter::vm_regs_comm] on empty regs
+        let const_zero_regs_merkle_root = [
+            Goldilocks::from_u64(16244443006506064383),
+            Goldilocks::from_u64(3940747969403026289),
+            Goldilocks::from_u64(12218044832803549905),
+            Goldilocks::from_u64(11889365038133828323),
+        ];
+        assert_eq!(zero_regs_comm, const_zero_regs_merkle_root);
 
         let zero_mem_ops_vec_comm = self.vm_mem_ops_vec_comm(
             Goldilocks::ZERO,
@@ -177,28 +180,40 @@ impl ZkVmCommitter {
                 is_write: false,
             },
         );
-        assert_eq!(
-            zero_mem_ops_vec_comm,
-            Goldilocks::from_u64(ZERO_MEM_OPS_VEC_COMM)
-        );
+        // calculated with [ZkVmCommitter::mem_ops_vec_comm] on empty/zero args
+        let const_zero_mem_ops_vec_comm = [
+            Goldilocks::from_u64(17155745924013818368),
+            Goldilocks::from_u64(13273765924687100318),
+            Goldilocks::from_u64(14983401559123317382),
+            Goldilocks::from_u64(16003586692101738351),
+        ];
+        assert_eq!(zero_mem_ops_vec_comm, const_zero_mem_ops_vec_comm);
 
         let mut rng = StdRng::from_seed(RNG_SEED);
         let perm = State0Poseidon2Perm::new_from_rng_128(&mut rng);
         let hasher = State0Poseidon2Sponge::new(perm);
-        unimplemented!();
-        // let comm = hasher.hash_iter([
-        //     code_comm[0],
-        //     code_comm[1],
-        //     code_comm[2],
-        //     code_comm[3],
-        //     entrypoint,
-        //     zero_mem_comm,
-        //     zero_regs_comm,
-        //     zero_mem_ops_vec_comm,
-        // ]);
+        let comm = hasher.hash_iter([
+            code_comm[0],
+            code_comm[1],
+            code_comm[2],
+            code_comm[3],
+            entrypoint,
+            zero_mem_comm[0],
+            zero_mem_comm[1],
+            zero_mem_comm[2],
+            zero_mem_comm[3],
+            zero_regs_comm[0],
+            zero_regs_comm[1],
+            zero_regs_comm[2],
+            zero_regs_comm[3],
+            zero_mem_ops_vec_comm[0],
+            zero_mem_ops_vec_comm[1],
+            zero_mem_ops_vec_comm[2],
+            zero_mem_ops_vec_comm[3],
+        ]);
 
-        // tracing::trace!("commited to state_0 in {:?}", commit_start.elapsed());
-        // comm
+        tracing::trace!("commited to state_0 in {:?}", commit_start.elapsed());
+        comm
     }
 
     /// Creates a Merkle tree commitment over the VM's registers
@@ -358,17 +373,17 @@ impl ZkVmCommitter {
         &self,
         previous_comm: Goldilocks,
         mem_op: &MemoryOperation,
-    ) -> Goldilocks {
+    ) -> [Goldilocks; MEM_COMM_POSEIDON2_OUT] {
         let commit_start = std::time::Instant::now();
 
-        let input = [
-            [previous_comm],
-            [Goldilocks::from_usize(mem_op.cycle)],
-            [Goldilocks::from_u32(mem_op.address)],
-            [Goldilocks::from_u32(mem_op.value)],
-        ];
+        let input = [[
+            previous_comm,
+            Goldilocks::from_usize(mem_op.cycle),
+            Goldilocks::from_u32(mem_op.address),
+            Goldilocks::from_u32(mem_op.value),
+        ]];
 
-        let comm = self.memory_ops_vec_compression.compress(input)[0];
+        let comm = self.memory_ops_vec_compression.compress(input);
         tracing::trace!("commited to memory ops vec in {:?}", commit_start.elapsed());
         comm
     }
@@ -396,7 +411,14 @@ fn vm_code_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
 
 #[cfg(test)]
 mod tests {
-    use vm::riscvm::{inst::MemoryOperation, vm::dummy_loaded_vm_1mb};
+    use std::path::PathBuf;
+
+    use p3_field::PrimeCharacteristicRing;
+    use p3_goldilocks::Goldilocks;
+    use vm::riscvm::{
+        inst::MemoryOperation,
+        vm::{dummy_loaded_vm_1mb, new_vm_1mb},
+    };
 
     use crate::commitments::ZkVmCommitter;
 
@@ -424,5 +446,26 @@ mod tests {
         commiter
             .verify_memory_opening::<WORDS_PER_PAGE, PAGE_COUNT>(comm, &opening)
             .expect("commitment opening wan't valid");
+    }
+
+    #[test]
+    fn state_0_comm_on_fibonacci() {
+        let vm = new_vm_1mb();
+        let program = PathBuf::from(
+            "/home/nesquiko/fiit/dp/latticeum/target/riscv32imac-unknown-none-elf/release/fibonacci",
+        );
+        let vm = vm.load_elf(program).expect("failed to load fibonacci elf");
+
+        let commiter = ZkVmCommitter::new();
+        let comm = commiter.state_0_comm(&vm);
+
+        let expected = [
+            Goldilocks::from_u64(3265770228178860056),
+            Goldilocks::from_u64(5178827264030412874),
+            Goldilocks::from_u64(3467290198855439401),
+            Goldilocks::from_u64(11781120981098105746),
+        ];
+
+        assert_eq!(expected, comm);
     }
 }

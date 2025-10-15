@@ -46,11 +46,6 @@ const KAPPA: usize = 4;
 /// Number of columns in the Ajtai commitment matrix
 const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 
-// TODO
-// 1. add to the README, in the z_i (also z_0) state the memory_ops_vec_comm, so that
-//  it is locked and malicous prover can in step `i` insert whatever,
-// 2. Create the code for creating z_0
-// 3. Create code for z_i
 fn main() {
     tracing_subscriber::fmt::init();
 
