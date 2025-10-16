@@ -24,7 +24,11 @@ use vm::riscvm::{inst::ExecutionTrace, vm::new_vm_1mb};
 
 #[cfg(feature = "debug")]
 use crate::constraints::check_relation_debug;
-use crate::{ccs::CCSLayout, commitments::ZkVmCommitter, constraints::CCSBuilder};
+use crate::{
+    ccs::CCSLayout,
+    commitments::{GoldilocksComm, ZkVmCommitter},
+    constraints::CCSBuilder,
+};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
@@ -207,7 +211,7 @@ fn main() {
     // );
 }
 
-const INITIAL_MEM_COMM: Goldilocks = Goldilocks::ZERO;
+const INITIAL_MEM_COMM: GoldilocksComm = [Goldilocks::ZERO; 4];
 
 fn initialize_accumulator(
     ccs: &CCS<GoldilocksRingNTT>,
@@ -216,19 +220,21 @@ fn initialize_accumulator(
 ) -> (
     LCCCS<GoldilocksRingNTT>,
     Witness<GoldilocksRingNTT>,
-    Goldilocks,
+    GoldilocksComm,
 ) {
-    // Create witness with private witness part only
-    // The z-vector structure is [x_ccs, 1, w_ccs] = layout.size + 1 total
-    // So the private witness (w_ccs) should be layout.size elements
+    // create witness with private witness part only
+    // the z-vector structure is [x_ccs, 1, w_ccs] = layout.size + 1 total
+    // so the private witness (w_ccs) should be layout.w_size elements
     debug_assert_eq!(ccs.n - ccs.l - 1, layout.w_size);
     let zero_w_ccs = vec![GoldilocksRingNTT::zero(); layout.w_size];
 
     let zero_wit = Witness::from_w_ccs::<GoldiLocksDP>(zero_w_ccs);
     // initialize public inputs and output to memory comm in and memory comm out
     let zero_x_ccs = vec![
-        GoldilocksRingNTT::from(INITIAL_MEM_COMM.as_canonical_u64()),
-        GoldilocksRingNTT::from(INITIAL_MEM_COMM.as_canonical_u64()),
+        GoldilocksRingNTT::from(INITIAL_MEM_COMM[0].as_canonical_u64()),
+        GoldilocksRingNTT::from(INITIAL_MEM_COMM[1].as_canonical_u64()),
+        GoldilocksRingNTT::from(INITIAL_MEM_COMM[2].as_canonical_u64()),
+        GoldilocksRingNTT::from(INITIAL_MEM_COMM[3].as_canonical_u64()),
     ];
 
     let zero_cm_i = CCCS {
@@ -251,8 +257,8 @@ fn initialize_accumulator(
 fn arithmetize(
     trace: &ExecutionTrace,
     layout: &CCSLayout,
-    mem_comm_in: Goldilocks,
-    mem_comm_out: Goldilocks,
+    mem_comm_in: GoldilocksComm,
+    mem_comm_out: GoldilocksComm,
 ) -> Vec<GoldilocksRingNTT> {
     let start_witness_creation = std::time::Instant::now();
 
@@ -260,9 +266,12 @@ fn arithmetize(
     // convert raw z to proper z-vector structure: [x_ccs, 1, w_ccs]
     let mut z_vec = Vec::new();
 
+    // TODO pass the state{i-1} comm here instead of mem_comm
     // x_ccs: public inputs - memory commitment in and out
-    z_vec.push(mem_comm_in.as_canonical_u64() as usize);
-    z_vec.push(mem_comm_out.as_canonical_u64() as usize);
+    z_vec.push(mem_comm_in[0].as_canonical_u64() as usize);
+    z_vec.push(mem_comm_in[1].as_canonical_u64() as usize);
+    z_vec.push(mem_comm_in[2].as_canonical_u64() as usize);
+    z_vec.push(mem_comm_in[3].as_canonical_u64() as usize);
 
     // Add constant 1
     z_vec.push(1usize);
@@ -274,7 +283,7 @@ fn arithmetize(
     let z_as_ring: Vec<GoldilocksRingNTT> = to_F_vec(z_vec);
 
     tracing::trace!(
-        "witness creation: {:?} (size: {} elements, mem_comm_in: {}, mem_comm_out: {})",
+        "witness creation: {:?} (size: {} elements, mem_comm_in: {:?}, mem_comm_out: {:?})",
         start_witness_creation.elapsed(),
         layout.w_size,
         mem_comm_in,

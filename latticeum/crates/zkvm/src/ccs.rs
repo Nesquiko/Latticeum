@@ -50,7 +50,7 @@ pub struct CCSLayout {
 }
 
 impl CCSLayout {
-    pub const X_ELEMS_SIZE: usize = 2; // memory commitment as public input
+    pub const X_ELEMS_SIZE: usize = 4; // memory commitment as public input
     pub const CONST_ELEMS_SIZE: usize = 1;
     pub const W_IDX_DELTA: usize = Self::X_ELEMS_SIZE + Self::CONST_ELEMS_SIZE;
 
