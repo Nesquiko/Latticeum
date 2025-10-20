@@ -27,20 +27,20 @@ part for verifying correct execution of `F`. In practice:
      - programs entrypoint, which is in `pc`
        - **1 goldilocks element**
      - Merkle root of all VM's memory pages (zeroes in all pages)
-       - **1 goldilocks element**
+       - **4 goldilocks element**
      - Merkle root of all registers, all zeroes
-       - **1 goldilocks elements**
+       - **4 goldilocks elements**
      - Commitment to an empty memory ops vector `poseidon2(mem_ops_vec = 0, cycle = 0, address = 0, value = 0)`
-       - **1 goldilocks element**
+       - **4 goldilocks element**
    - `hash(state_{i - 1})`, where `state_{i - 1}` is complete state of VM after step `i - 1`, it includes:
      - VM's `pc`
        - **1 goldilocks element**
      - new Merkle root of VM memory
-       - **1 goldilocks element**
+       - **4 goldilocks element**
      - Merkle root of registers
-       - **1 goldilocks elements**
+       - **4 goldilocks elements**
      - commitment to an memory ops vector `poseidon2(mem_ops_vec_{i - 1}, cycle, address, value)`
-       - **1 goldilocks element**
+       - **4 goldilocks element**
    - `hash(U_{i - 1})` binds the running instance
      - TODO read from code how many elements this has
 

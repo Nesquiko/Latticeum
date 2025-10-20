@@ -1,7 +1,28 @@
 use std::ops::Range;
 
 use configuration::N_REGS;
+use latticefold::decomposition_parameters::DecompositionParams;
 use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
+
+#[derive(Clone, Copy)]
+pub struct GoldiLocksDP;
+
+// Default params from latticefold examples
+impl DecompositionParams for GoldiLocksDP {
+    const B: u128 = 1 << 15;
+    /// Ring modulus is GoldiLocks (little less than 2^64), thus GoldiLocks modulus < B^L
+    const L: usize = 5;
+    /// Standard binary decomposition
+    const B_SMALL: usize = 2;
+    /// log₂(B)
+    const K: usize = 15;
+}
+
+pub const CCS_LAYOUT: CCSLayout = CCSLayout::new();
+/// Length of Ajtai commitment vectors (rows in commitment matrix)
+pub const KAPPA: usize = 4;
+/// Number of columns in the Ajtai commitment matrix
+pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 
 /// This struct holds the *indices* for CCS layout. It doesn't hold the data itself,
 /// just the indexes/layout map.

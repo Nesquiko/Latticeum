@@ -1,4 +1,6 @@
 use configuration::N_REGS;
+use cyclotomic_rings::rings::{GoldilocksRingNTT, GoldilocksRingPoly};
+use latticefold::arith::LCCCS;
 use p3_commit::{BatchOpening, BatchOpeningRef, Mmcs};
 use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::{Goldilocks, Poseidon2Goldilocks};
@@ -9,6 +11,10 @@ use p3_symmetric::{
     CryptographicHasher, Hash, PaddingFreeSponge, PseudoCompressionFunction, TruncatedPermutation,
 };
 use rand::{Rng, SeedableRng, rngs::StdRng};
+use stark_rings::{
+    PolyRing,
+    cyclotomic_ring::{ICRT, models::goldilocks::Fq},
+};
 use vm::riscvm::{
     inst::{ExecutionTrace, MemoryOperation},
     vm::{Loaded, VM, WORD_SIZE, physical_addr},
@@ -19,66 +25,46 @@ const RNG_SEED: [u8; 32] = [
     26, 27, 28, 29, 30, 31,
 ];
 
+/// number of field elements in the output digest
+const POSEIDON2_OUT: usize = 4;
+
+pub type GoldilocksComm = [Goldilocks; POSEIDON2_OUT];
+
 /// Total state size of the Poseidon2 permutation for memory and registers
 /// commitments (rate + capacity). The permutation operates on arrays of WIDTH
 /// field elements.
-const MEM_COMM_POSEIDON2_WIDTH: usize = 8;
+const POSEIDON2_WIDTH: usize = 8;
 
 /// Number of field elements that can be absorbed per permutation call. This is
 /// the "input size" of the sponge construction. Higher rate = faster hashing,
 /// but lower security.
-const MEM_COMM_POSEIDON2_RATE: usize = 4;
+const _POSEIDON2_RATE: usize = 4;
 
-/// Number of field elements in the output digest. This determines the size of
-/// hash outputs and Merkle tree node digests.
-const MEM_COMM_POSEIDON2_OUT: usize = 4;
+type Poseidon2Perm = Poseidon2Goldilocks<POSEIDON2_WIDTH>;
+type Poseidon2Sponge =
+    PaddingFreeSponge<Poseidon2Perm, POSEIDON2_WIDTH, _POSEIDON2_RATE, POSEIDON2_OUT>;
+type Poseidon2Compression = TruncatedPermutation<Poseidon2Perm, 2, POSEIDON2_OUT, POSEIDON2_WIDTH>;
 
-pub type GoldilocksComm = [Goldilocks; MEM_COMM_POSEIDON2_OUT];
+type MemOpsVecCommPoseidon2Compression = TruncatedPermutation<Poseidon2Perm, 2, 4, POSEIDON2_WIDTH>;
 
-type MemCommPoseidon2Perm = Poseidon2Goldilocks<MEM_COMM_POSEIDON2_WIDTH>;
-type MemCommPoseidon2Sponge = PaddingFreeSponge<
-    MemCommPoseidon2Perm,
-    MEM_COMM_POSEIDON2_WIDTH,
-    MEM_COMM_POSEIDON2_RATE,
-    MEM_COMM_POSEIDON2_OUT,
->;
-type MemCommPoseidon2Compression =
-    TruncatedPermutation<MemCommPoseidon2Perm, 2, MEM_COMM_POSEIDON2_OUT, MEM_COMM_POSEIDON2_WIDTH>;
-
-type MemOpsVecCommPoseidon2Compression =
-    TruncatedPermutation<MemCommPoseidon2Perm, 2, 4, MEM_COMM_POSEIDON2_WIDTH>;
-
-type MemCommMerkleTree = MerkleTreeMmcs<
-    Goldilocks,
-    Goldilocks,
-    MemCommPoseidon2Sponge,
-    MemCommPoseidon2Compression,
-    MEM_COMM_POSEIDON2_OUT,
->;
+type Poseidon2MerkleTree =
+    MerkleTreeMmcs<Goldilocks, Goldilocks, Poseidon2Sponge, Poseidon2Compression, POSEIDON2_OUT>;
 
 /// Total state size of the Poseidon2 permutation for state 0 commitment (rate + capacity).
 /// The permutation operates on arrays of WIDTH field elements.
 /// WIDTH = RATE + CAPACITY
-const STATE0_COMM_POSEIDON2_WIDTH: usize = 16;
+const WIDE_POSEIDON2_WIDTH: usize = 16;
 
 /// Number of field elements that can be absorbed per permutation call. This is
 /// the "input size" of the sponge construction.
 /// Higher rate = faster hashing, but lower security.
 /// Security is (Capacity * field bits) / 2 = (4 * 64) / 2 = 128 bits of security
 /// With CAPACITY=4 for 128-bit security, RATE = WIDTH - CAPACITY = 16 - 4 = 12
-const STATE0_COMM_POSEIDON2_RATE: usize = 12;
+const WIDE_POSEIDON2_RATE: usize = 12;
 
-/// Number of field elements in the output digest. This determines the size of
-/// hash outputs.
-const STATE_COMM_POSEIDON2_OUT: usize = 4;
-
-type StatePoseidon2Perm = Poseidon2Goldilocks<STATE0_COMM_POSEIDON2_WIDTH>;
-type StatePoseidon2Sponge = PaddingFreeSponge<
-    StatePoseidon2Perm,
-    STATE0_COMM_POSEIDON2_WIDTH,
-    STATE0_COMM_POSEIDON2_RATE,
-    STATE_COMM_POSEIDON2_OUT,
->;
+type WidePoseidon2Perm = Poseidon2Goldilocks<WIDE_POSEIDON2_WIDTH>;
+type WidePoseidon2Sponge =
+    PaddingFreeSponge<WidePoseidon2Perm, WIDE_POSEIDON2_WIDTH, WIDE_POSEIDON2_RATE, POSEIDON2_OUT>;
 
 /// Opening proof for a modified memory page.
 pub struct MemoryPageComm<const WORDS_PER_PAGE: usize> {
@@ -92,33 +78,49 @@ pub struct MemoryPageComm<const WORDS_PER_PAGE: usize> {
 }
 
 pub struct ZkVmCommitter {
-    memory_hasher: MemCommPoseidon2Sponge,
-    memory_compression: MemCommPoseidon2Compression,
+    hasher: Poseidon2Sponge,
+    compression: Poseidon2Compression,
     memory_ops_vec_compression: MemOpsVecCommPoseidon2Compression,
-    memory_mmcs: MemCommMerkleTree,
+    merkle_tree: Poseidon2MerkleTree,
 
-    state_hasher: StatePoseidon2Sponge,
+    wide_hasher: WidePoseidon2Sponge,
 }
 
 impl ZkVmCommitter {
     pub fn new() -> Self {
         let mut rng = StdRng::from_seed(RNG_SEED);
-        let memory_perm = MemCommPoseidon2Perm::new_from_rng_128(&mut rng);
-        let memory_hasher = MemCommPoseidon2Sponge::new(memory_perm.clone());
-        let memory_compression = MemCommPoseidon2Compression::new(memory_perm.clone());
+        let memory_perm = Poseidon2Perm::new_from_rng_128(&mut rng);
+        let memory_hasher = Poseidon2Sponge::new(memory_perm.clone());
+        let memory_compression = Poseidon2Compression::new(memory_perm.clone());
         let memory_ops_vec_compression = MemOpsVecCommPoseidon2Compression::new(memory_perm);
-        let memory_mmcs = MemCommMerkleTree::new(memory_hasher.clone(), memory_compression.clone());
+        let memory_mmcs =
+            Poseidon2MerkleTree::new(memory_hasher.clone(), memory_compression.clone());
 
-        let state_perm = StatePoseidon2Perm::new_from_rng_128(&mut rng);
-        let state_hasher = StatePoseidon2Sponge::new(state_perm);
+        let wide_perm = WidePoseidon2Perm::new_from_rng_128(&mut rng);
+        let wide_hasher = WidePoseidon2Sponge::new(wide_perm);
 
         Self {
-            memory_hasher,
-            memory_compression,
-            memory_ops_vec_compression,
-            memory_mmcs,
-            state_hasher,
+            hasher: memory_hasher,
+            compression: memory_compression,
+            memory_ops_vec_compression: memory_ops_vec_compression,
+            merkle_tree: memory_mmcs,
+            wide_hasher,
         }
+    }
+
+    /// `h_i` public poseidon2 commitment to the state of the IVC step `i`.
+    /// Preimage contains:
+    /// - `i`
+    /// - state 0 commitment (calculated with [Self::state_0_comm])
+    /// - state i commitment (calculated with [Self::state_i_comm])
+    /// - accumulator i commitment ([Self::acc_comm])
+    pub fn ivc_step_comm(
+        i: Goldilocks,
+        state_0_comm: GoldilocksComm,
+        state_i_comm: GoldilocksComm,
+        acc_comm: GoldilocksComm,
+    ) -> GoldilocksComm {
+        unimplemented!()
     }
 
     /// Commits to state_i and generates opening proof for modified memory page
@@ -129,8 +131,9 @@ impl ZkVmCommitter {
         previous_mem_comm: MemoryPageComm<WORDS_PER_PAGE>,
         previous_mem_ops_vec_comm: GoldilocksComm,
     ) -> (
-        [Goldilocks; STATE_COMM_POSEIDON2_OUT],
+        GoldilocksComm,
         MemoryPageComm<WORDS_PER_PAGE>,
+        GoldilocksComm,
     ) {
         let commit_start = std::time::Instant::now();
 
@@ -149,7 +152,7 @@ impl ZkVmCommitter {
             previous_mem_ops_vec_comm
         };
 
-        let comm = self.state_hasher.hash_iter([
+        let comm = self.wide_hasher.hash_iter([
             pc,
             regs_comm[0],
             regs_comm[1],
@@ -166,13 +169,50 @@ impl ZkVmCommitter {
         ]);
 
         tracing::trace!("commited to state_i in {:?}", commit_start.elapsed());
-        (comm, memory_comm)
+        (comm, memory_comm, mem_ops_vec_comm)
+    }
+
+    pub fn acc_comm(&self, acc: &LCCCS<GoldilocksRingNTT>) -> GoldilocksComm {
+        let commit_start = std::time::Instant::now();
+        let LCCCS::<GoldilocksRingNTT> {
+            // sumcheck challenge vector, s = log₂(m) where m is the number of rows in CCS matrices
+            r,
+            // evaluation of linearized CCS commitment at r
+            v,
+            // ajtai commitment to the B-decomposed witness, length is the commitment scheme's KAPPA parameter
+            cm,
+            // evaluations of MLEs of {M_j * z} at r, ccs.t is the number of matrices in the CCS
+            u,
+            // public IO (CCS statement) of size ccs.l
+            x_w,
+            // constant term of GoldilocksRingNTT::one()
+            h,
+        } = acc;
+
+        let r_flat = flatten(r);
+        let v_flat = flatten(v);
+        let cm_flat = flatten(cm.as_ref());
+        let u_flat = flatten(u);
+        let x_w_flat = flatten(x_w);
+        let h_flat = flatten(&[*h]);
+
+        let mut acc_goldilocks: Vec<Goldilocks> = Vec::new();
+        acc_goldilocks.extend_from_slice(&r_flat);
+        acc_goldilocks.extend_from_slice(&v_flat);
+        acc_goldilocks.extend_from_slice(&cm_flat);
+        acc_goldilocks.extend_from_slice(&u_flat);
+        acc_goldilocks.extend_from_slice(&x_w_flat);
+        acc_goldilocks.extend_from_slice(&h_flat);
+
+        let comm = self.wide_hasher.hash_iter(acc_goldilocks);
+        tracing::trace!("commited to accumulator in {:?}", commit_start.elapsed());
+        comm
     }
 
     pub fn state_0_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
-    ) -> [Goldilocks; STATE_COMM_POSEIDON2_OUT] {
+    ) -> GoldilocksComm {
         let commit_start = std::time::Instant::now();
 
         let code_comm = vm_code_comm(vm);
@@ -198,7 +238,7 @@ impl ZkVmCommitter {
         assert_eq!(zero_regs_comm, const_zero_regs_merkle_root);
 
         let zero_mem_ops_vec_comm = self.vm_mem_ops_vec_comm(
-            [Goldilocks::ZERO; MEM_COMM_POSEIDON2_OUT],
+            [Goldilocks::ZERO; POSEIDON2_OUT],
             &MemoryOperation {
                 cycle: 0,
                 address: 0,
@@ -215,7 +255,7 @@ impl ZkVmCommitter {
         ];
         assert_eq!(zero_mem_ops_vec_comm, const_zero_mem_ops_vec_comm);
 
-        let comm = self.state_hasher.hash_iter([
+        let comm = self.wide_hasher.hash_iter([
             code_comm[0],
             code_comm[1],
             code_comm[2],
@@ -255,16 +295,13 @@ impl ZkVmCommitter {
         let matrix = RowMajorMatrix::new(reg_elements, N_REGS);
         let leaves = vec![matrix];
 
-        let tree = MerkleTree::<
-            Goldilocks,
-            Goldilocks,
-            RowMajorMatrix<Goldilocks>,
-            MEM_COMM_POSEIDON2_OUT,
-        >::new::<Goldilocks, Goldilocks, _, _>(
-            &self.memory_hasher,
-            &self.memory_compression,
-            leaves,
-        );
+        let tree =
+            MerkleTree::<Goldilocks, Goldilocks, RowMajorMatrix<Goldilocks>, POSEIDON2_OUT>::new::<
+                Goldilocks,
+                Goldilocks,
+                _,
+                _,
+            >(&self.hasher, &self.compression, leaves);
 
         tracing::trace!("commited to vm's registers in {:?}", commit_start.elapsed());
         tree.root().into()
@@ -290,16 +327,13 @@ impl ZkVmCommitter {
             leaves.push(matrix);
         }
 
-        let tree = MerkleTree::<
-            Goldilocks,
-            Goldilocks,
-            RowMajorMatrix<Goldilocks>,
-            MEM_COMM_POSEIDON2_OUT,
-        >::new::<Goldilocks, Goldilocks, _, _>(
-            &self.memory_hasher,
-            &self.memory_compression,
-            leaves,
-        );
+        let tree =
+            MerkleTree::<Goldilocks, Goldilocks, RowMajorMatrix<Goldilocks>, POSEIDON2_OUT>::new::<
+                Goldilocks,
+                Goldilocks,
+                _,
+                _,
+            >(&self.hasher, &self.compression, leaves);
 
         tracing::trace!("commited to vm's memory in {:?}", commit_start.elapsed());
         tree.root().into()
@@ -330,10 +364,10 @@ impl ZkVmCommitter {
         }
 
         let memory_matrix = RowMajorMatrix::new(all_pages, WORDS_PER_PAGE);
-        let (commitment, merkle_tree) = self.memory_mmcs.commit(vec![memory_matrix]);
+        let (commitment, merkle_tree) = self.merkle_tree.commit(vec![memory_matrix]);
 
-        let batch_opening: BatchOpening<Goldilocks, MemCommMerkleTree> =
-            self.memory_mmcs.open_batch(page_index, &merkle_tree);
+        let batch_opening: BatchOpening<Goldilocks, Poseidon2MerkleTree> =
+            self.merkle_tree.open_batch(page_index, &merkle_tree);
 
         // there should be log2(PAGE_COUNT) elements in merkle proof
         assert_eq!(
@@ -379,7 +413,7 @@ impl ZkVmCommitter {
             opening_proof: &comm.proof,
         };
 
-        self.memory_mmcs.verify_batch(
+        self.merkle_tree.verify_batch(
             &commitment_array,
             &dimensions,
             comm.page_index,
@@ -428,6 +462,26 @@ fn vm_code_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
 
     tracing::trace!("commited to vm's code in {:?}", commit_start.elapsed());
     comm
+}
+
+fn fq_to_plonky3_goldilocks(fq: &Fq) -> Goldilocks {
+    debug_assert_eq!(1, fq.0.0.len());
+    let num = fq.0.0[0];
+    Goldilocks::from_u64(num)
+}
+
+fn flatten(vec: &[GoldilocksRingNTT]) -> Vec<Goldilocks> {
+    vec.iter()
+        .flat_map(|&ring_elem| {
+            let coeff_form = ICRT::icrt(ring_elem);
+            debug_assert_eq!(GoldilocksRingPoly::dimension(), coeff_form.coeffs().len());
+            coeff_form
+                .coeffs()
+                .iter()
+                .map(fq_to_plonky3_goldilocks)
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -481,10 +535,10 @@ mod tests {
         let comm = commiter.state_0_comm(&vm);
 
         let expected = [
-            Goldilocks::from_u64(3265770228178860056),
-            Goldilocks::from_u64(5178827264030412874),
-            Goldilocks::from_u64(3467290198855439401),
-            Goldilocks::from_u64(11781120981098105746),
+            Goldilocks::from_u64(10549510614130078268),
+            Goldilocks::from_u64(16102843695796942770),
+            Goldilocks::from_u64(12006347882075065208),
+            Goldilocks::from_u64(15261293120835209596),
         ];
 
         assert_eq!(expected, comm);

@@ -3,13 +3,13 @@ mod commitments;
 mod constraints;
 
 use ccs::to_raw_witness;
-use cyclotomic_rings::rings::{GoldilocksChallengeSet, GoldilocksRingNTT};
+use cyclotomic_rings::rings::{GoldilocksChallengeSet, GoldilocksRingNTT, GoldilocksRingPoly};
 use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness, r1cs::to_F_vec},
     commitment::AjtaiCommitmentScheme,
     decomposition_parameters::DecompositionParams,
     nifs::{
-        NIFSProver,
+        LFProof, NIFSProver,
         linearization::{LFLinearizationProver, LinearizationProver},
     },
     transcript::poseidon::PoseidonTranscript,
@@ -18,6 +18,7 @@ use latticefold::{
 use num_traits::identities::Zero;
 use p3_field::{PrimeCharacteristicRing, PrimeField64};
 use p3_goldilocks::Goldilocks;
+use stark_rings::PolyRing;
 use std::{path::PathBuf, usize};
 
 use vm::riscvm::{inst::ExecutionTrace, vm::new_vm_1mb};
@@ -25,30 +26,10 @@ use vm::riscvm::{inst::ExecutionTrace, vm::new_vm_1mb};
 #[cfg(feature = "debug")]
 use crate::constraints::check_relation_debug;
 use crate::{
-    ccs::CCSLayout,
+    ccs::{CCS_LAYOUT, CCSLayout, GoldiLocksDP, KAPPA, N},
     commitments::{GoldilocksComm, ZkVmCommitter},
     constraints::CCSBuilder,
 };
-
-#[derive(Clone, Copy)]
-pub struct GoldiLocksDP;
-
-// Default params from latticefold examples
-impl DecompositionParams for GoldiLocksDP {
-    const B: u128 = 1 << 15;
-    /// Ring modulus is GoldiLocks (little less than 2^64), thus GoldiLocks modulus < B^L
-    const L: usize = 5;
-    /// Standard binary decomposition
-    const B_SMALL: usize = 2;
-    /// log₂(B)
-    const K: usize = 15;
-}
-
-const CCS_LAYOUT: CCSLayout = CCSLayout::new();
-/// Length of Ajtai commitment vectors (rows in commitment matrix)
-const KAPPA: usize = 4;
-/// Number of columns in the Ajtai commitment matrix
-const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 
 fn main() {
     tracing_subscriber::fmt::init();
@@ -71,7 +52,7 @@ fn main() {
     };
 
     let zkvm_commiter = ZkVmCommitter::new();
-    let z_0_comm = zkvm_commiter.state_0_comm(&vm);
+    let state_0_comm = zkvm_commiter.state_0_comm(&vm);
 
     let ccs = CCSBuilder::create_riscv_ccs::<N>(&CCS_LAYOUT);
 
@@ -80,58 +61,63 @@ fn main() {
     let scheme: AjtaiCommitmentScheme<GoldilocksRingNTT> =
         AjtaiCommitmentScheme::rand(KAPPA, N, &mut rng);
 
-    let (mut acc, mut w_acc, mut current_mem_comm) =
+    let (mut acc, mut w_acc, mut current_mem_ops_comm) =
         initialize_accumulator(&ccs, &CCS_LAYOUT, &scheme);
+    let mut folding_proof: Option<LFProof<GoldilocksRingNTT>> = None;
 
     let start_vm_run = std::time::Instant::now();
 
     let mut memory_ops = Vec::new();
     let mut cycles: usize = 0;
+    let mut state_comm: GoldilocksComm = [Default::default(); 4];
 
     vm.run(|trace| {
         cycles = trace.cycle;
-        let mem_comm_in = current_mem_comm;
-        let mut mem_comm_out = current_mem_comm;
+
+        zkvm_commiter.acc_comm(&acc);
 
         if let Some(memory_op) = trace.side_effects.memory_op.clone() {
-            //     mem_comm_out = poseidon.mem_comm(current_mem_comm, &memory_op);
             memory_ops.push(memory_op);
         }
 
-        let z = arithmetize(&trace, &CCS_LAYOUT, mem_comm_in, mem_comm_out);
+        // let ivc_step = IVCStepInput {
+        //     ivc_step_comm: todo!(),
+        //     ivc_step: Goldilocks::from_usize(trace.cycle - 1),
+        //     state_0_comm,
+        //     state_comm,
+        //     acc_comm: todo!(),
+        //     trace: &trace,
+        //     acc: &acc,
+        //     folding_proof: folding_proof.as_ref(),
+        //     w_acc: &w_acc,
+        // };
+
+        // let z = arithmetize(&trace, &CCS_LAYOUT, state_0_comm, state_comm);
 
         #[cfg(feature = "debug")]
         check_relation_debug(&ccs, &z, &trace);
 
-        let (cm_i, w_i) = commit(z, &ccs, &scheme);
-        (acc, w_acc) = fold(FoldingArgs {
-            ccs: &ccs,
-            scheme: &scheme,
-            acc: &acc,
-            w_acc: &w_acc,
-            cm_i: &cm_i,
-            w_i: &w_i,
-        });
+        // let (cm_i, w_i) = commit(z, &ccs, &scheme);
+        // (acc, w_acc, folding_proof) = fold(FoldingArgs {
+        //     ccs: &ccs,
+        //     scheme: &scheme,
+        //     acc: &acc,
+        //     w_acc: &w_acc,
+        //     cm_i: &cm_i,
+        //     w_i: &w_i,
+        // });
 
-        // acc.r 9,
-        // acc.v 3,
-        // acc.cm 4,
-        // acc.u 15,
-        // acc.x_w 2,
-        // acc.h 1
-        // tracing::debug!(
-        //     "acc.r {:?},\nacc.v {:?},\nacc.cm {:?},\nacc.u {:?},\nacc.x_w {:?},\nacc.h 1",
-        //     acc.r.len(),
-        //     acc.v.len(),
-        //     acc.cm.len(),
-        //     acc.u.len(),
-        //     acc.x_w.len(),
-        // );
-        current_mem_comm = mem_comm_out;
+        assert_eq!(ccs.s, acc.r.len());
+        assert_eq!(
+            GoldilocksRingPoly::dimension() / GoldilocksRingNTT::dimension(),
+            acc.v.len()
+        );
+        assert_eq!(KAPPA, acc.cm.len());
+        assert_eq!(ccs.t, acc.u.len());
+        assert_eq!(ccs.l, acc.x_w.len());
     });
 
-    let expected_value = 0xc594bfc3; // 100th fibonacci
-    assert_eq!(expected_value, vm.result());
+    assert_eq!(0xc594bfc3 /* 100th fibonacci */, vm.result());
 
     tracing::info!(
         "folded {} execution traces and commited to {} memory operations",
@@ -211,7 +197,7 @@ fn main() {
     // );
 }
 
-const INITIAL_MEM_COMM: GoldilocksComm = [Goldilocks::ZERO; 4];
+const INITIAL_VM_COMM: GoldilocksComm = [Goldilocks::ZERO; 4];
 
 fn initialize_accumulator(
     ccs: &CCS<GoldilocksRingNTT>,
@@ -231,10 +217,10 @@ fn initialize_accumulator(
     let zero_wit = Witness::from_w_ccs::<GoldiLocksDP>(zero_w_ccs);
     // initialize public inputs and output to memory comm in and memory comm out
     let zero_x_ccs = vec![
-        GoldilocksRingNTT::from(INITIAL_MEM_COMM[0].as_canonical_u64()),
-        GoldilocksRingNTT::from(INITIAL_MEM_COMM[1].as_canonical_u64()),
-        GoldilocksRingNTT::from(INITIAL_MEM_COMM[2].as_canonical_u64()),
-        GoldilocksRingNTT::from(INITIAL_MEM_COMM[3].as_canonical_u64()),
+        GoldilocksRingNTT::from(INITIAL_VM_COMM[0].as_canonical_u64()),
+        GoldilocksRingNTT::from(INITIAL_VM_COMM[1].as_canonical_u64()),
+        GoldilocksRingNTT::from(INITIAL_VM_COMM[2].as_canonical_u64()),
+        GoldilocksRingNTT::from(INITIAL_VM_COMM[3].as_canonical_u64()),
     ];
 
     let zero_cm_i = CCCS {
@@ -251,43 +237,94 @@ fn initialize_accumulator(
     >::prove(&zero_cm_i, &zero_wit, &mut transcript, ccs)
     .expect("failed to create initial accumulator");
 
-    (acc, zero_wit, INITIAL_MEM_COMM)
+    (acc, zero_wit, INITIAL_VM_COMM)
+}
+
+// TODO needs the merkle opening of the VMs memory and also other things needed
+// for verifying the folding proof.
+struct IVCStepInput<'a> {
+    /// `h_{i - 1}` public poseidon2 commitment to the state of previous IVC step.
+    /// Preimage contains:
+    /// - `i - 1`
+    /// - state 0 commitment ([Self::state_0_comm])
+    /// - state i - 1 commitment ([Self::state_comm])
+    /// - accumulator at i - 1 commitment ([Self::acc_comm])
+    ivc_step_comm: GoldilocksComm,
+
+    // ###############################################
+    // ## [Self::ivc_step_comm] preimage components ##
+    // ###############################################
+    /// `i - 1`, the number of the previous step
+    ivc_step: Goldilocks,
+
+    /// poseidon2 commitment to the initial state of VM, doesn't need to be
+    /// verified inside the CCS, because all preimage parts are public.
+    state_0_comm: GoldilocksComm,
+
+    /// poseidon2 commitment to state_{i-1} (or z_{i-1}). Preimage contains:
+    /// - `pc`
+    /// - merkle root of VM's memory
+    /// - merkle root of VM's registers
+    /// - poseidon2 of accumulated memory ops vector
+    state_comm: GoldilocksComm,
+
+    /// poseidon2 commitment to the accumulated instance as of previous IVC step,
+    /// preimage contains all the fields of [LCCCS<GoldilocksRingNTT>].
+    acc_comm: GoldilocksComm,
+
+    /// contains `pc` registers needed in preimage of [Self::state_comm],
+    /// and also needed to prove correct execution of VM step.
+    trace: &'a ExecutionTrace,
+
+    /// preimage of [Self::acc_comm]
+    acc: &'a LCCCS<GoldilocksRingNTT>,
+
+    /// folding proof needed to verify correct IVC step inside the CCS.
+    /// When arithmetizing first step, there is not folding proof.
+    folding_proof: Option<&'a LFProof<GoldilocksRingNTT>>,
+    /// needed in verifying [Self::folding_proof] inside the CCS.
+    w_acc: &'a Witness<GoldilocksRingNTT>,
 }
 
 fn arithmetize(
-    trace: &ExecutionTrace,
+    IVCStepInput {
+        ivc_step_comm,
+        ivc_step,
+        state_0_comm,
+        state_comm,
+        acc_comm,
+        trace,
+        acc,
+        folding_proof,
+        w_acc,
+    }: IVCStepInput,
     layout: &CCSLayout,
-    mem_comm_in: GoldilocksComm,
-    mem_comm_out: GoldilocksComm,
 ) -> Vec<GoldilocksRingNTT> {
     let start_witness_creation = std::time::Instant::now();
 
+    // TODO put all the things into the to_raw_witness
     let raw_z = to_raw_witness(trace, layout);
-    // convert raw z to proper z-vector structure: [x_ccs, 1, w_ccs]
+    // convert raw z to proper z-vector structure [x_ccs, 1, w_ccs]
     let mut z_vec = Vec::new();
 
-    // TODO pass the state{i-1} comm here instead of mem_comm
-    // x_ccs: public inputs - memory commitment in and out
-    z_vec.push(mem_comm_in[0].as_canonical_u64() as usize);
-    z_vec.push(mem_comm_in[1].as_canonical_u64() as usize);
-    z_vec.push(mem_comm_in[2].as_canonical_u64() as usize);
-    z_vec.push(mem_comm_in[3].as_canonical_u64() as usize);
+    // public inputs (x_ccs) = `h_{i - 1}` = ivc step commitment
+    z_vec.push(ivc_step_comm[0].as_canonical_u64() as usize);
+    z_vec.push(ivc_step_comm[1].as_canonical_u64() as usize);
+    z_vec.push(ivc_step_comm[2].as_canonical_u64() as usize);
+    z_vec.push(ivc_step_comm[3].as_canonical_u64() as usize);
 
-    // Add constant 1
+    // constant 1
     z_vec.push(1usize);
 
-    // w_ccs: witness elements
+    // witness elements (w_ccs)
     z_vec.extend(raw_z.iter().map(|&x| x as usize));
 
-    // generate the full witness vector `z`
     let z_as_ring: Vec<GoldilocksRingNTT> = to_F_vec(z_vec);
 
     tracing::trace!(
-        "witness creation: {:?} (size: {} elements, mem_comm_in: {:?}, mem_comm_out: {:?})",
+        "witness creation: {:?} (size: {} elements)",
         start_witness_creation.elapsed(),
         layout.w_size,
-        mem_comm_in,
-        mem_comm_out,
     );
 
     z_as_ring
@@ -344,7 +381,11 @@ fn fold(
         cm_i,
         w_i,
     }: FoldingArgs,
-) -> (LCCCS<GoldilocksRingNTT>, Witness<GoldilocksRingNTT>) {
+) -> (
+    LCCCS<GoldilocksRingNTT>,
+    Witness<GoldilocksRingNTT>,
+    LFProof<GoldilocksRingNTT>,
+) {
     let folding_start = std::time::Instant::now();
     let mut prover_transcript =
         PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
@@ -378,5 +419,5 @@ fn fold(
         tracing::trace!("verified folding in {:?}", verifying_start.elapsed());
     }
 
-    (folded_acc, folded_w_acc)
+    (folded_acc, folded_w_acc, folding_proof)
 }
