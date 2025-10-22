@@ -20,6 +20,8 @@ use p3_field::{PrimeCharacteristicRing, PrimeField64};
 use p3_goldilocks::Goldilocks;
 use stark_rings::PolyRing;
 use std::{path::PathBuf, usize};
+use tracing::{Level, instrument};
+use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
 
 use vm::riscvm::{inst::ExecutionTrace, vm::new_vm_1mb};
 
@@ -32,9 +34,14 @@ use crate::{
 };
 
 fn main() {
-    tracing_subscriber::fmt::init();
+    let filter = EnvFilter::new("debug,p3_merkle_tree=off");
 
-    tracing::debug!(
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_span_events(FmtSpan::CLOSE)
+        .init();
+
+    tracing::trace!(
         "starting zkVM with decomposition params: B={}, L={}, B_SMALL={}, K={}",
         GoldiLocksDP::B,
         GoldiLocksDP::L,
@@ -94,8 +101,8 @@ fn main() {
 
         // let z = arithmetize(&trace, &CCS_LAYOUT, state_0_comm, state_comm);
 
-        #[cfg(feature = "debug")]
-        check_relation_debug(&ccs, &z, &trace);
+        // #[cfg(feature = "debug")]
+        // check_relation_debug(&ccs, &z, &trace);
 
         // let (cm_i, w_i) = commit(z, &ccs, &scheme);
         // (acc, w_acc, folding_proof) = fold(FoldingArgs {
@@ -286,6 +293,7 @@ struct IVCStepInput<'a> {
     w_acc: &'a Witness<GoldilocksRingNTT>,
 }
 
+#[instrument(skip_all, level = Level::DEBUG)]
 fn arithmetize(
     IVCStepInput {
         ivc_step_comm,
@@ -300,8 +308,6 @@ fn arithmetize(
     }: IVCStepInput,
     layout: &CCSLayout,
 ) -> Vec<GoldilocksRingNTT> {
-    let start_witness_creation = std::time::Instant::now();
-
     // TODO put all the things into the to_raw_witness
     let raw_z = to_raw_witness(trace, layout);
     // convert raw z to proper z-vector structure [x_ccs, 1, w_ccs]
@@ -319,24 +325,16 @@ fn arithmetize(
     // witness elements (w_ccs)
     z_vec.extend(raw_z.iter().map(|&x| x as usize));
 
-    let z_as_ring: Vec<GoldilocksRingNTT> = to_F_vec(z_vec);
-
-    tracing::trace!(
-        "witness creation: {:?} (size: {} elements)",
-        start_witness_creation.elapsed(),
-        layout.w_size,
-    );
-
-    z_as_ring
+    to_F_vec(z_vec)
 }
 
 /// returns CCS witness commitment and the private witness
+#[instrument(skip_all, level = Level::DEBUG)]
 fn commit(
     z_as_ring: Vec<GoldilocksRingNTT>,
     ccs: &CCS<GoldilocksRingNTT>,
     scheme: &AjtaiCommitmentScheme<GoldilocksRingNTT>,
 ) -> (CCCS<GoldilocksRingNTT>, Witness<GoldilocksRingNTT>) {
-    let start_commitment = std::time::Instant::now();
     // split the z vector into public IO (x_ccs) and private witness (w_ccs)
     let x_ccs = z_as_ring[0..ccs.l].to_vec(); // contains memory commitment (l=1)
     let w_ccs = z_as_ring[ccs.l + 1..].to_vec(); // +1 to skip the constant '1'
@@ -349,15 +347,6 @@ fn commit(
         .commit::<GoldiLocksDP>(scheme)
         .expect("failed to commit");
     let cccs_instance = CCCS { cm, x_ccs };
-
-    tracing::trace!(
-        "commited to witnes in {:?} (C={}, W={}, B={}, L={})",
-        start_commitment.elapsed(),
-        KAPPA,
-        N,
-        GoldiLocksDP::B,
-        GoldiLocksDP::L
-    );
 
     (cccs_instance, wit)
 }
@@ -372,6 +361,7 @@ struct FoldingArgs<'a> {
     w_i: &'a Witness<GoldilocksRingNTT>,
 }
 
+#[instrument(skip_all, level = Level::DEBUG)]
 fn fold(
     FoldingArgs {
         ccs,
@@ -386,7 +376,6 @@ fn fold(
     Witness<GoldilocksRingNTT>,
     LFProof<GoldilocksRingNTT>,
 ) {
-    let folding_start = std::time::Instant::now();
     let mut prover_transcript =
         PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
 
@@ -400,24 +389,28 @@ fn fold(
         >::prove(acc, w_acc, cm_i, w_i, &mut prover_transcript, ccs, scheme)
         .expect("NIFS proving failed for a step");
 
-    tracing::trace!("folded in {:?}", folding_start.elapsed());
-
     #[cfg(feature = "debug")]
-    {
-        use latticefold::nifs::NIFSVerifier;
-
-        let verifying_start = std::time::Instant::now();
-        let mut verifier_transcript =
-            PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
-        NIFSVerifier::<
-            GoldilocksRingNTT,
-            GoldiLocksDP,
-            PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
-        >::verify(&acc, &cm_i, &folding_proof, &mut verifier_transcript, &ccs)
-        .expect("Final proof verification failed");
-
-        tracing::trace!("verified folding in {:?}", verifying_start.elapsed());
-    }
+    verify_folding(&acc, &cm_i, &folding_proof, &ccs);
 
     (folded_acc, folded_w_acc, folding_proof)
+}
+
+#[cfg(feature = "debug")]
+#[instrument(skip_all, level = Level::DEBUG)]
+fn verify_folding(
+    acc: &LCCCS<GoldilocksRingNTT>,
+    cm_i: &CCCS<GoldilocksRingNTT>,
+    folding_proof: &LFProof<GoldilocksRingNTT>,
+    ccs: &CCS<GoldilocksRingNTT>,
+) {
+    use latticefold::nifs::NIFSVerifier;
+
+    let mut verifier_transcript =
+        PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
+    NIFSVerifier::<
+        GoldilocksRingNTT,
+        GoldiLocksDP,
+        PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
+    >::verify(&acc, &cm_i, &folding_proof, &mut verifier_transcript, &ccs)
+    .expect("Final proof verification failed");
 }

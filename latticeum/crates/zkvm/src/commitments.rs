@@ -15,6 +15,7 @@ use stark_rings::{
     PolyRing,
     cyclotomic_ring::{ICRT, models::goldilocks::Fq},
 };
+use tracing::{Level, instrument};
 use vm::riscvm::{
     inst::{ExecutionTrace, MemoryOperation},
     vm::{Loaded, VM, WORD_SIZE, physical_addr},
@@ -89,21 +90,20 @@ pub struct ZkVmCommitter {
 impl ZkVmCommitter {
     pub fn new() -> Self {
         let mut rng = StdRng::from_seed(RNG_SEED);
-        let memory_perm = Poseidon2Perm::new_from_rng_128(&mut rng);
-        let memory_hasher = Poseidon2Sponge::new(memory_perm.clone());
-        let memory_compression = Poseidon2Compression::new(memory_perm.clone());
-        let memory_ops_vec_compression = MemOpsVecCommPoseidon2Compression::new(memory_perm);
-        let memory_mmcs =
-            Poseidon2MerkleTree::new(memory_hasher.clone(), memory_compression.clone());
+        let perm = Poseidon2Perm::new_from_rng_128(&mut rng);
+        let hasher = Poseidon2Sponge::new(perm.clone());
+        let compression = Poseidon2Compression::new(perm.clone());
+        let memory_ops_vec_compression = MemOpsVecCommPoseidon2Compression::new(perm);
+        let merkle_tree = Poseidon2MerkleTree::new(hasher.clone(), compression.clone());
 
         let wide_perm = WidePoseidon2Perm::new_from_rng_128(&mut rng);
         let wide_hasher = WidePoseidon2Sponge::new(wide_perm);
 
         Self {
-            hasher: memory_hasher,
-            compression: memory_compression,
+            hasher,
+            compression,
             memory_ops_vec_compression: memory_ops_vec_compression,
-            merkle_tree: memory_mmcs,
+            merkle_tree,
             wide_hasher,
         }
     }
@@ -114,16 +114,33 @@ impl ZkVmCommitter {
     /// - state 0 commitment (calculated with [Self::state_0_comm])
     /// - state i commitment (calculated with [Self::state_i_comm])
     /// - accumulator i commitment ([Self::acc_comm])
+    #[instrument(skip_all, level = Level::TRACE)]
     pub fn ivc_step_comm(
+        &self,
         i: Goldilocks,
         state_0_comm: GoldilocksComm,
         state_i_comm: GoldilocksComm,
         acc_comm: GoldilocksComm,
     ) -> GoldilocksComm {
-        unimplemented!()
+        self.wide_hasher.hash_iter([
+            i,
+            state_0_comm[0],
+            state_0_comm[1],
+            state_0_comm[2],
+            state_0_comm[3],
+            state_i_comm[0],
+            state_i_comm[1],
+            state_i_comm[2],
+            state_i_comm[3],
+            acc_comm[0],
+            acc_comm[1],
+            acc_comm[2],
+            acc_comm[3],
+        ])
     }
 
     /// Commits to state_i and generates opening proof for modified memory page
+    #[instrument(skip_all, level = Level::DEBUG)]
     pub fn state_i_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
@@ -135,8 +152,6 @@ impl ZkVmCommitter {
         MemoryPageComm<WORDS_PER_PAGE>,
         GoldilocksComm,
     ) {
-        let commit_start = std::time::Instant::now();
-
         let pc = Goldilocks::from_usize(vm.pc);
         let regs_comm = self.vm_regs_comm(vm);
 
@@ -168,12 +183,11 @@ impl ZkVmCommitter {
             mem_ops_vec_comm[3],
         ]);
 
-        tracing::trace!("commited to state_i in {:?}", commit_start.elapsed());
         (comm, memory_comm, mem_ops_vec_comm)
     }
 
+    #[instrument(skip_all, level = Level::DEBUG)]
     pub fn acc_comm(&self, acc: &LCCCS<GoldilocksRingNTT>) -> GoldilocksComm {
-        let commit_start = std::time::Instant::now();
         let LCCCS::<GoldilocksRingNTT> {
             // sumcheck challenge vector, s = log₂(m) where m is the number of rows in CCS matrices
             r,
@@ -204,17 +218,14 @@ impl ZkVmCommitter {
         acc_goldilocks.extend_from_slice(&x_w_flat);
         acc_goldilocks.extend_from_slice(&h_flat);
 
-        let comm = self.wide_hasher.hash_iter(acc_goldilocks);
-        tracing::trace!("commited to accumulator in {:?}", commit_start.elapsed());
-        comm
+        self.wide_hasher.hash_iter(acc_goldilocks)
     }
 
+    #[instrument(skip_all, level = Level::DEBUG)]
     pub fn state_0_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
     ) -> GoldilocksComm {
-        let commit_start = std::time::Instant::now();
-
         let code_comm = vm_code_comm(vm);
         let entrypoint = Goldilocks::from_usize(vm.elf().entry_point);
         let zero_mem_comm = self.vm_mem_comm(vm);
@@ -255,7 +266,7 @@ impl ZkVmCommitter {
         ];
         assert_eq!(zero_mem_ops_vec_comm, const_zero_mem_ops_vec_comm);
 
-        let comm = self.wide_hasher.hash_iter([
+        self.wide_hasher.hash_iter([
             code_comm[0],
             code_comm[1],
             code_comm[2],
@@ -273,19 +284,15 @@ impl ZkVmCommitter {
             zero_mem_ops_vec_comm[1],
             zero_mem_ops_vec_comm[2],
             zero_mem_ops_vec_comm[3],
-        ]);
-
-        tracing::trace!("commited to state_0 in {:?}", commit_start.elapsed());
-        comm
+        ])
     }
 
     /// Creates a Merkle tree commitment over the VM's registers
+    #[instrument(skip_all, level = Level::DEBUG)]
     fn vm_regs_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
     ) -> GoldilocksComm {
-        let commit_start = std::time::Instant::now();
-
         let reg_elements: Vec<Goldilocks> = vm
             .regs
             .iter()
@@ -303,18 +310,16 @@ impl ZkVmCommitter {
                 _,
             >(&self.hasher, &self.compression, leaves);
 
-        tracing::trace!("commited to vm's registers in {:?}", commit_start.elapsed());
         tree.root().into()
     }
 
     /// Creates a Merkle tree commitment over the VM's memory using Poseidon2.
     /// Each page is hashed into a leaf, and the Merkle tree is built over all pages.
+    #[instrument(skip_all, level = Level::DEBUG)]
     fn vm_mem_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
     ) -> GoldilocksComm {
-        let commit_start = std::time::Instant::now();
-
         let mut leaves = Vec::with_capacity(PAGE_COUNT);
 
         for page in vm.memory.iter() {
@@ -335,7 +340,6 @@ impl ZkVmCommitter {
                 _,
             >(&self.hasher, &self.compression, leaves);
 
-        tracing::trace!("commited to vm's memory in {:?}", commit_start.elapsed());
         tree.root().into()
     }
 
@@ -346,13 +350,12 @@ impl ZkVmCommitter {
     /// - Each row is a page (WORDS_PER_PAGE elements)
     /// - There are PAGE_COUNT rows
     /// - The Merkle tree has PAGE_COUNT leaves (one per page/row)
+    #[instrument(skip_all, level = Level::DEBUG)]
     fn vm_mem_comm_with_opening<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
         mem_op: &MemoryOperation,
     ) -> MemoryPageComm<WORDS_PER_PAGE> {
-        let commit_start = std::time::Instant::now();
-
         let (page_index, _) =
             physical_addr::<WORD_SIZE, WORDS_PER_PAGE, PAGE_COUNT>(mem_op.address as usize);
 
@@ -379,7 +382,7 @@ impl ZkVmCommitter {
             batch_opening.opening_proof.len()
         );
 
-        let comm = MemoryPageComm::<WORDS_PER_PAGE> {
+        MemoryPageComm::<WORDS_PER_PAGE> {
             comm: commitment.into(),
             page: batch_opening.opened_values[0]
                 .clone()
@@ -387,16 +390,11 @@ impl ZkVmCommitter {
                 .expect("failed to convert page data"),
             proof: batch_opening.opening_proof,
             page_index,
-        };
-        tracing::trace!(
-            "commited to vm's memory with opening for page {} in {:?}",
-            page_index,
-            commit_start.elapsed()
-        );
-        comm
+        }
     }
 
     /// Verifies a memory page opening proof against a commitment.
+    #[instrument(skip_all, level = Level::DEBUG)]
     pub fn verify_memory_opening<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
         comm: &MemoryPageComm<WORDS_PER_PAGE>,
@@ -421,13 +419,12 @@ impl ZkVmCommitter {
         )
     }
 
+    #[instrument(skip_all, level = Level::DEBUG)]
     fn vm_mem_ops_vec_comm(
         &self,
         previous_comm: GoldilocksComm,
         mem_op: &MemoryOperation,
     ) -> GoldilocksComm {
-        let commit_start = std::time::Instant::now();
-
         let input = [
             previous_comm,
             [
@@ -438,30 +435,24 @@ impl ZkVmCommitter {
             ],
         ];
 
-        let comm = self.memory_ops_vec_compression.compress(input);
-        tracing::trace!("commited to memory ops vec in {:?}", commit_start.elapsed());
-        comm
+        self.memory_ops_vec_compression.compress(input)
     }
 }
 
 fn vm_code_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
     vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
 ) -> GoldilocksComm {
-    let commit_start = std::time::Instant::now();
     let program_code = vm.elf().raw_code.bytes.clone();
     let hasher = Keccak256Hash {};
     let program_comm = hasher.hash_iter(program_code);
     let mut rng = StdRng::from_seed(program_comm);
 
-    let comm = [
+    [
         Goldilocks::from_u64(rng.random()),
         Goldilocks::from_u64(rng.random()),
         Goldilocks::from_u64(rng.random()),
         Goldilocks::from_u64(rng.random()),
-    ];
-
-    tracing::trace!("commited to vm's code in {:?}", commit_start.elapsed());
-    comm
+    ]
 }
 
 fn fq_to_plonky3_goldilocks(fq: &Fq) -> Goldilocks {

@@ -5,6 +5,7 @@ use latticefold::arith::CCS;
 use num_traits::identities::One;
 use stark_rings_linalg::SparseMatrix;
 use std::ops::Neg;
+use tracing::{Level, instrument};
 
 pub type Ring = GoldilocksRingNTT;
 
@@ -296,13 +297,12 @@ use latticefold::arith::Arith;
 use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 
 #[cfg(feature = "debug")]
+#[instrument(skip_all, level = Level::DEBUG)]
 pub fn check_relation_debug(
     ccs: &CCS<GoldilocksRingNTT>,
     z: &Vec<GoldilocksRingNTT>,
     trace: &ExecutionTrace,
 ) {
-    let check_relation_start = std::time::Instant::now();
-
     match trace.instruction.inst {
         Instruction::ADD { .. }
         | Instruction::ADDI { .. }
@@ -323,6 +323,4 @@ pub fn check_relation_debug(
             panic!("unchecked instruction {:?}", inst);
         }
     }
-
-    tracing::trace!("checked relation in {:?}", check_relation_start.elapsed());
 }
