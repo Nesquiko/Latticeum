@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use configuration::N_REGS;
 use cyclotomic_rings::rings::{GoldilocksRingNTT, GoldilocksRingPoly};
 use latticefold::arith::LCCCS;
@@ -18,7 +20,7 @@ use stark_rings::{
 use tracing::{Level, instrument};
 use vm::riscvm::{
     inst::{ExecutionTrace, MemoryOperation},
-    vm::{Loaded, VM, WORD_SIZE, physical_addr},
+    vm::{Loaded, Memory, Registers, VM, WORD_SIZE, physical_addr},
 };
 
 const RNG_SEED: [u8; 32] = [
@@ -31,6 +33,8 @@ const POSEIDON2_OUT: usize = 4;
 
 pub type GoldilocksComm = [Goldilocks; POSEIDON2_OUT];
 
+pub const ZERO_GOLDILOCKS_COMM: GoldilocksComm = [Goldilocks::ZERO; 4];
+
 /// Total state size of the Poseidon2 permutation for memory and registers
 /// commitments (rate + capacity). The permutation operates on arrays of WIDTH
 /// field elements.
@@ -39,11 +43,11 @@ const POSEIDON2_WIDTH: usize = 8;
 /// Number of field elements that can be absorbed per permutation call. This is
 /// the "input size" of the sponge construction. Higher rate = faster hashing,
 /// but lower security.
-const _POSEIDON2_RATE: usize = 4;
+const POSEIDON2_RATE: usize = 4;
 
 type Poseidon2Perm = Poseidon2Goldilocks<POSEIDON2_WIDTH>;
 type Poseidon2Sponge =
-    PaddingFreeSponge<Poseidon2Perm, POSEIDON2_WIDTH, _POSEIDON2_RATE, POSEIDON2_OUT>;
+    PaddingFreeSponge<Poseidon2Perm, POSEIDON2_WIDTH, POSEIDON2_RATE, POSEIDON2_OUT>;
 type Poseidon2Compression = TruncatedPermutation<Poseidon2Perm, 2, POSEIDON2_OUT, POSEIDON2_WIDTH>;
 
 type MemOpsVecCommPoseidon2Compression = TruncatedPermutation<Poseidon2Perm, 2, 4, POSEIDON2_WIDTH>;
@@ -68,6 +72,7 @@ type WidePoseidon2Sponge =
     PaddingFreeSponge<WidePoseidon2Perm, WIDE_POSEIDON2_WIDTH, WIDE_POSEIDON2_RATE, POSEIDON2_OUT>;
 
 /// Opening proof for a modified memory page.
+#[derive(Debug, Clone)]
 pub struct MemoryPageComm<const WORDS_PER_PAGE: usize> {
     pub comm: GoldilocksComm,
     /// The page data that was opened
@@ -78,6 +83,17 @@ pub struct MemoryPageComm<const WORDS_PER_PAGE: usize> {
     pub page_index: usize,
 }
 
+impl<const WORDS_PER_PAGE: usize> Default for MemoryPageComm<WORDS_PER_PAGE> {
+    fn default() -> Self {
+        Self {
+            comm: Default::default(),
+            page: [Goldilocks::ZERO; WORDS_PER_PAGE],
+            proof: Default::default(),
+            page_index: Default::default(),
+        }
+    }
+}
+
 pub struct ZkVmCommitter {
     hasher: Poseidon2Sponge,
     compression: Poseidon2Compression,
@@ -86,6 +102,36 @@ pub struct ZkVmCommitter {
 
     wide_hasher: WidePoseidon2Sponge,
 }
+
+/// calculated with [ZkVmCommitter::vm_mem_comm] on empty memory
+pub static CONST_ZERO_MEM_MERKLE_ROOT: LazyLock<GoldilocksComm> = LazyLock::new(|| {
+    [
+        Goldilocks::from_u64(11048378538371949082),
+        Goldilocks::from_u64(17790278716442129820),
+        Goldilocks::from_u64(1567578095375187627),
+        Goldilocks::from_u64(16514699081104724142),
+    ]
+});
+
+/// calculated with [ZkVmCommitter::vm_regs_comm] on empty regs
+pub static CONST_ZERO_REGS_COMM: LazyLock<GoldilocksComm> = LazyLock::new(|| {
+    [
+        Goldilocks::from_u64(13273899974993439638),
+        Goldilocks::from_u64(9036831037010425586),
+        Goldilocks::from_u64(16810440461374211854),
+        Goldilocks::from_u64(4302830597023040269),
+    ]
+});
+
+/// calculated with [ZkVmCommitter::vm_mem_ops_vec_comm] on empty/zero args
+pub static CONST_ZERO_MEM_OPS_VEC_COMM: LazyLock<GoldilocksComm> = LazyLock::new(|| {
+    [
+        Goldilocks::from_u64(17155745924013818368),
+        Goldilocks::from_u64(13273765924687100318),
+        Goldilocks::from_u64(14983401559123317382),
+        Goldilocks::from_u64(16003586692101738351),
+    ]
+});
 
 impl ZkVmCommitter {
     pub fn new() -> Self {
@@ -139,35 +185,22 @@ impl ZkVmCommitter {
         ])
     }
 
-    /// Commits to state_i and generates opening proof for modified memory page
+    /// Returns commtiment to state_i, memory commitment (new if a memory
+    /// operation happened, or previous one if not), and memory ops vec commitment
+    /// (new if a memory operation happened, or previous one if not).
     #[instrument(skip_all, level = Level::DEBUG)]
     pub fn state_i_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
-        vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
+        vm_memory: &Memory<WORDS_PER_PAGE, PAGE_COUNT>,
+        vm_regs: &Registers,
         trace: &ExecutionTrace,
-        previous_mem_comm: MemoryPageComm<WORDS_PER_PAGE>,
-        previous_mem_ops_vec_comm: GoldilocksComm,
-    ) -> (
-        GoldilocksComm,
-        MemoryPageComm<WORDS_PER_PAGE>,
-        GoldilocksComm,
-    ) {
-        let pc = Goldilocks::from_usize(vm.pc);
-        let regs_comm = self.vm_regs_comm(vm);
+        memory_comm: &MemoryPageComm<WORDS_PER_PAGE>,
+        mem_ops_vec_comm: GoldilocksComm,
+    ) -> GoldilocksComm {
+        let pc = Goldilocks::from_usize(trace.output.pc);
+        let regs_comm = self.vm_regs_comm(vm_regs);
 
-        let memory_comm = if let Some(mem_op) = &trace.side_effects.memory_op {
-            self.vm_mem_comm_with_opening(vm, mem_op)
-        } else {
-            previous_mem_comm
-        };
-
-        let mem_ops_vec_comm = if let Some(mem_op) = &trace.side_effects.memory_op {
-            self.vm_mem_ops_vec_comm(previous_mem_ops_vec_comm, mem_op)
-        } else {
-            previous_mem_ops_vec_comm
-        };
-
-        let comm = self.wide_hasher.hash_iter([
+        self.wide_hasher.hash_iter([
             pc,
             regs_comm[0],
             regs_comm[1],
@@ -181,9 +214,7 @@ impl ZkVmCommitter {
             mem_ops_vec_comm[1],
             mem_ops_vec_comm[2],
             mem_ops_vec_comm[3],
-        ]);
-
-        (comm, memory_comm, mem_ops_vec_comm)
+        ])
     }
 
     #[instrument(skip_all, level = Level::DEBUG)]
@@ -204,11 +235,17 @@ impl ZkVmCommitter {
         } = acc;
 
         let r_flat = flatten(r);
+        debug_assert_eq!(r_flat.len(), 216);
         let v_flat = flatten(v);
+        debug_assert_eq!(v_flat.len(), 72);
         let cm_flat = flatten(cm.as_ref());
+        debug_assert_eq!(cm_flat.len(), 96);
         let u_flat = flatten(u);
+        debug_assert_eq!(u_flat.len(), 360);
         let x_w_flat = flatten(x_w);
+        debug_assert_eq!(x_w_flat.len(), 96);
         let h_flat = flatten(&[*h]);
+        debug_assert_eq!(h_flat.len(), 24);
 
         let mut acc_goldilocks: Vec<Goldilocks> = Vec::new();
         acc_goldilocks.extend_from_slice(&r_flat);
@@ -229,24 +266,10 @@ impl ZkVmCommitter {
         let code_comm = vm_code_comm(vm);
         let entrypoint = Goldilocks::from_usize(vm.elf().entry_point);
         let zero_mem_comm = self.vm_mem_comm(vm);
-        // calculated with [ZkVmCommitter::vm_mem_comm] on empty memory
-        let const_zero_mem_merkle_root = [
-            Goldilocks::from_u64(11048378538371949082),
-            Goldilocks::from_u64(17790278716442129820),
-            Goldilocks::from_u64(1567578095375187627),
-            Goldilocks::from_u64(16514699081104724142),
-        ];
-        assert_eq!(zero_mem_comm, const_zero_mem_merkle_root);
+        debug_assert_eq!(zero_mem_comm, *CONST_ZERO_MEM_MERKLE_ROOT);
 
-        let zero_regs_comm = self.vm_regs_comm(vm);
-        // calculated with [ZkVmCommitter::vm_regs_comm] on empty regs
-        let const_zero_regs_merkle_root = [
-            Goldilocks::from_u64(16244443006506064383),
-            Goldilocks::from_u64(3940747969403026289),
-            Goldilocks::from_u64(12218044832803549905),
-            Goldilocks::from_u64(11889365038133828323),
-        ];
-        assert_eq!(zero_regs_comm, const_zero_regs_merkle_root);
+        let zero_regs_comm = self.vm_regs_comm(&vm.regs);
+        debug_assert_eq!(zero_regs_comm, *CONST_ZERO_REGS_COMM);
 
         let zero_mem_ops_vec_comm = self.vm_mem_ops_vec_comm(
             [Goldilocks::ZERO; POSEIDON2_OUT],
@@ -257,14 +280,7 @@ impl ZkVmCommitter {
                 is_write: false,
             },
         );
-        // calculated with [ZkVmCommitter::mem_ops_vec_comm] on empty/zero args
-        let const_zero_mem_ops_vec_comm = [
-            Goldilocks::from_u64(17155745924013818368),
-            Goldilocks::from_u64(13273765924687100318),
-            Goldilocks::from_u64(14983401559123317382),
-            Goldilocks::from_u64(16003586692101738351),
-        ];
-        assert_eq!(zero_mem_ops_vec_comm, const_zero_mem_ops_vec_comm);
+        debug_assert_eq!(zero_mem_ops_vec_comm, *CONST_ZERO_MEM_OPS_VEC_COMM);
 
         self.wide_hasher.hash_iter([
             code_comm[0],
@@ -287,30 +303,17 @@ impl ZkVmCommitter {
         ])
     }
 
-    /// Creates a Merkle tree commitment over the VM's registers
+    /// Creates a poseidon2 commitment over the VM's registers
     #[instrument(skip_all, level = Level::DEBUG)]
-    fn vm_regs_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
-        &self,
-        vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
-    ) -> GoldilocksComm {
-        let reg_elements: Vec<Goldilocks> = vm
-            .regs
+    fn vm_regs_comm(&self, vm_regs: &Registers) -> GoldilocksComm {
+        let reg_elements: [Goldilocks; N_REGS] = vm_regs
             .iter()
             .map(|&word| Goldilocks::from_u32(word))
-            .collect();
+            .collect::<Vec<Goldilocks>>()
+            .try_into()
+            .expect("how can there be more then 32 regs?");
 
-        let matrix = RowMajorMatrix::new(reg_elements, N_REGS);
-        let leaves = vec![matrix];
-
-        let tree =
-            MerkleTree::<Goldilocks, Goldilocks, RowMajorMatrix<Goldilocks>, POSEIDON2_OUT>::new::<
-                Goldilocks,
-                Goldilocks,
-                _,
-                _,
-            >(&self.hasher, &self.compression, leaves);
-
-        tree.root().into()
+        self.wide_hasher.hash_iter(reg_elements)
     }
 
     /// Creates a Merkle tree commitment over the VM's memory using Poseidon2.
@@ -351,16 +354,16 @@ impl ZkVmCommitter {
     /// - There are PAGE_COUNT rows
     /// - The Merkle tree has PAGE_COUNT leaves (one per page/row)
     #[instrument(skip_all, level = Level::DEBUG)]
-    fn vm_mem_comm_with_opening<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
+    pub fn vm_mem_comm_with_opening<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
         &self,
-        vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
+        vm_memory: &Memory<WORDS_PER_PAGE, PAGE_COUNT>,
         mem_op: &MemoryOperation,
     ) -> MemoryPageComm<WORDS_PER_PAGE> {
         let (page_index, _) =
             physical_addr::<WORD_SIZE, WORDS_PER_PAGE, PAGE_COUNT>(mem_op.address as usize);
 
         let mut all_pages = Vec::with_capacity(PAGE_COUNT * WORDS_PER_PAGE);
-        for page in vm.memory.iter() {
+        for page in vm_memory.iter() {
             for &word in page.iter() {
                 all_pages.push(Goldilocks::from_u32(word));
             }
@@ -373,7 +376,7 @@ impl ZkVmCommitter {
             self.merkle_tree.open_batch(page_index, &merkle_tree);
 
         // there should be log2(PAGE_COUNT) elements in merkle proof
-        assert_eq!(
+        debug_assert_eq!(
             PAGE_COUNT.trailing_zeros() as usize,
             batch_opening.opening_proof.len(),
             "Expected {} proof elements for {} pages, got {}",
@@ -420,7 +423,7 @@ impl ZkVmCommitter {
     }
 
     #[instrument(skip_all, level = Level::DEBUG)]
-    fn vm_mem_ops_vec_comm(
+    pub fn vm_mem_ops_vec_comm(
         &self,
         previous_comm: GoldilocksComm,
         mem_op: &MemoryOperation,
@@ -507,7 +510,7 @@ mod tests {
             value: value,
             is_write: true,
         };
-        let comm = commiter.vm_mem_comm_with_opening(&vm, &memory_op);
+        let comm = commiter.vm_mem_comm_with_opening(&vm.memory, &memory_op);
 
         commiter
             .verify_memory_opening::<WORDS_PER_PAGE, PAGE_COUNT>(&comm)
@@ -526,10 +529,10 @@ mod tests {
         let comm = commiter.state_0_comm(&vm);
 
         let expected = [
-            Goldilocks::from_u64(10549510614130078268),
-            Goldilocks::from_u64(16102843695796942770),
-            Goldilocks::from_u64(12006347882075065208),
-            Goldilocks::from_u64(15261293120835209596),
+            Goldilocks::from_u64(1895765705522452637),
+            Goldilocks::from_u64(8128224917819805318),
+            Goldilocks::from_u64(15816178864278320395),
+            Goldilocks::from_u64(6438867417431175243),
         ];
 
         assert_eq!(expected, comm);

@@ -28,6 +28,11 @@ impl VmProgram for Loaded {}
 
 pub const WORD_SIZE: usize = size_of::<u32>();
 
+pub type Memory<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> =
+    Box<[[u32; WORDS_PER_PAGE]; PAGE_COUNT]>;
+
+pub type Registers = [u32; N_REGS];
+
 #[derive(Debug)]
 /// WORDS_PER_PAGE is the number words in one page
 /// PAGE_COUNT is the number of such pages
@@ -48,13 +53,13 @@ pub struct VM<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize, Program: VmP
     /// x12–17   | a2–7     | Function arguments                 | Caller
     /// x18–27   | s2–11    | Saved registers                    | Callee
     /// x28–31   | t3–6     | Temporaries                        | Caller
-    pub regs: [u32; N_REGS],
+    pub regs: Registers,
 
     /// The program counter of width 32 bits.
     pub pc: usize,
 
     /// The main memory of the VM.
-    pub memory: Box<[[u32; WORDS_PER_PAGE]; PAGE_COUNT]>,
+    pub memory: Memory<WORDS_PER_PAGE, PAGE_COUNT>,
 
     program: Program,
 }
@@ -145,16 +150,33 @@ impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>
     }
 }
 
+pub struct InterceptArgs<'a, const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> {
+    pub trace: ExecutionTrace,
+    pub vm_memory: &'a Memory<WORDS_PER_PAGE, PAGE_COUNT>,
+    pub vm_regs: &'a Registers,
+}
+
 impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded> {
     /// Runs the VM's execution loop
-    pub fn run(&mut self, mut intercept: impl FnMut(ExecutionTrace) -> ()) {
+    pub fn run(
+        &mut self,
+        mut intercept: impl FnMut(InterceptArgs<WORDS_PER_PAGE, PAGE_COUNT>) -> (),
+    ) {
         let mut cycle: usize = 0;
         loop {
             match self.fetch_execute(cycle) {
-                Ok((ExecutionState::Continue, trace)) => intercept(trace),
+                Ok((ExecutionState::Continue, trace)) => intercept(InterceptArgs {
+                    trace,
+                    vm_memory: &self.memory,
+                    vm_regs: &self.regs,
+                }),
                 Ok((ExecutionState::Halt, trace)) => {
                     tracing::info!("execution halted");
-                    intercept(trace);
+                    intercept(InterceptArgs {
+                        trace,
+                        vm_memory: &self.memory,
+                        vm_regs: &self.regs,
+                    });
                     break;
                 }
                 Err(err) => {

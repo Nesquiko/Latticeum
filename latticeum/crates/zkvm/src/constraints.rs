@@ -5,7 +5,6 @@ use latticefold::arith::CCS;
 use num_traits::identities::One;
 use stark_rings_linalg::SparseMatrix;
 use std::ops::Neg;
-use tracing::{Level, instrument};
 
 pub type Ring = GoldilocksRingNTT;
 
@@ -292,18 +291,24 @@ const AUIPC_CONSTR: usize = 5;
 const LUI_CONSTR: usize = 6;
 
 #[cfg(feature = "debug")]
+use crate::ivc::IVCStepInput;
+#[cfg(feature = "debug")]
 use latticefold::arith::Arith;
 #[cfg(feature = "debug")]
-use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
+use tracing::{Level, instrument};
+#[cfg(feature = "debug")]
+use vm::riscvm::riscv_isa::Instruction;
 
 #[cfg(feature = "debug")]
 #[instrument(skip_all, level = Level::DEBUG)]
 pub fn check_relation_debug(
     ccs: &CCS<GoldilocksRingNTT>,
     z: &Vec<GoldilocksRingNTT>,
-    trace: &ExecutionTrace,
+    ivc_step: &IVCStepInput,
 ) {
-    match trace.instruction.inst {
+    let inst = ivc_step.trace.instruction.inst;
+
+    match inst {
         Instruction::ADD { .. }
         | Instruction::ADDI { .. }
         | Instruction::BNE { .. }
@@ -313,10 +318,7 @@ pub fn check_relation_debug(
         | Instruction::JALR { .. }
         | Instruction::SW { .. } => {
             ccs.check_relation(z).unwrap_or_else(|e| {
-                panic!(
-                    "CCS relation failed for {:?}: {:?}",
-                    trace.instruction.inst, e
-                );
+                panic!("CCS relation failed for {:?}: {:?}", inst, e);
             });
         }
         inst => {

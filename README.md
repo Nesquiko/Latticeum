@@ -37,12 +37,12 @@ part for verifying correct execution of `F`. In practice:
        - **1 goldilocks element**
      - new Merkle root of VM memory
        - **4 goldilocks element**
-     - Merkle root of registers
+     - Commitment to VM's registers
        - **4 goldilocks elements**
      - commitment to an memory ops vector `poseidon2(mem_ops_vec_{i - 1}, cycle, address, value)`
        - **4 goldilocks element**
    - `hash(U_{i - 1})` binds the running instance
-     - TODO read from code how many elements this has
+     - a lot of elements...
 
 2. The private witness for step `i` contains all necessary information for the
    augmented circuit `F'` to prove the transition from state committed by `h_{i - 1}`

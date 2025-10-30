@@ -299,10 +299,14 @@ impl CCSLayout {
     }
 }
 
+pub fn to_trivial_raw_witness(layout: &CCSLayout) -> Vec<u32> {
+    vec![0u32; layout.w_size]
+}
+
 /// Returns only private witness vector `w_ccs`
 pub fn to_raw_witness(trace: &ExecutionTrace, layout: &CCSLayout) -> Vec<u32> {
     // The witness vector contains only the private witness elements
-    let mut z = vec![0u32; layout.w_size];
+    let mut z = to_trivial_raw_witness(layout);
 
     z[layout.w_pc_in()] = trace
         .input
