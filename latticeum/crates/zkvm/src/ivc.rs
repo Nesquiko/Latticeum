@@ -9,8 +9,8 @@ use tracing::{Level, instrument};
 use vm::riscvm::inst::ExecutionTrace;
 
 use crate::{
-    ccs::{CCSLayout, to_raw_witness},
-    commitments::{GoldilocksComm, MemoryPageComm},
+    ccs::{CCSLayout, set_ivc_witness, set_trace_witness},
+    commitments::GoldilocksComm,
 };
 
 /// Holds the complete public and private state at the end of a single IVC step.
@@ -23,9 +23,14 @@ pub struct IVCStepOutput {
     /// `i` the number of the step that was just completed. Becomes `ivc_step` for step `i+1`.
     pub ivc_step: Goldilocks,
 
+    /// The Poseidon2 commitment to the initial VM state before first step.
+    /// It has different structure. It is a constant, its preimage is publicly
+    /// known.
+    pub z_0_comm: GoldilocksComm,
+
     /// The Poseidon2 commitment to the VM state `z_i` at the end of this step.
     /// Becomes `state_comm` for step `i+1`.
-    pub state_comm: GoldilocksComm,
+    pub z_i_comm: GoldilocksComm,
 
     /// The Poseidon2 commitment to the accumulator `U_i` at the end of this step.
     /// Becomes `acc_comm` for step `i+1`.
@@ -90,36 +95,17 @@ pub struct IVCStepInput<'a> {
 }
 
 #[instrument(skip_all, level = Level::DEBUG)]
-pub fn arithmetize(
-    IVCStepInput {
-        ivc_step_comm,
-        ivc_step,
-        state_0_comm,
-        state_comm,
-        acc_comm,
-        trace,
-        acc,
-        folding_proof,
-        w_acc,
-    }: &IVCStepInput,
-    layout: &CCSLayout,
-) -> Vec<GoldilocksRingNTT> {
-    let raw_z = to_raw_witness(trace, layout);
+pub fn arithmetize(input: &IVCStepInput, layout: &CCSLayout) -> Vec<GoldilocksRingNTT> {
+    let mut z_vec = vec![0usize; layout.z_vector_size()];
 
-    // convert raw z to proper z-vector structure [x_ccs, 1, w_ccs]
-    let mut z_vec = Vec::new();
+    for i in 0..CCSLayout::X_ELEMS_SIZE {
+        z_vec[i] = input.ivc_step_comm[i].as_canonical_u64() as usize;
+    }
 
-    // public inputs (x_ccs) = `h_{i - 1}` = ivc step commitment
-    z_vec.push(ivc_step_comm[0].as_canonical_u64() as usize);
-    z_vec.push(ivc_step_comm[1].as_canonical_u64() as usize);
-    z_vec.push(ivc_step_comm[2].as_canonical_u64() as usize);
-    z_vec.push(ivc_step_comm[3].as_canonical_u64() as usize);
+    z_vec[layout.const_1_idx] = 1usize;
 
-    // constant 1
-    z_vec.push(1usize);
-
-    // witness elements (w_ccs)
-    z_vec.extend(raw_z.iter().map(|&x| x as usize));
+    set_ivc_witness(&mut z_vec, input, layout);
+    set_trace_witness(&mut z_vec, input.trace, layout);
 
     to_F_vec(z_vec)
 }

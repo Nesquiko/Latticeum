@@ -154,6 +154,7 @@ pub struct InterceptArgs<'a, const WORDS_PER_PAGE: usize, const PAGE_COUNT: usiz
     pub trace: ExecutionTrace,
     pub vm_memory: &'a Memory<WORDS_PER_PAGE, PAGE_COUNT>,
     pub vm_regs: &'a Registers,
+    pub vm_raw_code: &'a Box<[u8]>,
 }
 
 impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded> {
@@ -169,6 +170,7 @@ impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> VM<WORDS_PER_PAGE, PA
                     trace,
                     vm_memory: &self.memory,
                     vm_regs: &self.regs,
+                    vm_raw_code: &self.elf().raw_code.bytes,
                 }),
                 Ok((ExecutionState::Halt, trace)) => {
                     tracing::info!("execution halted");
@@ -176,6 +178,7 @@ impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> VM<WORDS_PER_PAGE, PA
                         trace,
                         vm_memory: &self.memory,
                         vm_regs: &self.regs,
+                        vm_raw_code: &self.elf().raw_code.bytes,
                     });
                     break;
                 }
@@ -377,6 +380,7 @@ mod tests {
         let insts = vm.program.instructions;
 
         assert_eq!(23, insts.len());
+        assert_eq!(0x110f0, vm.program.elf.entry_point);
 
         // The main code is first. Linker can reorders sections in `.text` segment.
         assert_eq!(
@@ -657,7 +661,7 @@ mod tests {
     }
 
     #[test]
-    fn run() {
+    fn fibonacci_100000th_element() {
         let vm = new_vm_1mb();
 
         let program = PathBuf::from("samples/fibonacci_100_000");

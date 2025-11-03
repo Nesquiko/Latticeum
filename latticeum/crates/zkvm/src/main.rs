@@ -71,31 +71,46 @@ fn main() {
         AjtaiCommitmentScheme::rand(KAPPA, N, &mut rng);
 
     let zkvm_commiter = ZkVmCommitter::new();
-    let state_0_comm = zkvm_commiter.state_0_comm(&vm);
 
-    let (acc, w_acc, initial_ivc_step_comm) = initialize_accumulator(&ccs, &CCS_LAYOUT, &scheme);
+    let mut memory_ops = Vec::new();
+    let mut vm_memory_comm = MemoryPageComm {
+        comm: zkvm_commiter.vm_mem_comm(&vm.memory),
+        page_index: 0,
+        page: vm.memory[0].map(|el| Goldilocks::from_u32(el)),
+        proof: Default::default(),
+    };
+
+    let mut vm_memory_ops_vec_comm = ZERO_GOLDILOCKS_COMM;
+    let z_0_comm = zkvm_commiter.state_i_comm(
+        &vm.regs,
+        &vm.elf().raw_code.bytes,
+        vm.pc,
+        vm_memory_comm.comm,
+        vm_memory_ops_vec_comm,
+    );
 
     let mut step: Goldilocks = Goldilocks::ZERO;
+    let (acc, w_acc) = initialize_accumulator(&ccs, &CCS_LAYOUT, &scheme, ZERO_GOLDILOCKS_COMM);
+    let acc_0_comm = zkvm_commiter.acc_comm(&acc);
+    let ivc_step_0_comm = zkvm_commiter.ivc_step_comm(step, z_0_comm, z_0_comm, acc_0_comm);
 
     let mut ivc_output = IVCStepOutput {
-        ivc_step_comm: initial_ivc_step_comm,
+        ivc_step_comm: ivc_step_0_comm,
         ivc_step: step,
-        state_comm: ZERO_GOLDILOCKS_COMM,
-        acc_comm: zkvm_commiter.acc_comm(&acc),
+        z_0_comm,
+        z_i_comm: z_0_comm,
+        acc_comm: acc_0_comm,
         acc,
         w_acc,
         folding_proof: None,
     };
-
-    let mut memory_ops = Vec::new();
-    let mut vm_memory_comm = MemoryPageComm::default();
-    let mut vm_memory_ops_vec_comm = ZERO_GOLDILOCKS_COMM;
 
     vm.run(
         |InterceptArgs {
              trace,
              vm_memory,
              vm_regs,
+             vm_raw_code,
          }| {
             // IVC starts at step 0, which is the empty state, cycle starts at 0,
             // in order to match add 1.
@@ -112,8 +127,8 @@ fn main() {
                 // these prove correct IVC transition from step `i - 1`
                 ivc_step_comm: ivc_output.ivc_step_comm,
                 ivc_step: step - Goldilocks::ONE,
-                state_0_comm,
-                state_comm: ivc_output.state_comm,
+                state_0_comm: ivc_output.z_0_comm,
+                state_comm: ivc_output.z_i_comm,
                 acc_comm: ivc_output.acc_comm,
                 acc: &ivc_output.acc,
                 // these are used to prove correct folding in step `i - 1`
@@ -140,21 +155,21 @@ fn main() {
             });
 
             let state_i_comm = zkvm_commiter.state_i_comm(
-                vm_memory,
                 vm_regs,
-                &trace,
-                &vm_memory_comm,
+                vm_raw_code,
+                trace.output.pc,
+                vm_memory_comm.comm,
                 vm_memory_ops_vec_comm,
             );
 
             let acc_comm = zkvm_commiter.acc_comm(&folded_acc);
-            let ivc_step_comm =
-                zkvm_commiter.ivc_step_comm(step, state_0_comm, state_i_comm, acc_comm);
+            let ivc_step_comm = zkvm_commiter.ivc_step_comm(step, z_0_comm, state_i_comm, acc_comm);
 
             ivc_output = IVCStepOutput {
                 ivc_step_comm: ivc_step_comm,
                 ivc_step: ivc_input.ivc_step,
-                state_comm: state_i_comm,
+                z_0_comm,
+                z_i_comm: state_i_comm,
                 acc_comm: acc_comm,
                 acc: folded_acc,
                 w_acc: folded_w_acc,
@@ -256,11 +271,8 @@ fn initialize_accumulator(
     ccs: &CCS<GoldilocksRingNTT>,
     layout: &CCSLayout,
     scheme: &AjtaiCommitmentScheme<GoldilocksRingNTT>,
-) -> (
-    LCCCS<GoldilocksRingNTT>,
-    Witness<GoldilocksRingNTT>,
-    GoldilocksComm,
-) {
+    initial_ivc_step_comm: GoldilocksComm,
+) -> (LCCCS<GoldilocksRingNTT>, Witness<GoldilocksRingNTT>) {
     // create witness with private witness part only
     // the z-vector structure is [x_ccs, 1, w_ccs] = layout.size + 1 total
     // so the private witness (w_ccs) should be layout.w_size elements
@@ -270,10 +282,10 @@ fn initialize_accumulator(
     let zero_wit = Witness::from_w_ccs::<GoldiLocksDP>(zero_w_ccs);
     // empty public input representing the ivc step commitment
     let zero_x_ccs = vec![
-        GoldilocksRingNTT::from(ZERO_GOLDILOCKS_COMM[0].as_canonical_u64()),
-        GoldilocksRingNTT::from(ZERO_GOLDILOCKS_COMM[1].as_canonical_u64()),
-        GoldilocksRingNTT::from(ZERO_GOLDILOCKS_COMM[2].as_canonical_u64()),
-        GoldilocksRingNTT::from(ZERO_GOLDILOCKS_COMM[3].as_canonical_u64()),
+        GoldilocksRingNTT::from(initial_ivc_step_comm[0].as_canonical_u64()),
+        GoldilocksRingNTT::from(initial_ivc_step_comm[1].as_canonical_u64()),
+        GoldilocksRingNTT::from(initial_ivc_step_comm[2].as_canonical_u64()),
+        GoldilocksRingNTT::from(initial_ivc_step_comm[3].as_canonical_u64()),
     ];
 
     let zero_cm_i = CCCS {
@@ -290,7 +302,7 @@ fn initialize_accumulator(
     >::prove(&zero_cm_i, &zero_wit, &mut transcript, ccs)
     .expect("failed to create initial accumulator");
 
-    (acc, zero_wit, ZERO_GOLDILOCKS_COMM)
+    (acc, zero_wit)
 }
 
 /// returns CCS witness commitment and the private witness

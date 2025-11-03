@@ -55,14 +55,14 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_ADD]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[ADD_CONSTR].push((Ring::one(), self.layout.is_add()));
+        m_a.coeffs[ADD_CONSTR].push((Ring::one(), self.layout.is_add_idx));
 
         // Matrix B: selects (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[ADD_CONSTR].push((Ring::from(1u64 << 32), self.layout.has_overflown())); // +2^32 * has_overflown
-        m_b.coeffs[ADD_CONSTR].push((Ring::one(), self.layout.val_rd_out())); // +val_rd_out
-        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.layout.val_rs1())); // -val_rs1
-        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.layout.val_rs2())); // -val_rs2
+        m_b.coeffs[ADD_CONSTR].push((Ring::from(1u64 << 32), self.layout.has_overflown_idx)); // +2^32 * has_overflown
+        m_b.coeffs[ADD_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx)); // +val_rd_out
+        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.layout.val_rs1_idx)); // -val_rs1
+        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.layout.val_rs2_idx)); // -val_rs2
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -81,13 +81,14 @@ impl<'a> CCSBuilder<'a> {
         // Matrix A: selects (1 - z[IS_BRANCHING])
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
         m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), self.layout.const_1_idx));
-        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.layout.is_branching()));
+        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.layout.is_branching_idx));
 
         // Matrix B: selects (z[PC_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), self.layout.pc_out()));
-        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.layout.pc_in()));
-        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.layout.instruction_size()));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), self.layout.pc_out_idx));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.layout.pc_in_idx));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR]
+            .push((Ring::one().neg(), self.layout.instruction_size_idx));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -105,13 +106,13 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_JAL]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[JAL_CONSTR].push((Ring::one(), self.layout.is_jal()));
+        m_a.coeffs[JAL_CONSTR].push((Ring::one(), self.layout.is_jal_idx));
 
         // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[JAL_CONSTR].push((Ring::one(), self.layout.val_rd_out()));
-        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.layout.pc_in()));
-        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.layout.instruction_size()));
+        m_b.coeffs[JAL_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx));
+        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.layout.pc_in_idx));
+        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.layout.instruction_size_idx));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -129,13 +130,13 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_JALR]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[JALR_CONSTR].push((Ring::one(), self.layout.is_jalr()));
+        m_a.coeffs[JALR_CONSTR].push((Ring::one(), self.layout.is_jalr_idx));
 
         // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[JALR_CONSTR].push((Ring::one(), self.layout.val_rd_out()));
-        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.layout.pc_in()));
-        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.layout.instruction_size()));
+        m_b.coeffs[JALR_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx));
+        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.layout.pc_in_idx));
+        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.layout.instruction_size_idx));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -160,17 +161,17 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_BNE]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[BNE_CONSTR].push((Ring::one(), self.layout.is_bne()));
+        m_a.coeffs[BNE_CONSTR].push((Ring::one(), self.layout.is_bne_idx));
 
         // Matrix B: selects (1 - z[IS_BRANCHING])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
         m_b.coeffs[BNE_CONSTR].push((Ring::one(), 0)); // constant 1 is at() index 0() in z-vector
-        m_b.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.layout.is_branching()));
+        m_b.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.layout.is_branching_idx));
 
         // Matrix C: selects (z[VAL_RS1] - z[VAL_RS2])
         let mut m_c = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_c.coeffs[BNE_CONSTR].push((Ring::one(), self.layout.val_rs1()));
-        m_c.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.layout.val_rs2()));
+        m_c.coeffs[BNE_CONSTR].push((Ring::one(), self.layout.val_rs1_idx));
+        m_c.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.layout.val_rs2_idx));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -195,14 +196,14 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_AUIPC]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[AUIPC_CONSTR].push((Ring::one(), self.layout.is_auipc()));
+        m_a.coeffs[AUIPC_CONSTR].push((Ring::one(), self.layout.is_auipc_idx));
 
         // Matrix B: selects (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[PC_IN] - (z[IMM] * 2^12))
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 32), self.layout.has_overflown())); // +2^32 * has_overflown
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::one(), self.layout.val_rd_out())); // +rd_out
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::one().neg(), self.layout.pc_in())); // -pc_in
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 12).neg(), self.layout.imm())); // -(imm * 2^12)
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 32), self.layout.has_overflown_idx)); // +2^32 * has_overflown
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx)); // +rd_out
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::one().neg(), self.layout.pc_in_idx)); // -pc_in
+        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 12).neg(), self.layout.imm_idx)); // -(imm * 2^12)
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -224,12 +225,12 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_LUI]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[LUI_CONSTR].push((Ring::one(), self.layout.is_lui()));
+        m_a.coeffs[LUI_CONSTR].push((Ring::one(), self.layout.is_lui_idx));
 
         // Matrix B: selects (z[VAL_RD_OUT] - (z[IMM] * 2^12))
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[LUI_CONSTR].push((Ring::one(), self.layout.val_rd_out())); // +rd_out
-        m_b.coeffs[LUI_CONSTR].push((Ring::from(1u64 << 12).neg(), self.layout.imm())); // -(imm * 2^12)
+        m_b.coeffs[LUI_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx)); // +rd_out
+        m_b.coeffs[LUI_CONSTR].push((Ring::from(1u64 << 12).neg(), self.layout.imm_idx)); // -(imm * 2^12)
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);

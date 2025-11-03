@@ -1,8 +1,12 @@
+use p3_field::PrimeField64;
+use p3_goldilocks::Goldilocks;
 use std::ops::Range;
 
 use configuration::N_REGS;
 use latticefold::decomposition_parameters::DecompositionParams;
 use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
+
+use crate::{commitments::POSEIDON2_OUT, ivc::IVCStepInput};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
@@ -31,40 +35,47 @@ pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 #[derive(Debug)]
 pub struct CCSLayout {
     pub const_1_idx: usize,
+
+    // h_i preimage parts
+    pub ivc_h_i_step_idx: usize,
+    pub ivc_h_i_state_0_comm_idx: Range<usize>,
+    pub ivc_h_i_state_i_comm_idx: Range<usize>,
+    pub ivc_h_i_acc_i_comm_idx: Range<usize>,
+
     // input state
-    pc_in_idx: usize,
-    regs_in_idx: Range<usize>,
+    pub pc_in_idx: usize,
+    pub regs_in_idx: Range<usize>,
 
     // instruction & decoding
-    instruction_size_idx: usize,
-    is_branching_idx: usize,
-    branched_to_idx: usize,
+    pub instruction_size_idx: usize,
+    pub is_branching_idx: usize,
+    pub branched_to_idx: usize,
 
     // opcode selectors
-    is_add_idx: usize,
-    is_addi_idx: usize,
+    pub is_add_idx: usize,
+    pub is_addi_idx: usize,
 
-    is_sw_idx: usize,
+    pub is_sw_idx: usize,
 
-    is_auipc_idx: usize,
-    is_lui_idx: usize,
+    pub is_auipc_idx: usize,
+    pub is_lui_idx: usize,
 
-    is_bne_idx: usize,
-    is_jal_idx: usize,
-    is_jalr_idx: usize,
+    pub is_bne_idx: usize,
+    pub is_jal_idx: usize,
+    pub is_jalr_idx: usize,
 
     // operands
-    val_rs1_idx: usize,
-    val_rs2_idx: usize,
-    imm_idx: usize,
+    pub val_rs1_idx: usize,
+    pub val_rs2_idx: usize,
+    pub imm_idx: usize,
 
     // alu
-    has_overflown_idx: usize,
+    pub has_overflown_idx: usize,
 
     // output State
-    pc_out_idx: usize,
-    regs_out_idx: Range<usize>,
-    val_rd_out_idx: usize,
+    pub pc_out_idx: usize,
+    pub regs_out_idx: Range<usize>,
+    pub val_rd_out_idx: usize,
 
     /// Size of the private witness
     pub w_size: usize,
@@ -78,6 +89,21 @@ impl CCSLayout {
     pub const fn new() -> Self {
         let const_1_idx = Self::X_ELEMS_SIZE;
         let mut w_cursor = CCSLayout::W_IDX_DELTA;
+
+        let ivc_h_i_step_idx = w_cursor;
+        w_cursor += 1;
+
+        let ivc_h_i_state_0_comm_start = w_cursor;
+        w_cursor += POSEIDON2_OUT;
+        let ivc_h_i_state_0_comm_idx = ivc_h_i_state_0_comm_start..w_cursor;
+
+        let ivc_h_i_state_i_comm_start = w_cursor;
+        w_cursor += POSEIDON2_OUT;
+        let ivc_h_i_state_i_comm_idx = ivc_h_i_state_i_comm_start..w_cursor;
+
+        let ivc_h_i_acc_i_comm_start = w_cursor;
+        w_cursor += POSEIDON2_OUT;
+        let ivc_h_i_acc_i_comm_idx = ivc_h_i_acc_i_comm_start..w_cursor;
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -133,6 +159,10 @@ impl CCSLayout {
 
         Self {
             const_1_idx,
+            ivc_h_i_step_idx,
+            ivc_h_i_state_0_comm_idx,
+            ivc_h_i_state_i_comm_idx,
+            ivc_h_i_acc_i_comm_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -169,226 +199,106 @@ impl CCSLayout {
     pub const fn z_vector_size(&self) -> usize {
         Self::X_ELEMS_SIZE + Self::CONST_ELEMS_SIZE + self.w_size
     }
+}
 
-    // Getter functions that return the z-vector indices
-    pub const fn pc_in(&self) -> usize {
-        self.pc_in_idx
-    }
-    pub fn regs_in(&self) -> Range<usize> {
-        self.regs_in_idx.clone()
-    }
-    pub const fn instruction_size(&self) -> usize {
-        self.instruction_size_idx
-    }
-    pub const fn is_branching(&self) -> usize {
-        self.is_branching_idx
-    }
-    pub const fn branched_to(&self) -> usize {
-        self.branched_to_idx
-    }
-    pub const fn is_add(&self) -> usize {
-        self.is_add_idx
-    }
-    pub const fn is_addi(&self) -> usize {
-        self.is_addi_idx
-    }
-    pub const fn is_sw(&self) -> usize {
-        self.is_sw_idx
-    }
-    pub const fn is_auipc(&self) -> usize {
-        self.is_auipc_idx
-    }
-    pub const fn is_lui(&self) -> usize {
-        self.is_lui_idx
-    }
-    pub const fn is_bne(&self) -> usize {
-        self.is_bne_idx
-    }
-    pub const fn is_jal(&self) -> usize {
-        self.is_jal_idx
-    }
-    pub const fn is_jalr(&self) -> usize {
-        self.is_jalr_idx
-    }
-    pub const fn val_rs1(&self) -> usize {
-        self.val_rs1_idx
-    }
-    pub const fn val_rs2(&self) -> usize {
-        self.val_rs2_idx
-    }
-    pub const fn imm(&self) -> usize {
-        self.imm_idx
-    }
-    pub const fn has_overflown(&self) -> usize {
-        self.has_overflown_idx
-    }
-    pub const fn pc_out(&self) -> usize {
-        self.pc_out_idx
-    }
-    pub fn regs_out(&self) -> Range<usize> {
-        self.regs_out_idx.clone()
-    }
-    pub const fn val_rd_out(&self) -> usize {
-        self.val_rd_out_idx
+pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLayout) {
+    z[layout.ivc_h_i_step_idx] = input.ivc_step.as_canonical_u64() as usize;
+
+    for (i, z_idx) in layout.ivc_h_i_state_0_comm_idx.clone().enumerate() {
+        z[z_idx] = input.state_0_comm[i].as_canonical_u64() as usize;
     }
 
-    // Witness index functions that return indices in the private witness part (w_ccs)
-    pub const fn w_pc_in(&self) -> usize {
-        self.pc_in_idx - Self::W_IDX_DELTA
+    for (i, z_idx) in layout.ivc_h_i_state_i_comm_idx.clone().enumerate() {
+        z[z_idx] = input.state_comm[i].as_canonical_u64() as usize;
     }
-    pub fn w_regs_in(&self) -> Range<usize> {
-        let start = self.regs_in_idx.start - Self::W_IDX_DELTA;
-        let end = self.regs_in_idx.end - Self::W_IDX_DELTA;
-        start..end
-    }
-    pub const fn w_instruction_size(&self) -> usize {
-        self.instruction_size_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_is_branching(&self) -> usize {
-        self.is_branching_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_branched_to(&self) -> usize {
-        self.branched_to_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_is_add(&self) -> usize {
-        self.is_add_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_is_addi(&self) -> usize {
-        self.is_addi_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_is_sw(&self) -> usize {
-        self.is_sw_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_is_auipc(&self) -> usize {
-        self.is_auipc_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_is_lui(&self) -> usize {
-        self.is_lui_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_is_bne(&self) -> usize {
-        self.is_bne_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_is_jal(&self) -> usize {
-        self.is_jal_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_is_jalr(&self) -> usize {
-        self.is_jalr_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_val_rs1(&self) -> usize {
-        self.val_rs1_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_val_rs2(&self) -> usize {
-        self.val_rs2_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_imm(&self) -> usize {
-        self.imm_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_has_overflown(&self) -> usize {
-        self.has_overflown_idx - Self::W_IDX_DELTA
-    }
-    pub const fn w_pc_out(&self) -> usize {
-        self.pc_out_idx - Self::W_IDX_DELTA
-    }
-    pub fn w_regs_out(&self) -> Range<usize> {
-        let start = self.regs_out_idx.start - Self::W_IDX_DELTA;
-        let end = self.regs_out_idx.end - Self::W_IDX_DELTA;
-        start..end
-    }
-    pub const fn w_val_rd_out(&self) -> usize {
-        self.val_rd_out_idx - Self::W_IDX_DELTA
+
+    for (i, z_idx) in layout.ivc_h_i_acc_i_comm_idx.clone().enumerate() {
+        z[z_idx] = input.acc_comm[i].as_canonical_u64() as usize;
     }
 }
 
-pub fn to_trivial_raw_witness(layout: &CCSLayout) -> Vec<u32> {
-    vec![0u32; layout.w_size]
-}
-
-/// Returns only private witness vector `w_ccs`
-pub fn to_raw_witness(trace: &ExecutionTrace, layout: &CCSLayout) -> Vec<u32> {
-    // The witness vector contains only the private witness elements
-    let mut z = to_trivial_raw_witness(layout);
-
-    z[layout.w_pc_in()] = trace
+pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CCSLayout) {
+    z[layout.pc_in_idx] = trace
         .input
         .pc
         .try_into()
         .expect("can't fit input pc: usize to u32");
-    for (i, z_idx) in layout.w_regs_in().enumerate() {
-        z[z_idx] = trace.input.regs[i];
+    for (i, z_idx) in layout.regs_in_idx.clone().enumerate() {
+        z[z_idx] = trace.input.regs[i] as usize;
     }
 
-    z[layout.w_instruction_size()] = trace.instruction.size as u32;
+    z[layout.instruction_size_idx] = trace.instruction.size;
 
     match trace.instruction.inst {
         Instruction::LUI { rd, imm } => {
-            z[layout.w_is_lui()] = 1;
-            z[layout.w_imm()] = imm;
-            z[layout.w_val_rd_out()] = trace.output.regs[rd as usize];
+            z[layout.is_lui_idx] = 1;
+            z[layout.imm_idx] = imm as usize;
+            z[layout.val_rd_out_idx] = trace.output.regs[rd as usize] as usize;
         }
         Instruction::AUIPC { rd, imm } => {
-            z[layout.w_is_auipc()] = 1;
-            z[layout.w_imm()] = imm;
-            z[layout.w_val_rd_out()] = trace.output.regs[rd as usize];
-            z[layout.w_has_overflown()] = trace.side_effects.has_overflown.into();
+            z[layout.is_auipc_idx] = 1;
+            z[layout.imm_idx] = imm as usize;
+            z[layout.val_rd_out_idx] = trace.output.regs[rd as usize] as usize;
+            z[layout.has_overflown_idx] = trace.side_effects.has_overflown.into();
         }
         Instruction::JAL { rd, offset } => {
-            z[layout.w_is_jal()] = 1;
-            z[layout.w_imm()] = offset as u32;
-            z[layout.w_val_rd_out()] = trace.output.regs[rd as usize];
-            z[layout.w_is_branching()] = 1;
-            z[layout.w_branched_to()] = trace.side_effects.branched_to.expect("JAL must branch");
+            z[layout.is_jal_idx] = 1;
+            z[layout.imm_idx] = offset as usize;
+            z[layout.val_rd_out_idx] = trace.output.regs[rd as usize] as usize;
+            z[layout.is_branching_idx] = 1;
+            z[layout.branched_to_idx] =
+                trace.side_effects.branched_to.expect("JAL must branch") as usize;
         }
         Instruction::JALR { rd, rs1, offset } => {
-            z[layout.w_is_jalr()] = 1;
-            z[layout.w_val_rs1()] = trace.input.regs[rs1 as usize];
-            z[layout.w_imm()] = offset as u32;
-            z[layout.w_val_rd_out()] = trace.output.regs[rd as usize];
-            z[layout.w_is_branching()] = 1;
-            z[layout.w_branched_to()] = trace.side_effects.branched_to.expect("JALR must branch");
+            z[layout.is_jalr_idx] = 1;
+            z[layout.val_rs1_idx] = trace.input.regs[rs1 as usize] as usize;
+            z[layout.imm_idx] = offset as usize;
+            z[layout.val_rd_out_idx] = trace.output.regs[rd as usize] as usize;
+            z[layout.is_branching_idx] = 1;
+            z[layout.branched_to_idx] =
+                trace.side_effects.branched_to.expect("JALR must branch") as usize;
         }
         Instruction::BNE { rs1, rs2, offset } => {
-            z[layout.w_is_bne()] = 1;
-            z[layout.w_val_rs1()] = trace.input.regs[rs1 as usize];
-            z[layout.w_val_rs2()] = trace.input.regs[rs2 as usize];
-            z[layout.w_imm()] = offset as u32;
-            z[layout.w_is_branching()] = trace.side_effects.branched_to.is_some().into();
-            z[layout.w_branched_to()] = trace.side_effects.branched_to.unwrap_or(0);
+            z[layout.is_bne_idx] = 1;
+            z[layout.val_rs1_idx] = trace.input.regs[rs1 as usize] as usize;
+            z[layout.val_rs2_idx] = trace.input.regs[rs2 as usize] as usize;
+            z[layout.imm_idx] = offset as usize;
+            z[layout.is_branching_idx] = trace.side_effects.branched_to.is_some().into();
+            z[layout.branched_to_idx] = trace.side_effects.branched_to.unwrap_or(0) as usize;
         }
         Instruction::SW { rs1, rs2, offset } => {
-            z[layout.w_is_sw()] = 1;
-            z[layout.w_val_rs1()] = trace.input.regs[rs1 as usize];
-            z[layout.w_val_rs2()] = trace.input.regs[rs2 as usize];
-            z[layout.w_imm()] = offset as u32;
+            z[layout.is_sw_idx] = 1;
+            z[layout.val_rs1_idx] = trace.input.regs[rs1 as usize] as usize;
+            z[layout.val_rs2_idx] = trace.input.regs[rs2 as usize] as usize;
+            z[layout.imm_idx] = offset as usize;
         }
         Instruction::ADDI { rd, rs1, imm } => {
-            z[layout.w_is_addi()] = 1;
+            z[layout.is_addi_idx] = 1;
 
-            z[layout.w_val_rs1()] = trace.input.regs[rs1 as usize];
-            z[layout.w_imm()] = imm as u32;
-            z[layout.w_val_rd_out()] = trace.output.regs[rd as usize];
+            z[layout.val_rs1_idx] = trace.input.regs[rs1 as usize] as usize;
+            z[layout.imm_idx] = imm as usize;
+            z[layout.val_rd_out_idx] = trace.output.regs[rd as usize] as usize;
 
-            z[layout.w_has_overflown()] = trace.side_effects.has_overflown.into();
+            z[layout.has_overflown_idx] = trace.side_effects.has_overflown.into();
         }
         Instruction::ADD { rd, rs1, rs2 } => {
-            z[layout.w_is_add()] = 1;
+            z[layout.is_add_idx] = 1;
 
-            z[layout.w_val_rs1()] = trace.input.regs[rs1 as usize];
-            z[layout.w_val_rs2()] = trace.input.regs[rs2 as usize];
-            z[layout.w_val_rd_out()] = trace.output.regs[rd as usize];
+            z[layout.val_rs1_idx] = trace.input.regs[rs1 as usize] as usize;
+            z[layout.val_rs2_idx] = trace.input.regs[rs2 as usize] as usize;
+            z[layout.val_rd_out_idx] = trace.output.regs[rd as usize] as usize;
 
-            z[layout.w_has_overflown()] = trace.side_effects.has_overflown.into();
+            z[layout.has_overflown_idx] = trace.side_effects.has_overflown.into();
         }
         _ => panic!("unsupported instruction: {:?}", trace.instruction.inst),
     };
 
-    z[layout.w_pc_out()] = trace
+    z[layout.pc_out_idx] = trace
         .output
         .pc
         .try_into()
         .expect("can't fit output pc: usize to u32");
-    for (i, z_idx) in layout.w_regs_out().enumerate() {
-        z[z_idx] = trace.output.regs[i];
+    for (i, z_idx) in layout.regs_out_idx.clone().enumerate() {
+        z[z_idx] = trace.output.regs[i] as usize;
     }
-
-    z
 }
