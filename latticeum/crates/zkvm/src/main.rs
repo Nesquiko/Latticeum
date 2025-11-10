@@ -1,7 +1,9 @@
 mod ccs;
 mod commitments;
 mod constraints;
+mod crypto_consts;
 mod ivc;
+mod poseidon2;
 
 use cyclotomic_rings::rings::{GoldilocksChallengeSet, GoldilocksRingNTT, GoldilocksRingPoly};
 use latticefold::{
@@ -30,9 +32,10 @@ use crate::constraints::check_relation_debug;
 
 use crate::{
     ccs::{CCS_LAYOUT, CCSLayout, GoldiLocksDP, KAPPA, N},
-    commitments::{GoldilocksComm, MemoryPageComm, ZERO_GOLDILOCKS_COMM, ZkVmCommitter},
+    commitments::{MemoryPageComm, ZkVmCommitter},
     constraints::CCSBuilder,
     ivc::{IVCStepInput, IVCStepOutput, arithmetize},
+    poseidon2::{GoldilocksComm, ZERO_GOLDILOCKS_COMM},
 };
 
 fn main() {

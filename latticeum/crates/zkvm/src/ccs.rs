@@ -1,12 +1,11 @@
 use p3_field::PrimeField64;
-use p3_goldilocks::Goldilocks;
 use std::ops::Range;
 
 use configuration::N_REGS;
 use latticefold::decomposition_parameters::DecompositionParams;
 use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 
-use crate::{commitments::POSEIDON2_OUT, ivc::IVCStepInput};
+use crate::{ivc::IVCStepInput, poseidon2::POSEIDON2_OUT};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
@@ -36,7 +35,7 @@ pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 pub struct CCSLayout {
     pub const_1_idx: usize,
 
-    // h_i preimage parts
+    // h_i (public input 0) preimage parts
     pub ivc_h_i_step_idx: usize,
     pub ivc_h_i_state_0_comm_idx: Range<usize>,
     pub ivc_h_i_state_i_comm_idx: Range<usize>,

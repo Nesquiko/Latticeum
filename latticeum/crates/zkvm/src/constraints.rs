@@ -36,8 +36,8 @@ impl<'a> CCSBuilder<'a> {
     pub fn create_riscv_ccs<const W: usize>(layout: &'a CCSLayout) -> CCS<Ring> {
         let mut builder = Self::new::<W>(layout);
 
+        // risc-v specific
         builder.pc_non_branching_constraint();
-
         builder.add_constraint();
         builder.jal_constraint();
         builder.jalr_constraint();

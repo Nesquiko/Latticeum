@@ -10,7 +10,7 @@ use vm::riscvm::inst::ExecutionTrace;
 
 use crate::{
     ccs::{CCSLayout, set_ivc_witness, set_trace_witness},
-    commitments::GoldilocksComm,
+    poseidon2::GoldilocksComm,
 };
 
 /// Holds the complete public and private state at the end of a single IVC step.
@@ -47,8 +47,6 @@ pub struct IVCStepOutput {
     pub folding_proof: Option<LFProof<GoldilocksRingNTT>>,
 }
 
-// TODO needs the merkle opening of the VMs memory and also other things needed
-// for verifying the folding proof, but that can wait a little.
 pub struct IVCStepInput<'a> {
     /// `h_{i - 1}` public poseidon2 commitment to the state of previous IVC step.
     /// Preimage contains:

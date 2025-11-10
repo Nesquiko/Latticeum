@@ -3,13 +3,10 @@ use cyclotomic_rings::rings::{GoldilocksRingNTT, GoldilocksRingPoly};
 use latticefold::arith::LCCCS;
 use p3_commit::{BatchOpening, BatchOpeningRef, Mmcs};
 use p3_field::PrimeCharacteristicRing;
-use p3_goldilocks::{Goldilocks, Poseidon2Goldilocks};
+use p3_goldilocks::Goldilocks;
 use p3_matrix::{Dimensions, dense::RowMajorMatrix};
 use p3_merkle_tree::{MerkleTree, MerkleTreeError, MerkleTreeMmcs};
-use p3_symmetric::{
-    CryptographicHasher, Hash, PaddingFreeSponge, PseudoCompressionFunction, TruncatedPermutation,
-};
-use rand::{SeedableRng, rngs::StdRng};
+use p3_symmetric::{CryptographicHasher, Hash, PseudoCompressionFunction, TruncatedPermutation};
 use stark_rings::{
     PolyRing,
     cyclotomic_ring::{ICRT, models::goldilocks::Fq},
@@ -21,53 +18,18 @@ use vm::riscvm::{
     vm::{Memory, Registers, WORD_SIZE, physical_addr},
 };
 
-const RNG_SEED: [u8; 32] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
-    26, 27, 28, 29, 30, 31,
-];
-
-/// number of field elements in the output digest
-pub const POSEIDON2_OUT: usize = 4;
-
-pub type GoldilocksComm = [Goldilocks; POSEIDON2_OUT];
-
-pub const ZERO_GOLDILOCKS_COMM: GoldilocksComm = [Goldilocks::ZERO; 4];
-
-/// Total state size of the Poseidon2 permutation for memory and registers
-/// commitments (rate + capacity). The permutation operates on arrays of WIDTH
-/// field elements.
-const POSEIDON2_WIDTH: usize = 8;
-
-/// Number of field elements that can be absorbed per permutation call. This is
-/// the "input size" of the sponge construction. Higher rate = faster hashing,
-/// but lower security.
-const POSEIDON2_RATE: usize = 4;
-
-type Poseidon2Perm = Poseidon2Goldilocks<POSEIDON2_WIDTH>;
-type Poseidon2Sponge =
-    PaddingFreeSponge<Poseidon2Perm, POSEIDON2_WIDTH, POSEIDON2_RATE, POSEIDON2_OUT>;
-type Poseidon2Compression = TruncatedPermutation<Poseidon2Perm, 2, POSEIDON2_OUT, POSEIDON2_WIDTH>;
+use crate::{
+    crypto_consts::{external_width_8_consts, external_width_16_consts, internal_constants_len_22},
+    poseidon2::{
+        GoldilocksComm, POSEIDON2_OUT, POSEIDON2_WIDTH, Poseidon2Compression, Poseidon2Perm,
+        Poseidon2Sponge, WideZkVMPoseidon2,
+    },
+};
 
 type MemOpsVecCommPoseidon2Compression = TruncatedPermutation<Poseidon2Perm, 2, 4, POSEIDON2_WIDTH>;
 
 type Poseidon2MerkleTree =
     MerkleTreeMmcs<Goldilocks, Goldilocks, Poseidon2Sponge, Poseidon2Compression, POSEIDON2_OUT>;
-
-/// Total state size of the Poseidon2 permutation for state 0 commitment (rate + capacity).
-/// The permutation operates on arrays of WIDTH field elements.
-/// WIDTH = RATE + CAPACITY
-const WIDE_POSEIDON2_WIDTH: usize = 16;
-
-/// Number of field elements that can be absorbed per permutation call. This is
-/// the "input size" of the sponge construction.
-/// Higher rate = faster hashing, but lower security.
-/// Security is (Capacity * field bits) / 2 = (4 * 64) / 2 = 128 bits of security
-/// With CAPACITY=4 for 128-bit security, RATE = WIDTH - CAPACITY = 16 - 4 = 12
-const WIDE_POSEIDON2_RATE: usize = 12;
-
-type WidePoseidon2Perm = Poseidon2Goldilocks<WIDE_POSEIDON2_WIDTH>;
-type WidePoseidon2Sponge =
-    PaddingFreeSponge<WidePoseidon2Perm, WIDE_POSEIDON2_WIDTH, WIDE_POSEIDON2_RATE, POSEIDON2_OUT>;
 
 /// Opening proof for a modified memory page.
 #[derive(Debug, Clone)]
@@ -87,25 +49,27 @@ pub struct ZkVmCommitter {
     memory_ops_vec_compression: MemOpsVecCommPoseidon2Compression,
     merkle_tree: Poseidon2MerkleTree,
 
-    wide_hasher: WidePoseidon2Sponge,
+    wide_hasher: WideZkVMPoseidon2,
 }
 
 impl ZkVmCommitter {
     pub fn new() -> Self {
-        let mut rng = StdRng::from_seed(RNG_SEED);
-        let perm = Poseidon2Perm::new_from_rng_128(&mut rng);
+        let external_consts_8 = external_width_8_consts();
+        let internal_consts = internal_constants_len_22();
+        let perm = Poseidon2Perm::new(external_consts_8, internal_consts.clone());
+
         let hasher = Poseidon2Sponge::new(perm.clone());
         let compression = Poseidon2Compression::new(perm.clone());
         let memory_ops_vec_compression = MemOpsVecCommPoseidon2Compression::new(perm);
         let merkle_tree = Poseidon2MerkleTree::new(hasher.clone(), compression.clone());
 
-        let wide_perm = WidePoseidon2Perm::new_from_rng_128(&mut rng);
-        let wide_hasher = WidePoseidon2Sponge::new(wide_perm);
+        let external_consts_16 = external_width_16_consts();
+        let wide_hasher = WideZkVMPoseidon2::new(external_consts_16, internal_consts);
 
         Self {
             hasher,
             compression,
-            memory_ops_vec_compression: memory_ops_vec_compression,
+            memory_ops_vec_compression,
             merkle_tree,
             wide_hasher,
         }
@@ -213,54 +177,10 @@ impl ZkVmCommitter {
         acc_goldilocks.extend_from_slice(&u_flat);
         acc_goldilocks.extend_from_slice(&x_w_flat);
         acc_goldilocks.extend_from_slice(&h_flat);
+        debug_assert_eq!(acc_goldilocks.len(), 216 + 72 + 96 + 360 + 96 + 24);
 
         self.wide_hasher.hash_iter(acc_goldilocks)
     }
-
-    // #[instrument(skip_all, level = Level::DEBUG)]
-    // pub fn state_0_comm<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>(
-    //     &self,
-    //     vm: &VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>,
-    // ) -> GoldilocksComm {
-    //     let code_comm = self.vm_code_comm(vm);
-    //     let entrypoint = Goldilocks::from_usize(vm.elf().entry_point);
-    //     let zero_mem_comm = self.vm_mem_comm(vm);
-    //     debug_assert_eq!(zero_mem_comm, *CONST_ZERO_MEM_MERKLE_ROOT);
-    //
-    //     let zero_regs_comm = self.vm_regs_comm(&vm.regs);
-    //     debug_assert_eq!(zero_regs_comm, *CONST_ZERO_REGS_COMM);
-    //
-    //     let zero_mem_ops_vec_comm = self.vm_mem_ops_vec_comm(
-    //         [Goldilocks::ZERO; POSEIDON2_OUT],
-    //         &MemoryOperation {
-    //             cycle: 0,
-    //             address: 0,
-    //             value: 0,
-    //             is_write: false,
-    //         },
-    //     );
-    //     debug_assert_eq!(zero_mem_ops_vec_comm, *CONST_ZERO_MEM_OPS_VEC_COMM);
-    //
-    //     self.wide_hasher.hash_iter([
-    //         code_comm[0],
-    //         code_comm[1],
-    //         code_comm[2],
-    //         code_comm[3],
-    //         entrypoint,
-    //         zero_mem_comm[0],
-    //         zero_mem_comm[1],
-    //         zero_mem_comm[2],
-    //         zero_mem_comm[3],
-    //         zero_regs_comm[0],
-    //         zero_regs_comm[1],
-    //         zero_regs_comm[2],
-    //         zero_regs_comm[3],
-    //         zero_mem_ops_vec_comm[0],
-    //         zero_mem_ops_vec_comm[1],
-    //         zero_mem_ops_vec_comm[2],
-    //         zero_mem_ops_vec_comm[3],
-    //     ])
-    // }
 
     /// Creates a poseidon2 commitment over the VM's registers
     #[instrument(skip_all, level = Level::DEBUG)]
@@ -449,16 +369,17 @@ fn flatten(vec: &[GoldilocksRingNTT]) -> Vec<Goldilocks> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
+    use crate::{
+        commitments::{MemoryPageComm, ZkVmCommitter},
+        poseidon2::ZERO_GOLDILOCKS_COMM,
+    };
     use p3_field::PrimeCharacteristicRing;
     use p3_goldilocks::Goldilocks;
+    use std::path::PathBuf;
     use vm::riscvm::{
         inst::MemoryOperation,
         vm::{dummy_loaded_vm_1mb, new_vm_1mb},
     };
-
-    use crate::commitments::{MemoryPageComm, ZERO_GOLDILOCKS_COMM, ZkVmCommitter};
 
     #[test]
     fn page_commitment_and_verification() {
@@ -511,10 +432,10 @@ mod tests {
         );
 
         let expected = [
-            Goldilocks::from_u64(4371699278718507715),
-            Goldilocks::from_u64(8946822045103986950),
-            Goldilocks::from_u64(14472288608838639038),
-            Goldilocks::from_u64(1237133764722816986),
+            Goldilocks::from_u64(10917700827563690995),
+            Goldilocks::from_u64(7799882581794317217),
+            Goldilocks::from_u64(1119468167469200545),
+            Goldilocks::from_u64(8559609930302799062),
         ];
 
         assert_eq!(expected, comm);
