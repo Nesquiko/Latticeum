@@ -6,7 +6,7 @@ use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::Goldilocks;
 use p3_matrix::{Dimensions, dense::RowMajorMatrix};
 use p3_merkle_tree::{MerkleTree, MerkleTreeError, MerkleTreeMmcs};
-use p3_symmetric::{CryptographicHasher, Hash, PseudoCompressionFunction, TruncatedPermutation};
+use p3_symmetric::{Hash, PseudoCompressionFunction, TruncatedPermutation};
 use stark_rings::{
     PolyRing,
     cyclotomic_ring::{ICRT, models::goldilocks::Fq},
@@ -21,8 +21,8 @@ use vm::riscvm::{
 use crate::{
     crypto_consts::{external_width_8_consts, external_width_16_consts, internal_constants_len_22},
     poseidon2::{
-        GoldilocksComm, POSEIDON2_OUT, POSEIDON2_WIDTH, Poseidon2Compression, Poseidon2Perm,
-        Poseidon2Sponge, WideZkVMPoseidon2,
+        GoldilocksComm, IntermediateStates, POSEIDON2_OUT, POSEIDON2_WIDTH, Poseidon2Compression,
+        Poseidon2Perm, Poseidon2Sponge, WideZkVMPoseidon2,
     },
 };
 
@@ -88,7 +88,7 @@ impl ZkVmCommitter {
         state_0_comm: GoldilocksComm,
         state_i_comm: GoldilocksComm,
         acc_comm: GoldilocksComm,
-    ) -> GoldilocksComm {
+    ) -> (GoldilocksComm, IntermediateStates) {
         self.wide_hasher.hash_iter([
             i,
             state_0_comm[0],
@@ -119,25 +119,27 @@ impl ZkVmCommitter {
         let pc = Goldilocks::from_usize(pc);
         let regs_comm = self.vm_regs_comm(vm_regs);
 
-        self.wide_hasher.hash_iter([
-            code_comm[0],
-            code_comm[1],
-            code_comm[2],
-            code_comm[3],
-            pc,
-            memory_comm[0],
-            memory_comm[1],
-            memory_comm[2],
-            memory_comm[3],
-            regs_comm[0],
-            regs_comm[1],
-            regs_comm[2],
-            regs_comm[3],
-            mem_ops_vec_comm[0],
-            mem_ops_vec_comm[1],
-            mem_ops_vec_comm[2],
-            mem_ops_vec_comm[3],
-        ])
+        self.wide_hasher
+            .hash_iter([
+                code_comm[0],
+                code_comm[1],
+                code_comm[2],
+                code_comm[3],
+                pc,
+                memory_comm[0],
+                memory_comm[1],
+                memory_comm[2],
+                memory_comm[3],
+                regs_comm[0],
+                regs_comm[1],
+                regs_comm[2],
+                regs_comm[3],
+                mem_ops_vec_comm[0],
+                mem_ops_vec_comm[1],
+                mem_ops_vec_comm[2],
+                mem_ops_vec_comm[3],
+            ])
+            .0
     }
 
     #[instrument(skip_all, level = Level::DEBUG)]
@@ -158,17 +160,17 @@ impl ZkVmCommitter {
         } = acc;
 
         let r_flat = flatten(r);
-        debug_assert_eq!(r_flat.len(), 216);
+        assert_eq!(r_flat.len(), 240);
         let v_flat = flatten(v);
-        debug_assert_eq!(v_flat.len(), 72);
+        assert_eq!(v_flat.len(), 72);
         let cm_flat = flatten(cm.as_ref());
-        debug_assert_eq!(cm_flat.len(), 96);
+        assert_eq!(cm_flat.len(), 96);
         let u_flat = flatten(u);
-        debug_assert_eq!(u_flat.len(), 360);
+        assert_eq!(u_flat.len(), 360);
         let x_w_flat = flatten(x_w);
-        debug_assert_eq!(x_w_flat.len(), 96);
+        assert_eq!(x_w_flat.len(), 96);
         let h_flat = flatten(&[*h]);
-        debug_assert_eq!(h_flat.len(), 24);
+        assert_eq!(h_flat.len(), 24);
 
         let mut acc_goldilocks: Vec<Goldilocks> = Vec::new();
         acc_goldilocks.extend_from_slice(&r_flat);
@@ -177,9 +179,9 @@ impl ZkVmCommitter {
         acc_goldilocks.extend_from_slice(&u_flat);
         acc_goldilocks.extend_from_slice(&x_w_flat);
         acc_goldilocks.extend_from_slice(&h_flat);
-        debug_assert_eq!(acc_goldilocks.len(), 216 + 72 + 96 + 360 + 96 + 24);
+        assert_eq!(acc_goldilocks.len(), 240 + 72 + 96 + 360 + 96 + 24);
 
-        self.wide_hasher.hash_iter(acc_goldilocks)
+        self.wide_hasher.hash_iter(acc_goldilocks).0
     }
 
     /// Creates a poseidon2 commitment over the VM's registers
@@ -192,7 +194,7 @@ impl ZkVmCommitter {
             .try_into()
             .expect("how can there be more then 32 regs?");
 
-        self.wide_hasher.hash_iter(reg_elements)
+        self.wide_hasher.hash_iter(reg_elements).0
     }
 
     #[instrument(skip_all, level = Level::DEBUG)]
@@ -248,7 +250,7 @@ impl ZkVmCommitter {
             self.merkle_tree.open_batch(page_index, &merkle_tree);
 
         // there should be log2(PAGE_COUNT) elements in merkle proof
-        debug_assert_eq!(
+        assert_eq!(
             PAGE_COUNT.trailing_zeros() as usize,
             batch_opening.opening_proof.len(),
             "Expected {} proof elements for {} pages, got {}",
@@ -331,7 +333,7 @@ impl ZkVmCommitter {
             // Convert u16 to u64 then to Goldilocks field element
             halfwords.push(Goldilocks::from_u16(halfword));
         }
-        debug_assert!(!halfwords.is_empty());
+        assert!(!halfwords.is_empty());
 
         let leaves = RowMajorMatrix::new(halfwords, 1);
 
@@ -348,7 +350,7 @@ impl ZkVmCommitter {
 }
 
 fn fq_to_plonky3_goldilocks(fq: &Fq) -> Goldilocks {
-    debug_assert_eq!(1, fq.0.0.len());
+    assert_eq!(1, fq.0.0.len());
     let num = fq.0.0[0];
     Goldilocks::from_u64(num)
 }
@@ -357,7 +359,7 @@ fn flatten(vec: &[GoldilocksRingNTT]) -> Vec<Goldilocks> {
     vec.iter()
         .flat_map(|&ring_elem| {
             let coeff_form = ICRT::icrt(ring_elem);
-            debug_assert_eq!(GoldilocksRingPoly::dimension(), coeff_form.coeffs().len());
+            assert_eq!(GoldilocksRingPoly::dimension(), coeff_form.coeffs().len());
             coeff_form
                 .coeffs()
                 .iter()

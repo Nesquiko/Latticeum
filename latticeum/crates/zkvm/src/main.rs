@@ -128,7 +128,7 @@ fn main() {
 
             let ivc_input = IVCStepInput {
                 // these prove correct IVC transition from step `i - 1`
-                ivc_step_comm: ivc_output.ivc_step_comm,
+                ivc_step_comm: ivc_output.ivc_step_comm.clone(),
                 ivc_step: step - Goldilocks::ONE,
                 state_0_comm: ivc_output.z_0_comm,
                 state_comm: ivc_output.z_i_comm,
@@ -279,7 +279,7 @@ fn initialize_accumulator(
     // create witness with private witness part only
     // the z-vector structure is [x_ccs, 1, w_ccs] = layout.size + 1 total
     // so the private witness (w_ccs) should be layout.w_size elements
-    debug_assert_eq!(ccs.n - ccs.l - 1, layout.w_size);
+    assert_eq!(ccs.n - ccs.l - 1, layout.w_size);
     let zero_w_ccs = vec![GoldilocksRingNTT::zero(); layout.w_size];
 
     let zero_wit = Witness::from_w_ccs::<GoldiLocksDP>(zero_w_ccs);

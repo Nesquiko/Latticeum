@@ -10,7 +10,7 @@ use vm::riscvm::inst::ExecutionTrace;
 
 use crate::{
     ccs::{CCSLayout, set_ivc_witness, set_trace_witness},
-    poseidon2::GoldilocksComm,
+    poseidon2::{GoldilocksComm, IntermediateStates},
 };
 
 /// Holds the complete public and private state at the end of a single IVC step.
@@ -18,7 +18,7 @@ use crate::{
 pub struct IVCStepOutput {
     /// `h_i` public Poseidon2 commitment that seals the state of the completed IVC step `i`.
     /// this becomes the `ivc_step_comm` for step `i+1`.
-    pub ivc_step_comm: GoldilocksComm,
+    pub ivc_step_comm: (GoldilocksComm, IntermediateStates),
 
     /// `i` the number of the step that was just completed. Becomes `ivc_step` for step `i+1`.
     pub ivc_step: Goldilocks,
@@ -48,13 +48,14 @@ pub struct IVCStepOutput {
 }
 
 pub struct IVCStepInput<'a> {
-    /// `h_{i - 1}` public poseidon2 commitment to the state of previous IVC step.
+    /// `h_{i - 1}` public poseidon2 commitment to the state of previous IVC step,
+    /// and the poseidon2 intermediate states needed to enforce it in CCS.
     /// Preimage contains:
     /// - `i - 1`
     /// - state 0 commitment ([Self::state_0_comm])
     /// - state i - 1 commitment ([Self::state_comm])
     /// - accumulator at i - 1 commitment ([Self::acc_comm])
-    pub ivc_step_comm: GoldilocksComm,
+    pub ivc_step_comm: (GoldilocksComm, IntermediateStates),
 
     // ###############################################
     // ## [Self::ivc_step_comm] preimage components ##
@@ -96,8 +97,8 @@ pub struct IVCStepInput<'a> {
 pub fn arithmetize(input: &IVCStepInput, layout: &CCSLayout) -> Vec<GoldilocksRingNTT> {
     let mut z_vec = vec![0usize; layout.z_vector_size()];
 
-    for i in 0..CCSLayout::X_ELEMS_SIZE {
-        z_vec[i] = input.ivc_step_comm[i].as_canonical_u64() as usize;
+    for i in layout.ivc_h_i_idx.clone() {
+        z_vec[i] = input.ivc_step_comm.0[i].as_canonical_u64() as usize;
     }
 
     z_vec[layout.const_1_idx] = 1usize;

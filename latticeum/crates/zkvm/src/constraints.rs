@@ -1,4 +1,7 @@
-use crate::ccs::CCSLayout;
+use crate::{
+    ccs::CCSLayout,
+    poseidon2::{POSEIDON2_OUT, WIDE_POSEIDON2_WIDTH},
+};
 use ark_std::log2;
 use cyclotomic_rings::rings::GoldilocksRingNTT;
 use latticefold::arith::CCS;
@@ -45,7 +48,64 @@ impl<'a> CCSBuilder<'a> {
         builder.auipc_constraint();
         builder.lui_constraint();
 
+        // ivc specific
+        // builder.ivc_step_constraint();
+
         builder.build()
+    }
+
+    fn ivc_step_constraint(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        let ivc_h_i_state_0_comm_idx: [usize; POSEIDON2_OUT] = self
+            .layout
+            .ivc_h_i_state_0_comm_idx
+            .clone()
+            .collect::<Vec<_>>()
+            .try_into()
+            .expect("failed to convert ivc_h_i_state_0_comm_idx to array");
+
+        let ivc_h_i_state_i_comm_idx: [usize; POSEIDON2_OUT] = self
+            .layout
+            .ivc_h_i_state_i_comm_idx
+            .clone()
+            .collect::<Vec<_>>()
+            .try_into()
+            .expect("failed to convert ivc_h_i_state_i_comm_idx to array");
+
+        // z[IVC_H_I_MDS_CHUNKS_OUT_IDX[0]]
+        //  applied MDS matrix on the state
+        //  - (2 * z[IVC_H_I_STEP_IDX] + 3 * z[IVC_H_I_STATE_0_COMM_IDX[0]] + z[IVC_H_I_STATE_0_COMM_IDX[1]] + z[IVC_H_I_STATE_0_COMM_IDX[2]])
+        //  = 0
+        let mut m_mds_chunk0_out0 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+            .push((Ring::one(), self.layout.ivc_h_i_idx.start));
+
+        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+            .push((Ring::from(2u64).neg(), self.layout.ivc_h_i_step_idx));
+
+        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+
+        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[1]));
+
+        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+            .push((Ring::from(2u64).neg(), self.layout.ivc_h_i_step_idx));
+
+        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+
+        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+
+        self.matrices.push(m_mds_chunk0_out0);
+
+        self.multisets.push(vec![matrix_base_idx]);
+        self.coeffs.push(Ring::one());
     }
 
     /// Adds an ADD constraint that handles 32-bit overflow:
@@ -260,7 +320,7 @@ impl<'a> CCSBuilder<'a> {
         // len = max((n - l - 1) * L, m).next_power_of_two()
         // With our values: n=layout.size+1, l=0, L=1, m=original_m
         // This gives: len = max(layout.size, original_m).next_power_of_two()
-        // So we need to set our dimensions to match this expected padding
+        // Need to set dimensions to match this expected padding
         let latticefold_padded_size =
             usize::max((ccs.n - ccs.l - 1) * 1, self.m).next_power_of_two();
 
@@ -290,6 +350,17 @@ const JALR_CONSTR: usize = 3;
 const BNE_CONSTR: usize = 4;
 const AUIPC_CONSTR: usize = 5;
 const LUI_CONSTR: usize = 6;
+
+const IVC_H_I_MDS_CHUNKS_OUT_CONSTR_START: usize = 7;
+const IVC_H_I_MDS_CHUNKS_OUT_CONSTR: [usize; 2 * WIDE_POSEIDON2_WIDTH] = {
+    let mut arr = [0; 2 * WIDE_POSEIDON2_WIDTH];
+    let mut i = 0;
+    while i < 2 * WIDE_POSEIDON2_WIDTH {
+        arr[i] = IVC_H_I_MDS_CHUNKS_OUT_CONSTR_START + i;
+        i += 1;
+    }
+    arr
+};
 
 #[cfg(feature = "debug")]
 use crate::ivc::IVCStepInput;

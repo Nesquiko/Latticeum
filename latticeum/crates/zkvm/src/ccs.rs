@@ -1,11 +1,16 @@
 use p3_field::PrimeField64;
-use std::ops::Range;
+use p3_goldilocks::Goldilocks;
+use std::{ops::Range, usize};
+use tracing::{Level, instrument};
 
 use configuration::N_REGS;
 use latticefold::decomposition_parameters::DecompositionParams;
 use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 
-use crate::{ivc::IVCStepInput, poseidon2::POSEIDON2_OUT};
+use crate::{
+    ivc::IVCStepInput,
+    poseidon2::{POSEIDON2_OUT, WIDE_POSEIDON2_WIDTH},
+};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
@@ -33,6 +38,7 @@ pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 /// CCS/Z-vector structure: `[x_ccs..., 1, w_ccs...]`
 #[derive(Debug)]
 pub struct CCSLayout {
+    pub ivc_h_i_idx: Range<usize>,
     pub const_1_idx: usize,
 
     // h_i (public input 0) preimage parts
@@ -40,6 +46,9 @@ pub struct CCSLayout {
     pub ivc_h_i_state_0_comm_idx: Range<usize>,
     pub ivc_h_i_state_i_comm_idx: Range<usize>,
     pub ivc_h_i_acc_i_comm_idx: Range<usize>,
+
+    /// Intermediate MDS chunks after the first operation in external rounds
+    pub ivc_h_i_mds_chunks_out_idx: [usize; 2 * WIDE_POSEIDON2_WIDTH],
 
     // input state
     pub pc_in_idx: usize,
@@ -86,8 +95,13 @@ impl CCSLayout {
     pub const W_IDX_DELTA: usize = Self::X_ELEMS_SIZE + Self::CONST_ELEMS_SIZE;
 
     pub const fn new() -> Self {
-        let const_1_idx = Self::X_ELEMS_SIZE;
-        let mut w_cursor = CCSLayout::W_IDX_DELTA;
+        let mut w_cursor = 0;
+        let ivc_h_i_comm_start = w_cursor;
+        w_cursor += POSEIDON2_OUT;
+        let ivc_h_i_idx = ivc_h_i_comm_start..w_cursor;
+
+        let const_1_idx = w_cursor;
+        w_cursor += 1;
 
         let ivc_h_i_step_idx = w_cursor;
         w_cursor += 1;
@@ -103,6 +117,10 @@ impl CCSLayout {
         let ivc_h_i_acc_i_comm_start = w_cursor;
         w_cursor += POSEIDON2_OUT;
         let ivc_h_i_acc_i_comm_idx = ivc_h_i_acc_i_comm_start..w_cursor;
+
+        // there are 13 elements in the ivc h_i comm, and rate is 12, so 2 sponge passes
+        let ivc_h_i_mds_chunks_out_idx: [usize; 2 * WIDE_POSEIDON2_WIDTH] = indices_array(w_cursor);
+        w_cursor = ivc_h_i_mds_chunks_out_idx[2 * WIDE_POSEIDON2_WIDTH - 1];
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -157,11 +175,13 @@ impl CCSLayout {
         w_cursor += 1;
 
         Self {
+            ivc_h_i_idx,
             const_1_idx,
             ivc_h_i_step_idx,
             ivc_h_i_state_0_comm_idx,
             ivc_h_i_state_i_comm_idx,
             ivc_h_i_acc_i_comm_idx,
+            ivc_h_i_mds_chunks_out_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -200,6 +220,7 @@ impl CCSLayout {
     }
 }
 
+#[instrument(skip_all, level = Level::DEBUG)]
 pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLayout) {
     z[layout.ivc_h_i_step_idx] = input.ivc_step.as_canonical_u64() as usize;
 
@@ -214,8 +235,24 @@ pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLay
     for (i, z_idx) in layout.ivc_h_i_acc_i_comm_idx.clone().enumerate() {
         z[z_idx] = input.acc_comm[i].as_canonical_u64() as usize;
     }
+
+    assert_eq!(2, input.ivc_step_comm.1.perm_states.len());
+    let after_mds_sponge_passes: [Goldilocks; 2 * WIDE_POSEIDON2_WIDTH] = input
+        .ivc_step_comm
+        .1
+        .perm_states
+        .iter()
+        .flat_map(|states| states.after_external_initial_mds.clone())
+        .collect::<Vec<Goldilocks>>()
+        .try_into()
+        .expect("failed to convert permutation states into sponge passes");
+
+    for (i, &z_idx) in layout.ivc_h_i_mds_chunks_out_idx.iter().enumerate() {
+        z[z_idx] = after_mds_sponge_passes[i].as_canonical_u64() as usize;
+    }
 }
 
+#[instrument(skip_all, level = Level::DEBUG)]
 pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CCSLayout) {
     z[layout.pc_in_idx] = trace
         .input
@@ -300,4 +337,14 @@ pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CC
     for (i, z_idx) in layout.regs_out_idx.clone().enumerate() {
         z[z_idx] = trace.output.regs[i] as usize;
     }
+}
+
+const fn indices_array<const SIZE: usize>(start: usize) -> [usize; SIZE] {
+    let mut arr = [0; SIZE];
+    let mut i = 0;
+    while i < SIZE {
+        arr[i] = start + i;
+        i += 1;
+    }
+    arr
 }
