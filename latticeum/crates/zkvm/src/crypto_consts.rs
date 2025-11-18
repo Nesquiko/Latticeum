@@ -2,8 +2,11 @@ use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::Goldilocks;
 use p3_poseidon2::ExternalLayerConstants;
 
+pub const PARTIAL_ROUNDS: usize = 8;
+pub const FULL_ROUNDS: usize = 22;
+
 pub fn external_width_8_consts() -> ExternalLayerConstants<Goldilocks, 8> {
-    let initial: Vec<[Goldilocks; 8]> = vec![
+    let initial: [[Goldilocks; 8]; PARTIAL_ROUNDS / 2] = [
         [
             Goldilocks::from_u64(6829280927315210738),
             Goldilocks::from_u64(12268062495221155140),
@@ -46,7 +49,7 @@ pub fn external_width_8_consts() -> ExternalLayerConstants<Goldilocks, 8> {
         ],
     ];
 
-    let terminal = vec![
+    let terminal: [[Goldilocks; 8]; PARTIAL_ROUNDS / 2] = [
         [
             Goldilocks::from_u64(6724848910640704165),
             Goldilocks::from_u64(12531617827730311088),
@@ -89,11 +92,11 @@ pub fn external_width_8_consts() -> ExternalLayerConstants<Goldilocks, 8> {
         ],
     ];
 
-    ExternalLayerConstants::new(initial, terminal)
+    ExternalLayerConstants::new(initial.into(), terminal.into())
 }
 
 pub fn internal_constants_len_22() -> Vec<Goldilocks> {
-    vec![
+    let consts: [Goldilocks; FULL_ROUNDS] = [
         Goldilocks::from_u64(6829280927315210738),
         Goldilocks::from_u64(12268062495221155140),
         Goldilocks::from_u64(13566740668459520841),
@@ -116,11 +119,12 @@ pub fn internal_constants_len_22() -> Vec<Goldilocks> {
         Goldilocks::from_u64(1519916994673379586),
         Goldilocks::from_u64(3994020779470435763),
         Goldilocks::from_u64(9770397865355724868),
-    ]
+    ];
+    consts.into()
 }
 
 pub fn external_width_16_consts() -> ExternalLayerConstants<Goldilocks, 16> {
-    let initial: Vec<[Goldilocks; 16]> = vec![
+    let initial: [[Goldilocks; 16]; PARTIAL_ROUNDS / 2] = [
         [
             Goldilocks::from_u64(6829280927315210738),
             Goldilocks::from_u64(12268062495221155140),
@@ -193,6 +197,9 @@ pub fn external_width_16_consts() -> ExternalLayerConstants<Goldilocks, 16> {
             Goldilocks::from_u64(410053551717407169),
             Goldilocks::from_u64(7863381228991551146),
         ],
+    ];
+
+    let terminal: [[Goldilocks; 16]; PARTIAL_ROUNDS / 2] = [
         [
             Goldilocks::from_u64(7412193989428284957),
             Goldilocks::from_u64(13318177500032327881),
@@ -267,152 +274,5 @@ pub fn external_width_16_consts() -> ExternalLayerConstants<Goldilocks, 16> {
         ],
     ];
 
-    let terminal = vec![
-        [
-            Goldilocks::from_u64(16462796813699560241),
-            Goldilocks::from_u64(5048509942218626704),
-            Goldilocks::from_u64(6608522634744750078),
-            Goldilocks::from_u64(12162818303315942365),
-            Goldilocks::from_u64(8424102062392273093),
-            Goldilocks::from_u64(5204258187028705225),
-            Goldilocks::from_u64(1291538057077416941),
-            Goldilocks::from_u64(10775332564994299079),
-            Goldilocks::from_u64(6407500140291179612),
-            Goldilocks::from_u64(8009714999545098102),
-            Goldilocks::from_u64(1120322326746505638),
-            Goldilocks::from_u64(16681584429069480224),
-            Goldilocks::from_u64(1291960314785740105),
-            Goldilocks::from_u64(17840116703560385186),
-            Goldilocks::from_u64(4835762021905275091),
-            Goldilocks::from_u64(11327749009855790936),
-        ],
-        [
-            Goldilocks::from_u64(11824093226123314773),
-            Goldilocks::from_u64(626268567395781397),
-            Goldilocks::from_u64(15267797054216961728),
-            Goldilocks::from_u64(15863696724149909799),
-            Goldilocks::from_u64(14450029904510352311),
-            Goldilocks::from_u64(7956584779797306821),
-            Goldilocks::from_u64(16575215210462899249),
-            Goldilocks::from_u64(10303061572545570502),
-            Goldilocks::from_u64(6455069537596679932),
-            Goldilocks::from_u64(8515640547611762257),
-            Goldilocks::from_u64(5996539555710979986),
-            Goldilocks::from_u64(3646300239390328756),
-            Goldilocks::from_u64(14930847521866506535),
-            Goldilocks::from_u64(16299966515442188073),
-            Goldilocks::from_u64(9040869694686834618),
-            Goldilocks::from_u64(2531436709976026680),
-        ],
-        [
-            Goldilocks::from_u64(8265023012649048264),
-            Goldilocks::from_u64(16520527788515647281),
-            Goldilocks::from_u64(18050879857126344638),
-            Goldilocks::from_u64(9063522731208175796),
-            Goldilocks::from_u64(17064562712863091000),
-            Goldilocks::from_u64(5816520870910384594),
-            Goldilocks::from_u64(848544955375979456),
-            Goldilocks::from_u64(8586618136679145446),
-            Goldilocks::from_u64(16238916565371885651),
-            Goldilocks::from_u64(7420158350223162846),
-            Goldilocks::from_u64(6532673436374126365),
-            Goldilocks::from_u64(15606624247327858927),
-            Goldilocks::from_u64(12422958168555039971),
-            Goldilocks::from_u64(14857789708459686916),
-            Goldilocks::from_u64(3643298309293489093),
-            Goldilocks::from_u64(6901005458384736670),
-        ],
-        [
-            Goldilocks::from_u64(12204673044080473848),
-            Goldilocks::from_u64(4656202776283137239),
-            Goldilocks::from_u64(15776094079922211099),
-            Goldilocks::from_u64(7187243528772409579),
-            Goldilocks::from_u64(2247056308995352393),
-            Goldilocks::from_u64(18328887179279279024),
-            Goldilocks::from_u64(13223565483477683089),
-            Goldilocks::from_u64(14164493963815975553),
-            Goldilocks::from_u64(14738316045001775857),
-            Goldilocks::from_u64(12553148520170377754),
-            Goldilocks::from_u64(16766297217880412054),
-            Goldilocks::from_u64(7320538213100442682),
-            Goldilocks::from_u64(10665886547871282609),
-            Goldilocks::from_u64(17410475136942662014),
-            Goldilocks::from_u64(10334280375081815963),
-            Goldilocks::from_u64(14900945362113542140),
-        ],
-        [
-            Goldilocks::from_u64(16275227434695279220),
-            Goldilocks::from_u64(5460500537079712201),
-            Goldilocks::from_u64(8735836963738816859),
-            Goldilocks::from_u64(11572613291789798599),
-            Goldilocks::from_u64(13797081267970369005),
-            Goldilocks::from_u64(15109845234118014784),
-            Goldilocks::from_u64(3950416376259289936),
-            Goldilocks::from_u64(11994622502072671328),
-            Goldilocks::from_u64(517112351862255464),
-            Goldilocks::from_u64(6772524686846940240),
-            Goldilocks::from_u64(8811764898878069940),
-            Goldilocks::from_u64(6353416447261385833),
-            Goldilocks::from_u64(8460470572673025537),
-            Goldilocks::from_u64(2308544318763989503),
-            Goldilocks::from_u64(1384212557820467220),
-            Goldilocks::from_u64(2390176669120831380),
-        ],
-        [
-            Goldilocks::from_u64(7617343851281356522),
-            Goldilocks::from_u64(6492260943368304242),
-            Goldilocks::from_u64(14807095210363179158),
-            Goldilocks::from_u64(13390872864197634860),
-            Goldilocks::from_u64(9608280041209129482),
-            Goldilocks::from_u64(4921939814239093047),
-            Goldilocks::from_u64(801489816962266164),
-            Goldilocks::from_u64(5720403661565276413),
-            Goldilocks::from_u64(16406482123675104017),
-            Goldilocks::from_u64(16136306187685263510),
-            Goldilocks::from_u64(10262356865496151901),
-            Goldilocks::from_u64(11601979943186437158),
-            Goldilocks::from_u64(8916852509777896559),
-            Goldilocks::from_u64(7373423643654691066),
-            Goldilocks::from_u64(8798935607312257359),
-            Goldilocks::from_u64(17175816675827149781),
-        ],
-        [
-            Goldilocks::from_u64(3573555382272767211),
-            Goldilocks::from_u64(12986571597821787219),
-            Goldilocks::from_u64(948713269537571860),
-            Goldilocks::from_u64(13353443992479400422),
-            Goldilocks::from_u64(10631399135375449481),
-            Goldilocks::from_u64(10476883673105045128),
-            Goldilocks::from_u64(8951045016360855161),
-            Goldilocks::from_u64(3553396647684903423),
-            Goldilocks::from_u64(12942026236636592358),
-            Goldilocks::from_u64(2971891157558490996),
-            Goldilocks::from_u64(13943750809571506261),
-            Goldilocks::from_u64(6181572835001712299),
-            Goldilocks::from_u64(17317887488581296710),
-            Goldilocks::from_u64(5955174109558261526),
-            Goldilocks::from_u64(5136718623476521465),
-            Goldilocks::from_u64(3517008773079750518),
-        ],
-        [
-            Goldilocks::from_u64(11064584079981775496),
-            Goldilocks::from_u64(5530416193213812407),
-            Goldilocks::from_u64(7340577184988390394),
-            Goldilocks::from_u64(7586724615495399751),
-            Goldilocks::from_u64(10754545167665191282),
-            Goldilocks::from_u64(17900663189519638169),
-            Goldilocks::from_u64(9536984201884484877),
-            Goldilocks::from_u64(12143569339268012295),
-            Goldilocks::from_u64(11953466080692325827),
-            Goldilocks::from_u64(14945510026291173272),
-            Goldilocks::from_u64(15273196475330189024),
-            Goldilocks::from_u64(4226389309141937889),
-            Goldilocks::from_u64(12289591523691488035),
-            Goldilocks::from_u64(11452594345290828025),
-            Goldilocks::from_u64(7695978291982418303),
-            Goldilocks::from_u64(2500917116460030885),
-        ],
-    ];
-
-    ExternalLayerConstants::new(initial, terminal)
+    ExternalLayerConstants::new(initial.into(), terminal.into())
 }

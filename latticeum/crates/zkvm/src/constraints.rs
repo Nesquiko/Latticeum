@@ -1,7 +1,4 @@
-use crate::{
-    ccs::CCSLayout,
-    poseidon2::{POSEIDON2_OUT, WIDE_POSEIDON2_WIDTH},
-};
+use crate::{ccs::CCSLayout, poseidon2::WIDE_POSEIDON2_WIDTH};
 use ark_std::log2;
 use cyclotomic_rings::rings::GoldilocksRingNTT;
 use latticefold::arith::CCS;
@@ -57,52 +54,44 @@ impl<'a> CCSBuilder<'a> {
     fn ivc_step_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
-        let ivc_h_i_state_0_comm_idx: [usize; POSEIDON2_OUT] = self
-            .layout
-            .ivc_h_i_state_0_comm_idx
-            .clone()
-            .collect::<Vec<_>>()
-            .try_into()
-            .expect("failed to convert ivc_h_i_state_0_comm_idx to array");
+        let ivc_h_i_state_0_comm_idx = self.layout.ivc_h_i_state_0_comm_idx;
+        let ivc_h_i_state_i_comm_idx = self.layout.ivc_h_i_state_i_comm_idx;
+        let acc_comm_idx = self.layout.ivc_h_i_acc_i_comm_idx;
 
-        let ivc_h_i_state_i_comm_idx: [usize; POSEIDON2_OUT] = self
-            .layout
-            .ivc_h_i_state_i_comm_idx
-            .clone()
-            .collect::<Vec<_>>()
-            .try_into()
-            .expect("failed to convert ivc_h_i_state_i_comm_idx to array");
+        let mut m_after_mds = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
-        // z[IVC_H_I_MDS_CHUNKS_OUT_IDX[0]]
-        //  applied MDS matrix on the state
-        //  - (2 * z[IVC_H_I_STEP_IDX] + 3 * z[IVC_H_I_STATE_0_COMM_IDX[0]] + z[IVC_H_I_STATE_0_COMM_IDX[1]] + z[IVC_H_I_STATE_0_COMM_IDX[2]])
-        //  = 0
-        let mut m_mds_chunk0_out0 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
-            .push((Ring::one(), self.layout.ivc_h_i_idx.start));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[0]));
 
-        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
-            .push((Ring::from(2u64).neg(), self.layout.ivc_h_i_step_idx));
-
-        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
-            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[0]));
-
-        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
+            .push((Ring::from(3u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
             .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[1]));
-
-        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
             .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[2]));
-
-        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
-            .push((Ring::from(2u64).neg(), self.layout.ivc_h_i_step_idx));
-
-        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
             .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[3]));
-
-        m_mds_chunk0_out0.coeffs[IVC_H_I_MDS_CHUNKS_OUT_CONSTR[0]]
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[2]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
             .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
+            .push((Ring::from(3u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]].push((Ring::one().neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]].push((Ring::one().neg(), acc_comm_idx[2]));
 
-        self.matrices.push(m_mds_chunk0_out0);
+        // TODO derive rest (see if I can derive further without intermediate vars)
+        // and set them to next IVC_H_I_AFTER_MDS_CONSTR, derive them and let the
+        // code be done by AI, this is error prone, and in this, I guess,
+        // I belive AI more to not make a mistake
+
+        self.matrices.push(m_after_mds);
 
         self.multisets.push(vec![matrix_base_idx]);
         self.coeffs.push(Ring::one());
@@ -351,12 +340,12 @@ const BNE_CONSTR: usize = 4;
 const AUIPC_CONSTR: usize = 5;
 const LUI_CONSTR: usize = 6;
 
-const IVC_H_I_MDS_CHUNKS_OUT_CONSTR_START: usize = 7;
-const IVC_H_I_MDS_CHUNKS_OUT_CONSTR: [usize; 2 * WIDE_POSEIDON2_WIDTH] = {
+const IVC_H_I_AFTER_MDS_CONSTR_START: usize = 7;
+const IVC_H_I_AFTER_MDS_CONSTR: [usize; 2 * WIDE_POSEIDON2_WIDTH] = {
     let mut arr = [0; 2 * WIDE_POSEIDON2_WIDTH];
     let mut i = 0;
     while i < 2 * WIDE_POSEIDON2_WIDTH {
-        arr[i] = IVC_H_I_MDS_CHUNKS_OUT_CONSTR_START + i;
+        arr[i] = IVC_H_I_AFTER_MDS_CONSTR_START + i;
         i += 1;
     }
     arr

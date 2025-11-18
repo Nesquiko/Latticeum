@@ -8,6 +8,7 @@ use latticefold::decomposition_parameters::DecompositionParams;
 use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 
 use crate::{
+    crypto_consts::PARTIAL_ROUNDS,
     ivc::IVCStepInput,
     poseidon2::{POSEIDON2_OUT, WIDE_POSEIDON2_WIDTH},
 };
@@ -38,17 +39,23 @@ pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 /// CCS/Z-vector structure: `[x_ccs..., 1, w_ccs...]`
 #[derive(Debug)]
 pub struct CCSLayout {
-    pub ivc_h_i_idx: Range<usize>,
+    pub ivc_h_i_idx: [usize; POSEIDON2_OUT],
     pub const_1_idx: usize,
+
+    pub wide_poseidon2_external_initial_consts_idx:
+        [usize; WIDE_POSEIDON2_WIDTH * PARTIAL_ROUNDS / 2],
+    pub wide_poseidon2_external_terminal_consts_idx:
+        [usize; WIDE_POSEIDON2_WIDTH * PARTIAL_ROUNDS / 2],
 
     // h_i (public input 0) preimage parts
     pub ivc_h_i_step_idx: usize,
-    pub ivc_h_i_state_0_comm_idx: Range<usize>,
-    pub ivc_h_i_state_i_comm_idx: Range<usize>,
-    pub ivc_h_i_acc_i_comm_idx: Range<usize>,
+    pub ivc_h_i_state_0_comm_idx: [usize; POSEIDON2_OUT],
+    pub ivc_h_i_state_i_comm_idx: [usize; POSEIDON2_OUT],
+    pub ivc_h_i_acc_i_comm_idx: [usize; POSEIDON2_OUT],
 
-    /// Intermediate MDS chunks after the first operation in external rounds
-    pub ivc_h_i_mds_chunks_out_idx: [usize; 2 * WIDE_POSEIDON2_WIDTH],
+    /// Intermediate 2 states (because there are 2 sponge passes on 13 preimage elements of the
+    /// ivc_h_i commitment) after applying MDS in the first operation in external rounds
+    pub ivc_h_i_after_mds_idx: [usize; 2 * WIDE_POSEIDON2_WIDTH],
 
     // input state
     pub pc_in_idx: usize,
@@ -95,32 +102,30 @@ impl CCSLayout {
     pub const W_IDX_DELTA: usize = Self::X_ELEMS_SIZE + Self::CONST_ELEMS_SIZE;
 
     pub const fn new() -> Self {
-        let mut w_cursor = 0;
-        let ivc_h_i_comm_start = w_cursor;
-        w_cursor += POSEIDON2_OUT;
-        let ivc_h_i_idx = ivc_h_i_comm_start..w_cursor;
+        let w_cursor = 0;
+        let (ivc_h_i_idx, mut w_cursor) = indices_with_new_cursor(w_cursor);
 
         let const_1_idx = w_cursor;
         w_cursor += 1;
 
+        let (wide_poseidon2_external_initial_consts_idx, w_cursor) =
+            indices_with_new_cursor::<{ WIDE_POSEIDON2_WIDTH * PARTIAL_ROUNDS / 2 }>(w_cursor);
+
+        let (wide_poseidon2_external_terminal_consts_idx, mut w_cursor) =
+            indices_with_new_cursor::<{ WIDE_POSEIDON2_WIDTH * PARTIAL_ROUNDS / 2 }>(w_cursor);
+
         let ivc_h_i_step_idx = w_cursor;
         w_cursor += 1;
 
-        let ivc_h_i_state_0_comm_start = w_cursor;
-        w_cursor += POSEIDON2_OUT;
-        let ivc_h_i_state_0_comm_idx = ivc_h_i_state_0_comm_start..w_cursor;
+        let (ivc_h_i_state_0_comm_idx, w_cursor) = indices_with_new_cursor(w_cursor);
 
-        let ivc_h_i_state_i_comm_start = w_cursor;
-        w_cursor += POSEIDON2_OUT;
-        let ivc_h_i_state_i_comm_idx = ivc_h_i_state_i_comm_start..w_cursor;
+        let (ivc_h_i_state_i_comm_idx, w_cursor) = indices_with_new_cursor(w_cursor);
 
-        let ivc_h_i_acc_i_comm_start = w_cursor;
-        w_cursor += POSEIDON2_OUT;
-        let ivc_h_i_acc_i_comm_idx = ivc_h_i_acc_i_comm_start..w_cursor;
+        let (ivc_h_i_acc_i_comm_idx, w_cursor) = indices_with_new_cursor(w_cursor);
 
         // there are 13 elements in the ivc h_i comm, and rate is 12, so 2 sponge passes
-        let ivc_h_i_mds_chunks_out_idx: [usize; 2 * WIDE_POSEIDON2_WIDTH] = indices_array(w_cursor);
-        w_cursor = ivc_h_i_mds_chunks_out_idx[2 * WIDE_POSEIDON2_WIDTH - 1];
+        let (ivc_h_i_after_mds_idx, mut w_cursor) =
+            indices_with_new_cursor::<{ 2 * WIDE_POSEIDON2_WIDTH }>(w_cursor);
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -177,11 +182,13 @@ impl CCSLayout {
         Self {
             ivc_h_i_idx,
             const_1_idx,
+            wide_poseidon2_external_initial_consts_idx,
+            wide_poseidon2_external_terminal_consts_idx,
             ivc_h_i_step_idx,
             ivc_h_i_state_0_comm_idx,
             ivc_h_i_state_i_comm_idx,
             ivc_h_i_acc_i_comm_idx,
-            ivc_h_i_mds_chunks_out_idx,
+            ivc_h_i_after_mds_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -222,17 +229,26 @@ impl CCSLayout {
 
 #[instrument(skip_all, level = Level::DEBUG)]
 pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLayout) {
+    for (i, &z_idx) in layout
+        .wide_poseidon2_external_initial_consts_idx
+        .iter()
+        .enumerate()
+    {
+        // z[z_idx] =
+        //     input.poseidon2_external_consts.get_initial_constants()[i].as_canonical_u64() as usize;
+    }
+
     z[layout.ivc_h_i_step_idx] = input.ivc_step.as_canonical_u64() as usize;
 
-    for (i, z_idx) in layout.ivc_h_i_state_0_comm_idx.clone().enumerate() {
+    for (i, &z_idx) in layout.ivc_h_i_state_0_comm_idx.iter().enumerate() {
         z[z_idx] = input.state_0_comm[i].as_canonical_u64() as usize;
     }
 
-    for (i, z_idx) in layout.ivc_h_i_state_i_comm_idx.clone().enumerate() {
+    for (i, &z_idx) in layout.ivc_h_i_state_i_comm_idx.iter().enumerate() {
         z[z_idx] = input.state_comm[i].as_canonical_u64() as usize;
     }
 
-    for (i, z_idx) in layout.ivc_h_i_acc_i_comm_idx.clone().enumerate() {
+    for (i, &z_idx) in layout.ivc_h_i_acc_i_comm_idx.iter().enumerate() {
         z[z_idx] = input.acc_comm[i].as_canonical_u64() as usize;
     }
 
@@ -242,12 +258,12 @@ pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLay
         .1
         .perm_states
         .iter()
-        .flat_map(|states| states.after_external_initial_mds.clone())
+        .flat_map(|states| states.after_external_initial_mds)
         .collect::<Vec<Goldilocks>>()
         .try_into()
         .expect("failed to convert permutation states into sponge passes");
 
-    for (i, &z_idx) in layout.ivc_h_i_mds_chunks_out_idx.iter().enumerate() {
+    for (i, &z_idx) in layout.ivc_h_i_after_mds_idx.iter().enumerate() {
         z[z_idx] = after_mds_sponge_passes[i].as_canonical_u64() as usize;
     }
 }
@@ -347,4 +363,14 @@ const fn indices_array<const SIZE: usize>(start: usize) -> [usize; SIZE] {
         i += 1;
     }
     arr
+}
+
+const fn indices_with_new_cursor<const SIZE: usize>(start: usize) -> ([usize; SIZE], usize) {
+    let mut arr = [0; SIZE];
+    let mut i = 0;
+    while i < SIZE {
+        arr[i] = start + i;
+        i += 1;
+    }
+    (arr, arr[i - 1] + 1)
 }

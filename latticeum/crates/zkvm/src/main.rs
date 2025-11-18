@@ -140,6 +140,8 @@ fn main() {
 
                 // this is used to prove the RISC-V execution
                 trace: &trace,
+
+                poseidon2_external_consts: zkvm_commiter.wide_poseidon2_external_consts(),
             };
 
             let z = arithmetize(&ivc_input, &CCS_LAYOUT);

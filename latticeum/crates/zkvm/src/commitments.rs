@@ -6,6 +6,7 @@ use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::Goldilocks;
 use p3_matrix::{Dimensions, dense::RowMajorMatrix};
 use p3_merkle_tree::{MerkleTree, MerkleTreeError, MerkleTreeMmcs};
+use p3_poseidon2::ExternalLayerConstants;
 use p3_symmetric::{Hash, PseudoCompressionFunction, TruncatedPermutation};
 use stark_rings::{
     PolyRing,
@@ -19,10 +20,11 @@ use vm::riscvm::{
 };
 
 use crate::{
-    crypto_consts::{external_width_8_consts, external_width_16_consts, internal_constants_len_22},
+    crypto_consts::internal_constants_len_22,
     poseidon2::{
         GoldilocksComm, IntermediateStates, POSEIDON2_OUT, POSEIDON2_WIDTH, Poseidon2Compression,
-        Poseidon2Perm, Poseidon2Sponge, WideZkVMPoseidon2,
+        Poseidon2Perm, Poseidon2Sponge, WIDE_POSEIDON2_WIDTH, WIDTH_8_EXTERNAL_INITIAL_CONSTS,
+        WIDTH_16_EXTERNAL_INITIAL_CONSTS, WideZkVMPoseidon2,
     },
 };
 
@@ -54,17 +56,19 @@ pub struct ZkVmCommitter {
 
 impl ZkVmCommitter {
     pub fn new() -> Self {
-        let external_consts_8 = external_width_8_consts();
         let internal_consts = internal_constants_len_22();
-        let perm = Poseidon2Perm::new(external_consts_8, internal_consts.clone());
+        let perm = Poseidon2Perm::new(
+            WIDTH_8_EXTERNAL_INITIAL_CONSTS.clone(),
+            internal_consts.clone(),
+        );
 
         let hasher = Poseidon2Sponge::new(perm.clone());
         let compression = Poseidon2Compression::new(perm.clone());
         let memory_ops_vec_compression = MemOpsVecCommPoseidon2Compression::new(perm);
         let merkle_tree = Poseidon2MerkleTree::new(hasher.clone(), compression.clone());
 
-        let external_consts_16 = external_width_16_consts();
-        let wide_hasher = WideZkVMPoseidon2::new(external_consts_16, internal_consts);
+        let wide_hasher =
+            WideZkVMPoseidon2::new(WIDTH_16_EXTERNAL_INITIAL_CONSTS.clone(), internal_consts);
 
         Self {
             hasher,
@@ -73,6 +77,12 @@ impl ZkVmCommitter {
             merkle_tree,
             wide_hasher,
         }
+    }
+
+    pub fn wide_poseidon2_external_consts(
+        &self,
+    ) -> &ExternalLayerConstants<Goldilocks, WIDE_POSEIDON2_WIDTH> {
+        self.wide_hasher.perm().external_layer()
     }
 
     /// `h_i` public poseidon2 commitment to the state of the IVC step `i`.
@@ -160,7 +170,7 @@ impl ZkVmCommitter {
         } = acc;
 
         let r_flat = flatten(r);
-        assert_eq!(r_flat.len(), 240);
+        assert_eq!(r_flat.len(), 264);
         let v_flat = flatten(v);
         assert_eq!(v_flat.len(), 72);
         let cm_flat = flatten(cm.as_ref());
@@ -179,7 +189,7 @@ impl ZkVmCommitter {
         acc_goldilocks.extend_from_slice(&u_flat);
         acc_goldilocks.extend_from_slice(&x_w_flat);
         acc_goldilocks.extend_from_slice(&h_flat);
-        assert_eq!(acc_goldilocks.len(), 240 + 72 + 96 + 360 + 96 + 24);
+        assert_eq!(acc_goldilocks.len(), 264 + 72 + 96 + 360 + 96 + 24);
 
         self.wide_hasher.hash_iter(acc_goldilocks).0
     }
@@ -434,10 +444,10 @@ mod tests {
         );
 
         let expected = [
-            Goldilocks::from_u64(10917700827563690995),
-            Goldilocks::from_u64(7799882581794317217),
-            Goldilocks::from_u64(1119468167469200545),
-            Goldilocks::from_u64(8559609930302799062),
+            Goldilocks::from_u64(13458558136629279646),
+            Goldilocks::from_u64(11917569669020208757),
+            Goldilocks::from_u64(3145715386209370042),
+            Goldilocks::from_u64(17331705705982545631),
         ];
 
         assert_eq!(expected, comm);

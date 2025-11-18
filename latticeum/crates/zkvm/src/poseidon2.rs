@@ -1,11 +1,16 @@
+use std::sync::LazyLock;
+
 use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::{Goldilocks, MATRIX_DIAG_16_GOLDILOCKS, Poseidon2Goldilocks};
+use p3_mds::MdsPermutation;
 use p3_poseidon2::{
     ExternalLayerConstants, MDSMat4, add_rc_and_sbox_generic, external_terminal_permute_state,
-    internal_permute_state, matmul_internal, mds_light_permutation,
+    internal_permute_state, matmul_internal,
 };
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
 use tracing::{Level, instrument};
+
+use crate::crypto_consts::{external_width_8_consts, external_width_16_consts};
 
 /// number of field elements in the output digest
 pub const POSEIDON2_OUT: usize = 4;
@@ -30,6 +35,10 @@ pub type Poseidon2Sponge =
 pub type Poseidon2Compression =
     TruncatedPermutation<Poseidon2Perm, 2, POSEIDON2_OUT, POSEIDON2_WIDTH>;
 
+pub const WIDTH_8_EXTERNAL_INITIAL_CONSTS: LazyLock<
+    ExternalLayerConstants<Goldilocks, POSEIDON2_WIDTH>,
+> = LazyLock::new(external_width_8_consts);
+
 /// Total state size of the Poseidon2 permutation for state 0 commitment (rate + capacity).
 /// The permutation operates on arrays of WIDTH field elements.
 /// WIDTH = RATE + CAPACITY
@@ -48,6 +57,10 @@ pub struct WideZkVMPoseidon2Perm {
     internal_layer: Vec<Goldilocks>,
 }
 
+pub const WIDTH_16_EXTERNAL_INITIAL_CONSTS: LazyLock<
+    ExternalLayerConstants<Goldilocks, WIDE_POSEIDON2_WIDTH>,
+> = LazyLock::new(external_width_16_consts);
+
 impl WideZkVMPoseidon2Perm {
     pub fn new(
         external_layer: ExternalLayerConstants<Goldilocks, WIDE_POSEIDON2_WIDTH>,
@@ -57,6 +70,10 @@ impl WideZkVMPoseidon2Perm {
             external_layer,
             internal_layer,
         }
+    }
+
+    pub fn external_layer(&self) -> &ExternalLayerConstants<Goldilocks, WIDE_POSEIDON2_WIDTH> {
+        &self.external_layer
     }
 }
 
@@ -90,14 +107,13 @@ impl WideZkVMPoseidon2Perm {
         // which is unrolled into this
 
         let mat4 = MDSMat4 {};
+
+        // the external initial permutation is the same as the later external terminal
+        // one, but with different constants and a linear layer (the application of MDS) first.
         {
-            tracing::warn!("{:?}", state);
-            mds_light_permutation(state, &mat4);
+            mds_width_16_permutation(state, &mat4);
             intermediate.after_external_initial_mds = state.clone();
 
-            // TODO after mds constrain do this
-            // After the initial mds_light_permutation, the remaining layers are identical
-            // to the terminal permutation simply with different constants.
             external_terminal_permute_state(
                 state,
                 self.external_layer.get_initial_constants(),
@@ -139,6 +155,10 @@ impl WideZkVMPoseidon2 {
             perm: WideZkVMPoseidon2Perm::new(external_layer, internal_layer),
         }
     }
+
+    pub fn perm(&self) -> &WideZkVMPoseidon2Perm {
+        &self.perm
+    }
 }
 
 #[derive(Clone)]
@@ -178,4 +198,36 @@ impl WideZkVMPoseidon2 {
             IntermediateStates { perm_states },
         )
     }
+}
+
+/// Implement the matrix multiplication used by the external layer.
+/// Given a 4x4 MDS matrix M, we multiply by the `4N x 4N` matrix
+/// `[[2M M  ... M], [M  2M ... M], ..., [M  M ... 2M]]`.
+/// Mutates the state inplace and returns its copy after applying the M_4.
+#[inline(always)]
+pub fn mds_width_16_permutation<MdsPerm4: MdsPermutation<Goldilocks, 4>>(
+    state: &mut [Goldilocks; WIDE_POSEIDON2_WIDTH],
+    mdsmat: &MdsPerm4,
+) {
+    // First, we apply M_4 to each consecutive four elements of the state.
+    // In Appendix B's terminology, this replaces each x_i with x_i'.
+    for chunk in state.chunks_exact_mut(4) {
+        mdsmat.permute_mut(chunk.try_into().unwrap());
+    }
+    // Now, we apply the outer circulant matrix (to compute the y_i values).
+
+    // We first precompute the four sums of every four elements.
+    let sums: [Goldilocks; 4] = core::array::from_fn(|k| {
+        (0..WIDE_POSEIDON2_WIDTH)
+            .step_by(4)
+            .map(|j| state[j + k].clone())
+            .sum()
+    });
+
+    // The formula for each y_i involves 2x_i' term and x_j' terms for each j that equals i mod 4.
+    // In other words, we can add a single copy of x_i' to the appropriate one of our precomputed sums
+    state
+        .iter_mut()
+        .enumerate()
+        .for_each(|(i, elem)| *elem += sums[i % 4].clone());
 }

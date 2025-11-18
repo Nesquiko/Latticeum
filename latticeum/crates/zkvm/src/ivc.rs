@@ -5,12 +5,13 @@ use latticefold::{
 };
 use p3_field::PrimeField64;
 use p3_goldilocks::Goldilocks;
+use p3_poseidon2::ExternalLayerConstants;
 use tracing::{Level, instrument};
 use vm::riscvm::inst::ExecutionTrace;
 
 use crate::{
     ccs::{CCSLayout, set_ivc_witness, set_trace_witness},
-    poseidon2::{GoldilocksComm, IntermediateStates},
+    poseidon2::{GoldilocksComm, IntermediateStates, WIDE_POSEIDON2_WIDTH},
 };
 
 /// Holds the complete public and private state at the end of a single IVC step.
@@ -91,6 +92,9 @@ pub struct IVCStepInput<'a> {
     /// contains `pc` registers needed in preimage of [Self::state_comm],
     /// and also needed to prove correct execution of VM step.
     pub trace: &'a ExecutionTrace,
+
+    /// poseidon2 width 16 external initial consts
+    pub poseidon2_external_consts: &'a ExternalLayerConstants<Goldilocks, WIDE_POSEIDON2_WIDTH>,
 }
 
 #[instrument(skip_all, level = Level::DEBUG)]
