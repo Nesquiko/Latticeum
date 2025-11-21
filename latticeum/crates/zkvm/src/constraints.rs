@@ -60,6 +60,7 @@ impl<'a> CCSBuilder<'a> {
 
         let mut m_after_mds = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
+        // ================= After MDS state[0] =================
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
             .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[0]));
 
@@ -87,6 +88,471 @@ impl<'a> CCSBuilder<'a> {
             .push((Ring::from(3u64).neg(), acc_comm_idx[0]));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]].push((Ring::one().neg(), acc_comm_idx[1]));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]].push((Ring::one().neg(), acc_comm_idx[2]));
+        // ================= After MDS state[0] =================
+
+        // ================= After MDS state[1] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[1]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::from(2u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::from(4u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::from(6u64).neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[2]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[3]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]]
+            .push((Ring::from(3u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[1]].push((Ring::one().neg(), acc_comm_idx[2]));
+        // ================= After MDS state[2] =================
+
+        // ================= After MDS state[2] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::from(2u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::from(4u64).neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::from(6u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]].push((Ring::one().neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[2]]
+            .push((Ring::from(3u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[2] =================
+
+        // ================= After MDS state[3] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[3]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::from(6u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::from(4u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]].push((Ring::one().neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]].push((Ring::one().neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[3]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[3] =================
+
+        // ================= After MDS state[4] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[4]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::from(2u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::from(4u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::from(6u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]]
+            .push((Ring::from(3u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]].push((Ring::one().neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[4]].push((Ring::one().neg(), acc_comm_idx[2]));
+        // ================= After MDS state[4] =================
+
+        // ================= After MDS state[5] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[5]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::one().neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::from(4u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::from(6u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]]
+            .push((Ring::from(3u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[5]].push((Ring::one().neg(), acc_comm_idx[2]));
+        // ================= After MDS state[5] =================
+
+        // ================= After MDS state[6] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[6]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::one().neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::from(4u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::from(6u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]].push((Ring::one().neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[6]]
+            .push((Ring::from(3u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[6] =================
+
+        // ================= After MDS state[7] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[7]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::from(3u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::from(6u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::from(4u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]].push((Ring::one().neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]].push((Ring::one().neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[7]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[7] =================
+
+        // ================= After MDS state[8] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[8]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::from(2u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::from(4u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::from(6u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[8]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[8] =================
+
+        // ================= After MDS state[9] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[9]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::one().neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::from(4u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::from(6u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[9]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[9] =================
+
+        // ================= After MDS state[10] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[10]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::one().neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::from(4u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[10]]
+            .push((Ring::from(6u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[10] =================
+
+        // ================= After MDS state[11] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[11]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::from(3u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::from(6u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[11]]
+            .push((Ring::from(4u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[11] =================
+
+        // ================= After MDS state[12] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[12]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::from(2u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]]
+            .push((Ring::from(3u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]].push((Ring::one().neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[12]].push((Ring::one().neg(), acc_comm_idx[2]));
+        // ================= After MDS state[12] =================
+
+        // ================= After MDS state[13] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[13]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::one().neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]]
+            .push((Ring::from(3u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[13]].push((Ring::one().neg(), acc_comm_idx[2]));
+        // ================= After MDS state[13] =================
+
+        // ================= After MDS state[14] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[14]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::one().neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]].push((Ring::one().neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[14]]
+            .push((Ring::from(3u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[14] =================
+
+        // ================= After MDS state[15] =================
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[15]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::from(3u64).neg(), self.layout.ivc_h_i_step_idx));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_0_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[2]));
+
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::from(3u64).neg(), ivc_h_i_state_i_comm_idx[3]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]].push((Ring::one().neg(), acc_comm_idx[0]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]].push((Ring::one().neg(), acc_comm_idx[1]));
+        m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[15]]
+            .push((Ring::from(2u64).neg(), acc_comm_idx[2]));
+        // ================= After MDS state[15] =================
 
         self.matrices.push(m_after_mds);
 
