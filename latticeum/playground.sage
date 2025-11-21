@@ -1,7 +1,7 @@
 p = 2 ^ 64 - 2 ^ 32 + 1
 F = GF(p)
 
-input_state = vector(
+initial_state = vector(
     F,
     [
         0,
@@ -76,27 +76,44 @@ def mds_sums(after_m4):
 
 def mds(input_state):
     state_m4 = m_4_4(input_state)
-    print(state_m4)
     sums = mds_sums(state_m4)
 
     return [
-        input_state[0] + sums[0],
-        input_state[1] + sums[1],
-        input_state[2] + sums[2],
-        input_state[3] + sums[3],
-        input_state[4] + sums[0],
-        input_state[5] + sums[1],
-        input_state[6] + sums[2],
-        input_state[7] + sums[3],
-        input_state[8] + sums[0],
-        input_state[9] + sums[1],
-        input_state[10] + sums[2],
-        input_state[11] + sums[3],
-        input_state[12] + sums[0],
-        input_state[13] + sums[1],
-        input_state[14] + sums[2],
-        input_state[15] + sums[3],
+        state_m4[0] + sums[0],
+        state_m4[1] + sums[1],
+        state_m4[2] + sums[2],
+        state_m4[3] + sums[3],
+        state_m4[4] + sums[0],
+        state_m4[5] + sums[1],
+        state_m4[6] + sums[2],
+        state_m4[7] + sums[3],
+        state_m4[8] + sums[0],
+        state_m4[9] + sums[1],
+        state_m4[10] + sums[2],
+        state_m4[11] + sums[3],
+        state_m4[12] + sums[0],
+        state_m4[13] + sums[1],
+        state_m4[14] + sums[2],
+        state_m4[15] + sums[3],
     ]
 
 
-mds(input_state)
+x = (
+    +4 * F(0)
+    + 6 * F(13458558136629279646)
+    + 2 * F(11917569669020208757)
+    + 2 * F(3145715386209370042)
+    + 2 * F(17331705705982545631)
+    + 3 * F(13458558136629279646)
+    + F(11917569669020208757)
+    + F(3145715386209370042)
+    + 2 * F(17331705705982545631)
+    + 3 * F(13984430912008153556)
+    + F(15521108528102704061)
+    + F(4970103052708374450)
+)
+
+t_0 = F(2940300425484625778)
+
+print(x)
+print(x == t_0)

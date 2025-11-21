@@ -46,12 +46,12 @@ impl<'a> CCSBuilder<'a> {
         builder.lui_constraint();
 
         // ivc specific
-        // builder.ivc_step_constraint();
+        builder.ivc_step_after_initial_mds();
 
         builder.build()
     }
 
-    fn ivc_step_constraint(&mut self) {
+    fn ivc_step_after_initial_mds(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         let ivc_h_i_state_0_comm_idx = self.layout.ivc_h_i_state_0_comm_idx;
@@ -64,13 +64,14 @@ impl<'a> CCSBuilder<'a> {
             .push((Ring::one(), self.layout.ivc_h_i_after_mds_idx[0]));
 
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
-            .push((Ring::from(3u64).neg(), self.layout.ivc_h_i_step_idx));
+            .push((Ring::from(4u64).neg(), self.layout.ivc_h_i_step_idx));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
-            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[0]));
+            .push((Ring::from(6u64).neg(), ivc_h_i_state_0_comm_idx[0]));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
-            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[1]));
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[1]));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
-            .push((Ring::one().neg(), ivc_h_i_state_0_comm_idx[2]));
+            .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[2]));
+
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
             .push((Ring::from(2u64).neg(), ivc_h_i_state_0_comm_idx[3]));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
@@ -79,17 +80,13 @@ impl<'a> CCSBuilder<'a> {
             .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[1]));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
             .push((Ring::one().neg(), ivc_h_i_state_i_comm_idx[2]));
+
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
             .push((Ring::from(2u64).neg(), ivc_h_i_state_i_comm_idx[3]));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]]
             .push((Ring::from(3u64).neg(), acc_comm_idx[0]));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]].push((Ring::one().neg(), acc_comm_idx[1]));
         m_after_mds.coeffs[IVC_H_I_AFTER_MDS_CONSTR[0]].push((Ring::one().neg(), acc_comm_idx[2]));
-
-        // TODO derive rest (see if I can derive further without intermediate vars)
-        // and set them to next IVC_H_I_AFTER_MDS_CONSTR, derive them and let the
-        // code be done by AI, this is error prone, and in this, I guess,
-        // I belive AI more to not make a mistake
 
         self.matrices.push(m_after_mds);
 

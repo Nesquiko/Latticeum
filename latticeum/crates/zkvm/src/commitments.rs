@@ -176,7 +176,7 @@ impl ZkVmCommitter {
         let cm_flat = flatten(cm.as_ref());
         assert_eq!(cm_flat.len(), 96);
         let u_flat = flatten(u);
-        assert_eq!(u_flat.len(), 360);
+        assert_eq!(u_flat.len(), 384);
         let x_w_flat = flatten(x_w);
         assert_eq!(x_w_flat.len(), 96);
         let h_flat = flatten(&[*h]);
@@ -189,7 +189,7 @@ impl ZkVmCommitter {
         acc_goldilocks.extend_from_slice(&u_flat);
         acc_goldilocks.extend_from_slice(&x_w_flat);
         acc_goldilocks.extend_from_slice(&h_flat);
-        assert_eq!(acc_goldilocks.len(), 264 + 72 + 96 + 360 + 96 + 24);
+        assert_eq!(acc_goldilocks.len(), 264 + 72 + 96 + 384 + 96 + 24);
 
         self.wide_hasher.hash_iter(acc_goldilocks).0
     }
