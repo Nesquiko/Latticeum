@@ -40,10 +40,11 @@ def m_4_4(input_state):
     s_10 = input_state[8] + input_state[9] + 2 * input_state[10] + 3 * input_state[11]
     s_11 = 3 * input_state[8] + input_state[9] + input_state[10] + 2 * input_state[11]
 
-    s_12 = 0
-    s_13 = 0
-    s_14 = 0
-    s_15 = 0
+
+    s_12 = 2 * input_state[12] + 3 * input_state[13] + input_state[14] + input_state[15]
+    s_13 = input_state[12] + 2 * input_state[13] + 3 * input_state[14] + input_state[15]
+    s_14 = input_state[12] + input_state[13] + 2 * input_state[14] + 3 * input_state[15]
+    s_15 = 3 * input_state[12] + input_state[13] + input_state[14] + 2 * input_state[15]
 
     return [
         s_0,
@@ -98,22 +99,5 @@ def mds(input_state):
     ]
 
 
-x = (
-    +4 * F(0)
-    + 6 * F(13458558136629279646)
-    + 2 * F(11917569669020208757)
-    + 2 * F(3145715386209370042)
-    + 2 * F(17331705705982545631)
-    + 3 * F(13458558136629279646)
-    + F(11917569669020208757)
-    + F(3145715386209370042)
-    + 2 * F(17331705705982545631)
-    + 3 * F(13984430912008153556)
-    + F(15521108528102704061)
-    + F(4970103052708374450)
-)
-
-t_0 = F(2940300425484625778)
-
-print(x)
-print(x == t_0)
+if __name__ == "__main__":
+	print(mds(initial_state))
