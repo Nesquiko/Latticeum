@@ -10,7 +10,9 @@ use p3_poseidon2::{
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
 use tracing::{Level, instrument};
 
-use crate::crypto_consts::{external_width_8_consts, external_width_16_consts};
+use crate::crypto_consts::{
+    FULL_ROUNDS, PARTIAL_ROUNDS, external_width_8_consts, external_width_16_consts,
+};
 
 /// number of field elements in the output digest
 pub const POSEIDON2_OUT: usize = 4;
@@ -79,7 +81,8 @@ impl WideZkVMPoseidon2Perm {
 
 #[derive(Clone)]
 pub struct PermutationIntermediateStates {
-    pub after_external_initial_mds: [Goldilocks; WIDE_POSEIDON2_WIDTH],
+    pub after_initial_mds: [Goldilocks; WIDE_POSEIDON2_WIDTH],
+    pub after_ext_init_rounds: [[Goldilocks; WIDE_POSEIDON2_WIDTH]; PARTIAL_ROUNDS / 2],
 }
 
 /// impl taken from Permutation<[Goldilocks; WIDE_POSEIDON2_WIDTH]>
@@ -89,7 +92,9 @@ impl WideZkVMPoseidon2Perm {
         state: &mut [Goldilocks; WIDE_POSEIDON2_WIDTH],
     ) -> PermutationIntermediateStates {
         let mut intermediate = PermutationIntermediateStates {
-            after_external_initial_mds: [Goldilocks::default(); WIDE_POSEIDON2_WIDTH],
+            after_initial_mds: [Goldilocks::default(); WIDE_POSEIDON2_WIDTH],
+            after_ext_init_rounds: [[Goldilocks::default(); WIDE_POSEIDON2_WIDTH];
+                PARTIAL_ROUNDS / 2],
         };
 
         // Replaces Poseidon2 first part of `permute_mut`, the
@@ -112,14 +117,21 @@ impl WideZkVMPoseidon2Perm {
         // one, but with different constants and a linear layer (the application of MDS) first.
         {
             mds_width_16_permutation(state, &mat4);
-            intermediate.after_external_initial_mds = state.clone();
+            intermediate.after_initial_mds = state.clone();
 
-            external_terminal_permute_state(
-                state,
-                self.external_layer.get_initial_constants(),
-                add_rc_and_sbox_generic,
-                &mat4,
-            )
+            for (i, elem) in self
+                .external_layer()
+                .get_initial_constants()
+                .iter()
+                .enumerate()
+            {
+                state
+                    .iter_mut()
+                    .zip(elem.iter())
+                    .for_each(|(s, &rc)| add_rc_and_sbox_generic(s, rc));
+                mds_width_16_permutation(state, &mat4);
+                intermediate.after_ext_init_rounds[i] = state.clone();
+            }
         }
 
         // replaces self.internal_layer.permute_state(state);
@@ -154,10 +166,6 @@ impl WideZkVMPoseidon2 {
         Self {
             perm: WideZkVMPoseidon2Perm::new(external_layer, internal_layer),
         }
-    }
-
-    pub fn perm(&self) -> &WideZkVMPoseidon2Perm {
-        &self.perm
     }
 }
 

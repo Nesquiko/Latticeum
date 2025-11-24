@@ -6,7 +6,6 @@ use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::Goldilocks;
 use p3_matrix::{Dimensions, dense::RowMajorMatrix};
 use p3_merkle_tree::{MerkleTree, MerkleTreeError, MerkleTreeMmcs};
-use p3_poseidon2::ExternalLayerConstants;
 use p3_symmetric::{Hash, PseudoCompressionFunction, TruncatedPermutation};
 use stark_rings::{
     PolyRing,
@@ -23,7 +22,7 @@ use crate::{
     crypto_consts::internal_constants_len_22,
     poseidon2::{
         GoldilocksComm, IntermediateStates, POSEIDON2_OUT, POSEIDON2_WIDTH, Poseidon2Compression,
-        Poseidon2Perm, Poseidon2Sponge, WIDE_POSEIDON2_WIDTH, WIDTH_8_EXTERNAL_INITIAL_CONSTS,
+        Poseidon2Perm, Poseidon2Sponge, WIDTH_8_EXTERNAL_INITIAL_CONSTS,
         WIDTH_16_EXTERNAL_INITIAL_CONSTS, WideZkVMPoseidon2,
     },
 };
@@ -77,12 +76,6 @@ impl ZkVmCommitter {
             merkle_tree,
             wide_hasher,
         }
-    }
-
-    pub fn wide_poseidon2_external_consts(
-        &self,
-    ) -> &ExternalLayerConstants<Goldilocks, WIDE_POSEIDON2_WIDTH> {
-        self.wide_hasher.perm().external_layer()
     }
 
     /// `h_i` public poseidon2 commitment to the state of the IVC step `i`.
@@ -170,17 +163,11 @@ impl ZkVmCommitter {
         } = acc;
 
         let r_flat = flatten(r);
-        assert_eq!(r_flat.len(), 264);
         let v_flat = flatten(v);
-        assert_eq!(v_flat.len(), 72);
         let cm_flat = flatten(cm.as_ref());
-        assert_eq!(cm_flat.len(), 96);
         let u_flat = flatten(u);
-        assert_eq!(u_flat.len(), 384);
         let x_w_flat = flatten(x_w);
-        assert_eq!(x_w_flat.len(), 96);
         let h_flat = flatten(&[*h]);
-        assert_eq!(h_flat.len(), 24);
 
         let mut acc_goldilocks: Vec<Goldilocks> = Vec::new();
         acc_goldilocks.extend_from_slice(&r_flat);
@@ -189,7 +176,14 @@ impl ZkVmCommitter {
         acc_goldilocks.extend_from_slice(&u_flat);
         acc_goldilocks.extend_from_slice(&x_w_flat);
         acc_goldilocks.extend_from_slice(&h_flat);
-        assert_eq!(acc_goldilocks.len(), 264 + 72 + 96 + 384 + 96 + 24);
+
+        assert_eq!(r_flat.len(), 264);
+        assert_eq!(v_flat.len(), 72);
+        assert_eq!(cm_flat.len(), 96);
+        assert_eq!(u_flat.len(), 456);
+        assert_eq!(x_w_flat.len(), 96);
+        assert_eq!(h_flat.len(), 24);
+        assert_eq!(acc_goldilocks.len(), 264 + 72 + 96 + 456 + 96 + 24);
 
         self.wide_hasher.hash_iter(acc_goldilocks).0
     }

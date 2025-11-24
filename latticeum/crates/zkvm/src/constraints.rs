@@ -1,8 +1,14 @@
-use crate::{ccs::CCSLayout, poseidon2::WIDE_POSEIDON2_WIDTH};
+use crate::{
+    ccs::CCSLayout,
+    crypto_consts::{MDS_INVERSE_TRANSPOSED, PARTIAL_ROUNDS},
+    poseidon2::{WIDE_POSEIDON2_WIDTH, WIDTH_16_EXTERNAL_INITIAL_CONSTS},
+};
 use ark_std::log2;
 use cyclotomic_rings::rings::GoldilocksRingNTT;
 use latticefold::arith::CCS;
 use num_traits::identities::One;
+use p3_field::PrimeField64;
+use p3_goldilocks::Goldilocks;
 use stark_rings_linalg::SparseMatrix;
 use std::ops::Neg;
 
@@ -47,6 +53,7 @@ impl<'a> CCSBuilder<'a> {
 
         // ivc specific
         builder.ivc_step_after_initial_mds();
+        builder.ivc_step_external_rounds();
 
         builder.build()
     }
@@ -560,6 +567,49 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(Ring::one());
     }
 
+    fn ivc_step_external_rounds(&mut self) {
+        let after_init_mds_idx = self.layout.ivc_h_i_after_mds_idx;
+        let externl_layers = WIDTH_16_EXTERNAL_INITIAL_CONSTS;
+        let external_initial_consts = externl_layers.get_initial_constants();
+
+        let idx_m_add_round_consts = self.matrices.len();
+        let mut m_add_round_consts = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        m_add_round_consts.coeffs[IVC_H_EXT_INIT_ADD_ROUND_CONSTS[0]]
+            .push((Ring::one(), after_init_mds_idx[0]));
+        m_add_round_consts.coeffs[IVC_H_EXT_INIT_ADD_ROUND_CONSTS[0]].push((
+            from_goldilocks(external_initial_consts[0][0]),
+            self.layout.const_1_idx,
+        ));
+
+        // - (after_init_mds[0] + external_initial_consts[0])^7
+        self.matrices.push(m_add_round_consts);
+        self.multisets.push(vec![idx_m_add_round_consts; 7]);
+        self.coeffs.push(Ring::one().neg());
+
+        let idx_m_inverse_mds = self.matrices.len();
+        let mut m_inverse_mds = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        for (i, &coeff) in MDS_INVERSE_TRANSPOSED[0].iter().enumerate() {
+            m_inverse_mds.coeffs[IVC_H_EXT_INIT_ADD_ROUND_CONSTS[0]].push((
+                from_goldilocks(coeff),
+                self.layout.ivc_h_i_external_initial_0[i],
+            ));
+        }
+        self.matrices.push(m_inverse_mds);
+
+        let idx_m_one = self.matrices.len();
+        let mut m_one = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        m_one.coeffs[IVC_H_EXT_INIT_ADD_ROUND_CONSTS[0]]
+            .push((Ring::one(), self.layout.const_1_idx));
+        self.matrices.push(m_one);
+
+        // MDS^-1 * external_initial_0 * 1^6
+        //  the 1^6 make the multisets match in size, both are of length 7
+        let mut multiset = vec![idx_m_inverse_mds];
+        multiset.extend(std::iter::repeat(idx_m_one).take(6));
+        self.multisets.push(multiset);
+        self.coeffs.push(Ring::one());
+    }
+
     /// Adds an ADD constraint that handles 32-bit overflow:
     /// z[IS_ADD] * (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2]) = 0
     fn add_constraint(&mut self) {
@@ -794,6 +844,10 @@ fn empty_sparse_matrix(m: usize, n: usize) -> SparseMatrix<GoldilocksRingNTT> {
     }
 }
 
+fn from_goldilocks(g: Goldilocks) -> Ring {
+    Ring::from(g.as_canonical_u64())
+}
+
 // Indices of the constraints
 const ADD_CONSTR: usize = 0;
 const PC_NON_BRANCH_CONSTR: usize = 1;
@@ -814,14 +868,22 @@ const IVC_H_I_AFTER_MDS_CONSTR: [usize; 2 * WIDE_POSEIDON2_WIDTH] = {
     arr
 };
 
+const IVC_H_EXT_INIT_ADD_ROUND_CONSTS_START: usize =
+    IVC_H_I_AFTER_MDS_CONSTR[IVC_H_I_AFTER_MDS_CONSTR.len() - 1] + 1;
+const IVC_H_EXT_INIT_ADD_ROUND_CONSTS: [usize; PARTIAL_ROUNDS / 2] = {
+    let mut arr = [0; PARTIAL_ROUNDS / 2];
+    let mut i = 0;
+    while i < PARTIAL_ROUNDS / 2 {
+        arr[i] = IVC_H_EXT_INIT_ADD_ROUND_CONSTS_START + i;
+        i += 1;
+    }
+    arr
+};
+
 #[cfg(feature = "debug")]
 use crate::ivc::IVCStepInput;
 #[cfg(feature = "debug")]
-use latticefold::arith::Arith;
-#[cfg(feature = "debug")]
 use tracing::{Level, instrument};
-#[cfg(feature = "debug")]
-use vm::riscvm::riscv_isa::Instruction;
 
 #[cfg(feature = "debug")]
 #[instrument(skip_all, level = Level::DEBUG)]
@@ -830,6 +892,9 @@ pub fn check_relation_debug(
     z: &Vec<GoldilocksRingNTT>,
     ivc_step: &IVCStepInput,
 ) {
+    use latticefold::arith::Arith;
+    use vm::riscvm::riscv_isa::Instruction;
+
     let inst = ivc_step.trace.instruction.inst;
 
     match inst {
