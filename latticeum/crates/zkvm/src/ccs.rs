@@ -52,9 +52,9 @@ pub struct CCSLayout {
     /// ivc_h_i commitment) after applying MDS in the first operation in external rounds
     pub ivc_h_i_after_mds_idx: [usize; 2 * WIDE_POSEIDON2_WIDTH],
 
-    /// Intermediate 2 states (because there are 2 sponge passes on 13 preimage elements of the
-    /// ivc_h_i commitment) after applying external round 0
-    pub ivc_h_i_external_initial_0: [usize; 2 * WIDE_POSEIDON2_WIDTH],
+    /// There are 4 external initial rounds, and there are 2 sponge passes
+    ///  so PARTIAL_ROUNDS/2 * 2 * WIDE_POSEIDON2_WIDTH = PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH
+    pub ivc_h_i_external_initial: [usize; PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH],
 
     // input state
     pub pc_in_idx: usize,
@@ -107,12 +107,6 @@ impl CCSLayout {
         let const_1_idx = w_cursor;
         w_cursor += 1;
 
-        let (wide_poseidon2_external_initial_consts_idx, w_cursor) =
-            indices_with_new_cursor::<{ WIDE_POSEIDON2_WIDTH * PARTIAL_ROUNDS / 2 }>(w_cursor);
-
-        let (wide_poseidon2_external_terminal_consts_idx, mut w_cursor) =
-            indices_with_new_cursor::<{ WIDE_POSEIDON2_WIDTH * PARTIAL_ROUNDS / 2 }>(w_cursor);
-
         let ivc_h_i_step_idx = w_cursor;
         w_cursor += 1;
 
@@ -126,8 +120,8 @@ impl CCSLayout {
         let (ivc_h_i_after_mds_idx, w_cursor) =
             indices_with_new_cursor::<{ 2 * WIDE_POSEIDON2_WIDTH }>(w_cursor);
 
-        let (ivc_h_i_external_initial_0, mut w_cursor) =
-            indices_with_new_cursor::<{ 2 * WIDE_POSEIDON2_WIDTH }>(w_cursor);
+        let (ivc_h_i_external_initial, mut w_cursor) =
+            indices_with_new_cursor::<{ PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH }>(w_cursor);
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -189,7 +183,7 @@ impl CCSLayout {
             ivc_h_i_state_i_comm_idx,
             ivc_h_i_acc_i_comm_idx,
             ivc_h_i_after_mds_idx,
-            ivc_h_i_external_initial_0,
+            ivc_h_i_external_initial,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -259,18 +253,24 @@ pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLay
         z[z_idx] = after_mds_sponge_passes[i].as_canonical_u64() as usize;
     }
 
-    let after_ext_init_round_0: [Goldilocks; 2 * WIDE_POSEIDON2_WIDTH] = input
+    let after_ext_init_rounds: [Goldilocks; PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH] = input
         .ivc_step_comm
         .1
         .perm_states
         .iter()
-        .flat_map(|states| states.after_ext_init_rounds[0])
+        .flat_map(|states| {
+            states
+                .after_ext_init_rounds
+                .into_iter()
+                .flatten()
+                .collect::<Vec<Goldilocks>>()
+        })
         .collect::<Vec<Goldilocks>>()
         .try_into()
         .expect("failed to convert external init round 0 state into sponge passes");
 
-    for (i, &z_idx) in layout.ivc_h_i_external_initial_0.iter().enumerate() {
-        z[z_idx] = after_ext_init_round_0[i].as_canonical_u64() as usize;
+    for (i, &z_idx) in layout.ivc_h_i_external_initial.iter().enumerate() {
+        z[z_idx] = after_ext_init_rounds[i].as_canonical_u64() as usize;
     }
 }
 
