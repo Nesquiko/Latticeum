@@ -9,7 +9,6 @@ use cyclotomic_rings::rings::{GoldilocksChallengeSet, GoldilocksRingNTT, Goldilo
 use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness},
     commitment::AjtaiCommitmentScheme,
-    decomposition_parameters::DecompositionParams,
     nifs::{
         LFProof, NIFSProver,
         linearization::{LFLinearizationProver, LinearizationProver},
@@ -48,18 +47,13 @@ fn main() {
         .with_span_events(FmtSpan::CLOSE)
         .init();
 
-    tracing::trace!(
-        "starting zkVM with decomposition params: B={}, L={}, B_SMALL={}, K={}",
-        GoldiLocksDP::B,
-        GoldiLocksDP::L,
-        GoldiLocksDP::B_SMALL,
-        GoldiLocksDP::K
-    );
-
-    let vm = new_vm_1mb();
     let program = PathBuf::from(
         "/home/nesquiko/fiit/dp/latticeum/target/riscv32imac-unknown-none-elf/release/fibonacci",
     );
+
+    tracing::info!("proving program '{}'", program.display().to_string());
+
+    let vm = new_vm_1mb();
     let mut vm = match vm.load_elf(program) {
         Ok(vm) => vm,
         Err(e) => panic!("failed to load `fibonacci` elf, {}", e),

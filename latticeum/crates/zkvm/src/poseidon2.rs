@@ -10,9 +10,7 @@ use p3_poseidon2::{
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
 use tracing::{Level, instrument};
 
-use crate::crypto_consts::{
-    FULL_ROUNDS, PARTIAL_ROUNDS, external_width_8_consts, external_width_16_consts,
-};
+use crate::crypto_consts::{PARTIAL_ROUNDS, external_width_8_consts, external_width_16_consts};
 
 /// number of field elements in the output digest
 pub const POSEIDON2_OUT: usize = 4;
@@ -79,7 +77,7 @@ impl WideZkVMPoseidon2Perm {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PermutationIntermediateStates {
     pub after_initial_mds: [Goldilocks; WIDE_POSEIDON2_WIDTH],
     pub after_ext_init_rounds: [[Goldilocks; WIDE_POSEIDON2_WIDTH]; PARTIAL_ROUNDS / 2],
@@ -119,7 +117,7 @@ impl WideZkVMPoseidon2Perm {
             mds_width_16_permutation(state, &mat4);
             intermediate.after_initial_mds = state.clone();
 
-            for (i, elem) in self
+            for (i, init_consts) in self
                 .external_layer()
                 .get_initial_constants()
                 .iter()
@@ -127,7 +125,7 @@ impl WideZkVMPoseidon2Perm {
             {
                 state
                     .iter_mut()
-                    .zip(elem.iter())
+                    .zip(init_consts.iter())
                     .for_each(|(s, &rc)| add_rc_and_sbox_generic(s, rc));
                 mds_width_16_permutation(state, &mat4);
                 intermediate.after_ext_init_rounds[i] = state.clone();
