@@ -5,12 +5,21 @@ use p3_goldilocks::{Goldilocks, MATRIX_DIAG_16_GOLDILOCKS, Poseidon2Goldilocks};
 use p3_mds::MdsPermutation;
 use p3_poseidon2::{
     ExternalLayerConstants, MDSMat4, add_rc_and_sbox_generic, external_terminal_permute_state,
-    internal_permute_state, matmul_internal,
+    matmul_internal,
 };
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
 use tracing::{Level, instrument};
 
-use crate::crypto_consts::{PARTIAL_ROUNDS, external_width_8_consts, external_width_16_consts};
+use crate::crypto_consts::{
+    FULL_ROUNDS, PARTIAL_ROUNDS, external_width_8_consts, external_width_16_consts,
+    internal_constants_len_22,
+};
+
+/// Copied from Plonky3, because it is private...
+/// Degree of the chosen permutation polynomial for Goldilocks, used as the Poseidon2 S-Box.
+///
+/// As p - 1 = 2^32 * 3 * 5 * 17 * ... the smallest choice for a degree D satisfying gcd(p - 1, D) = 1 is 7.
+pub const GOLDILOCKS_S_BOX_DEGREE: usize = 7;
 
 /// number of field elements in the output digest
 pub const POSEIDON2_OUT: usize = 4;
@@ -39,6 +48,8 @@ pub const WIDTH_8_EXTERNAL_INITIAL_CONSTS: LazyLock<
     ExternalLayerConstants<Goldilocks, POSEIDON2_WIDTH>,
 > = LazyLock::new(external_width_8_consts);
 
+pub const INTERNAL_CONSTS: LazyLock<Vec<Goldilocks>> = LazyLock::new(internal_constants_len_22);
+
 /// Total state size of the Poseidon2 permutation for state 0 commitment (rate + capacity).
 /// The permutation operates on arrays of WIDTH field elements.
 /// WIDTH = RATE + CAPACITY
@@ -50,6 +61,9 @@ pub const WIDE_POSEIDON2_WIDTH: usize = 16;
 /// Security is (Capacity * field bits) / 2 = (4 * 64) / 2 = 128 bits of security
 /// With CAPACITY=4 for 128-bit security, RATE = WIDTH - CAPACITY = 16 - 4 = 12
 pub const WIDE_POSEIDON2_RATE: usize = 12;
+
+pub const WIDE_POSEIDON2_13_ELS_SPONGE_PASSES: usize =
+    WIDE_POSEIDON2_WIDTH / WIDE_POSEIDON2_RATE + 1;
 
 #[derive(Clone)]
 pub struct WideZkVMPoseidon2Perm {
@@ -80,7 +94,8 @@ impl WideZkVMPoseidon2Perm {
 #[derive(Debug, Clone)]
 pub struct PermutationIntermediateStates {
     pub after_initial_mds: [Goldilocks; WIDE_POSEIDON2_WIDTH],
-    pub after_ext_init_rounds: [[Goldilocks; WIDE_POSEIDON2_WIDTH]; PARTIAL_ROUNDS / 2],
+    pub after_ext_init_rounds: [[Goldilocks; WIDE_POSEIDON2_WIDTH]; FULL_ROUNDS / 2],
+    pub after_internal_rounds: [[Goldilocks; WIDE_POSEIDON2_WIDTH]; PARTIAL_ROUNDS],
 }
 
 /// impl taken from Permutation<[Goldilocks; WIDE_POSEIDON2_WIDTH]>
@@ -91,8 +106,8 @@ impl WideZkVMPoseidon2Perm {
     ) -> PermutationIntermediateStates {
         let mut intermediate = PermutationIntermediateStates {
             after_initial_mds: [Goldilocks::default(); WIDE_POSEIDON2_WIDTH],
-            after_ext_init_rounds: [[Goldilocks::default(); WIDE_POSEIDON2_WIDTH];
-                PARTIAL_ROUNDS / 2],
+            after_ext_init_rounds: [[Goldilocks::default(); WIDE_POSEIDON2_WIDTH]; FULL_ROUNDS / 2],
+            after_internal_rounds: [[Goldilocks::default(); WIDE_POSEIDON2_WIDTH]; PARTIAL_ROUNDS],
         };
 
         // Replaces Poseidon2 first part of `permute_mut`, the
@@ -117,7 +132,7 @@ impl WideZkVMPoseidon2Perm {
             mds_width_16_permutation(state, &mat4);
             intermediate.after_initial_mds = state.clone();
 
-            for (i, init_consts) in self
+            for (round, init_consts) in self
                 .external_layer()
                 .get_initial_constants()
                 .iter()
@@ -128,16 +143,16 @@ impl WideZkVMPoseidon2Perm {
                     .zip(init_consts.iter())
                     .for_each(|(s, &rc)| add_rc_and_sbox_generic(s, rc));
                 mds_width_16_permutation(state, &mat4);
-                intermediate.after_ext_init_rounds[i] = state.clone();
+                intermediate.after_ext_init_rounds[round] = state.clone();
             }
         }
 
         // replaces self.internal_layer.permute_state(state);
-        internal_permute_state(
-            state,
-            |x| matmul_internal(x, MATRIX_DIAG_16_GOLDILOCKS),
-            &self.internal_layer,
-        );
+        for (round, &elem) in self.internal_layer.iter().enumerate() {
+            add_rc_and_sbox_generic(&mut state[0], elem);
+            matmul_internal(state, MATRIX_DIAG_16_GOLDILOCKS);
+            intermediate.after_internal_rounds[round] = state.clone();
+        }
 
         // replaces self.external_layer.permute_state_terminal(state);
         external_terminal_permute_state(
@@ -236,4 +251,15 @@ pub fn mds_width_16_permutation<MdsPerm4: MdsPermutation<Goldilocks, 4>>(
         .iter_mut()
         .enumerate()
         .for_each(|(i, elem)| *elem += sums[i % 4].clone());
+}
+
+#[inline]
+pub fn internal_permute_state(
+    state: &mut [Goldilocks; WIDE_POSEIDON2_WIDTH],
+    internal_constants: &[Goldilocks],
+) {
+    for elem in internal_constants {
+        add_rc_and_sbox_generic(&mut state[0], *elem);
+        matmul_internal(state, MATRIX_DIAG_16_GOLDILOCKS);
+    }
 }

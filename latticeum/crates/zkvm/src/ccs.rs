@@ -1,6 +1,6 @@
 use p3_field::PrimeField64;
 use p3_goldilocks::Goldilocks;
-use std::{ops::Range, usize};
+use std::ops::Range;
 use tracing::{Level, instrument};
 
 use configuration::N_REGS;
@@ -8,9 +8,9 @@ use latticefold::decomposition_parameters::DecompositionParams;
 use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 
 use crate::{
-    crypto_consts::PARTIAL_ROUNDS,
+    crypto_consts::{FULL_ROUNDS, PARTIAL_ROUNDS},
     ivc::IVCStepInput,
-    poseidon2::{POSEIDON2_OUT, WIDE_POSEIDON2_WIDTH},
+    poseidon2::{POSEIDON2_OUT, WIDE_POSEIDON2_13_ELS_SPONGE_PASSES, WIDE_POSEIDON2_WIDTH},
 };
 
 #[derive(Clone, Copy)]
@@ -50,11 +50,15 @@ pub struct CCSLayout {
 
     /// Intermediate 2 states (because there are 2 sponge passes on 13 preimage elements of the
     /// ivc_h_i commitment) after applying MDS in the first operation in external rounds
-    pub ivc_h_i_after_mds_idx: [usize; 2 * WIDE_POSEIDON2_WIDTH],
+    pub ivc_h_i_after_mds_idx: [usize; WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * WIDE_POSEIDON2_WIDTH],
 
     /// There are 4 external initial rounds, and there are 2 sponge passes
-    ///  so PARTIAL_ROUNDS/2 * 2 * WIDE_POSEIDON2_WIDTH = PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH
-    pub ivc_h_i_external_initial: [usize; PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH],
+    ///  so FULL_ROUNDS/2 * 2 * WIDE_POSEIDON2_WIDTH = FULL_ROUNDS * WIDE_POSEIDON2_WIDTH
+    pub ivc_h_i_external_initial: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH],
+
+    /// There are 22 internal rounds, and there are 2 sponge passes
+    pub ivc_h_i_after_internal_idx:
+        [usize; WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH],
 
     // input state
     pub pc_in_idx: usize,
@@ -120,8 +124,12 @@ impl CCSLayout {
         let (ivc_h_i_after_mds_idx, w_cursor) =
             indices_with_new_cursor::<{ 2 * WIDE_POSEIDON2_WIDTH }>(w_cursor);
 
-        let (ivc_h_i_external_initial, mut w_cursor) =
-            indices_with_new_cursor::<{ PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH }>(w_cursor);
+        let (ivc_h_i_external_initial, w_cursor) =
+            indices_with_new_cursor::<{ FULL_ROUNDS * WIDE_POSEIDON2_WIDTH }>(w_cursor);
+
+        let (ivc_h_i_after_internal_idx, mut w_cursor) = indices_with_new_cursor::<
+            { WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH },
+        >(w_cursor);
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -184,6 +192,7 @@ impl CCSLayout {
             ivc_h_i_acc_i_comm_idx,
             ivc_h_i_after_mds_idx,
             ivc_h_i_external_initial,
+            ivc_h_i_after_internal_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -253,7 +262,7 @@ pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLay
         z[z_idx] = after_mds_sponge_passes[i].as_canonical_u64() as usize;
     }
 
-    let after_ext_init_rounds: [Goldilocks; PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH] = input
+    let after_ext_init_rounds: [Goldilocks; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] = input
         .ivc_step_comm
         .1
         .perm_states
@@ -267,10 +276,31 @@ pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLay
         })
         .collect::<Vec<Goldilocks>>()
         .try_into()
-        .expect("failed to convert external init round 0 state into sponge passes");
+        .expect("failed to convert external init rounds state into sponge passes");
 
     for (i, &z_idx) in layout.ivc_h_i_external_initial.iter().enumerate() {
         z[z_idx] = after_ext_init_rounds[i].as_canonical_u64() as usize;
+    }
+
+    let after_internal_rounds: [Goldilocks;
+        WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH] = input
+        .ivc_step_comm
+        .1
+        .perm_states
+        .iter()
+        .flat_map(|states| {
+            states
+                .after_internal_rounds
+                .into_iter()
+                .flatten()
+                .collect::<Vec<Goldilocks>>()
+        })
+        .collect::<Vec<Goldilocks>>()
+        .try_into()
+        .expect("failed to convert internal rounds state into sponge passes");
+
+    for (i, &z_idx) in layout.ivc_h_i_after_internal_idx.iter().enumerate() {
+        z[z_idx] = after_internal_rounds[i].as_canonical_u64() as usize;
     }
 }
 
