@@ -60,6 +60,10 @@ pub struct CCSLayout {
     pub ivc_h_i_after_internal_idx:
         [usize; WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH],
 
+    /// There are 4 external terminal rounds, and there are 2 sponge passes
+    ///  so FULL_ROUNDS/2 * 2 * WIDE_POSEIDON2_WIDTH = FULL_ROUNDS * WIDE_POSEIDON2_WIDTH
+    pub ivc_h_i_external_terminal: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH],
+
     // input state
     pub pc_in_idx: usize,
     pub regs_in_idx: Range<usize>,
@@ -127,9 +131,12 @@ impl CCSLayout {
         let (ivc_h_i_external_initial, w_cursor) =
             indices_with_new_cursor::<{ FULL_ROUNDS * WIDE_POSEIDON2_WIDTH }>(w_cursor);
 
-        let (ivc_h_i_after_internal_idx, mut w_cursor) = indices_with_new_cursor::<
+        let (ivc_h_i_after_internal_idx, w_cursor) = indices_with_new_cursor::<
             { WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH },
         >(w_cursor);
+
+        let (ivc_h_i_external_terminal, mut w_cursor) =
+            indices_with_new_cursor::<{ FULL_ROUNDS * WIDE_POSEIDON2_WIDTH }>(w_cursor);
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -193,6 +200,7 @@ impl CCSLayout {
             ivc_h_i_after_mds_idx,
             ivc_h_i_external_initial,
             ivc_h_i_after_internal_idx,
+            ivc_h_i_external_terminal,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -301,6 +309,26 @@ pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLay
 
     for (i, &z_idx) in layout.ivc_h_i_after_internal_idx.iter().enumerate() {
         z[z_idx] = after_internal_rounds[i].as_canonical_u64() as usize;
+    }
+
+    let after_ext_term_rounds: [Goldilocks; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] = input
+        .ivc_step_comm
+        .1
+        .perm_states
+        .iter()
+        .flat_map(|states| {
+            states
+                .after_ext_terminal_rounds
+                .into_iter()
+                .flatten()
+                .collect::<Vec<Goldilocks>>()
+        })
+        .collect::<Vec<Goldilocks>>()
+        .try_into()
+        .expect("failed to convert external terminal rounds state into sponge passes");
+
+    for (i, &z_idx) in layout.ivc_h_i_external_terminal.iter().enumerate() {
+        z[z_idx] = after_ext_term_rounds[i].as_canonical_u64() as usize;
     }
 }
 

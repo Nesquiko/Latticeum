@@ -21,7 +21,7 @@ use vm::riscvm::{
 use crate::poseidon2::{
     GoldilocksComm, INTERNAL_CONSTS, IntermediateStates, POSEIDON2_OUT, POSEIDON2_WIDTH,
     Poseidon2Compression, Poseidon2Perm, Poseidon2Sponge, WIDTH_8_EXTERNAL_INITIAL_CONSTS,
-    WIDTH_16_EXTERNAL_INITIAL_CONSTS, WideZkVMPoseidon2,
+    WIDTH_16_EXTERNAL_CONSTS, WideZkVMPoseidon2,
 };
 
 type MemOpsVecCommPoseidon2Compression = TruncatedPermutation<Poseidon2Perm, 2, 4, POSEIDON2_WIDTH>;
@@ -62,10 +62,8 @@ impl ZkVmCommitter {
         let memory_ops_vec_compression = MemOpsVecCommPoseidon2Compression::new(perm);
         let merkle_tree = Poseidon2MerkleTree::new(hasher.clone(), compression.clone());
 
-        let wide_hasher = WideZkVMPoseidon2::new(
-            WIDTH_16_EXTERNAL_INITIAL_CONSTS.clone(),
-            INTERNAL_CONSTS.clone(),
-        );
+        let wide_hasher =
+            WideZkVMPoseidon2::new(WIDTH_16_EXTERNAL_CONSTS.clone(), INTERNAL_CONSTS.clone());
 
         Self {
             hasher,
@@ -178,10 +176,10 @@ impl ZkVmCommitter {
         assert_eq!(r_flat.len(), 312);
         assert_eq!(v_flat.len(), 72);
         assert_eq!(cm_flat.len(), 96);
-        assert_eq!(u_flat.len(), 1056);
+        assert_eq!(u_flat.len(), 1392);
         assert_eq!(x_w_flat.len(), 96);
         assert_eq!(h_flat.len(), 24);
-        assert_eq!(acc_goldilocks.len(), 312 + 72 + 96 + 1056 + 96 + 24);
+        assert_eq!(acc_goldilocks.len(), 312 + 72 + 96 + 1392 + 96 + 24);
 
         self.wide_hasher.hash_iter(acc_goldilocks).0
     }

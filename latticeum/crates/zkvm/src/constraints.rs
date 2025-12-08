@@ -3,14 +3,14 @@ use crate::{
     crypto_consts::{FULL_ROUNDS, M_I_INVERSE_TRANSPOSED, MDS_INVERSE_TRANSPOSED, PARTIAL_ROUNDS},
     poseidon2::{
         GOLDILOCKS_S_BOX_DEGREE, INTERNAL_CONSTS, WIDE_POSEIDON2_13_ELS_SPONGE_PASSES,
-        WIDE_POSEIDON2_RATE, WIDE_POSEIDON2_WIDTH, WIDTH_16_EXTERNAL_INITIAL_CONSTS,
+        WIDE_POSEIDON2_RATE, WIDE_POSEIDON2_WIDTH, WIDTH_16_EXTERNAL_CONSTS,
     },
 };
 use ark_std::log2;
 use cyclotomic_rings::rings::GoldilocksRingNTT;
 use latticefold::arith::CCS;
 use num_traits::identities::One;
-use p3_field::{PrimeCharacteristicRing, PrimeField64};
+use p3_field::PrimeField64;
 use p3_goldilocks::Goldilocks;
 use stark_rings_linalg::SparseMatrix;
 use std::ops::Neg;
@@ -58,8 +58,9 @@ impl<'a> CCSBuilder<'a> {
 
         // TODO sponge pass 2 after the whole 1st pass
         builder.ivc_step_after_initial_mds_sponge_pass_1();
-        builder.ivc_step_external_rounds_sponge_pass_1();
+        builder.ivc_step_external_initial_rounds_sponge_pass_1();
         builder.ivc_step_internal_rounds_sponge_pass_1();
+        builder.ivc_step_external_terminal_rounds_sponge_pass_1();
 
         builder.build()
     }
@@ -138,10 +139,10 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(Ring::one());
     }
 
-    fn ivc_step_external_rounds_sponge_pass_1(&mut self) {
+    fn ivc_step_external_initial_rounds_sponge_pass_1(&mut self) {
         let after_init_mds_idx = self.layout.ivc_h_i_after_mds_idx;
         let after_external_init_rounds_idx = self.layout.ivc_h_i_external_initial;
-        let external_layers = WIDTH_16_EXTERNAL_INITIAL_CONSTS;
+        let external_layers = WIDTH_16_EXTERNAL_CONSTS;
         let external_initial_consts = external_layers.get_initial_constants();
         assert_eq!(external_initial_consts.len(), FULL_ROUNDS / 2);
 
@@ -341,6 +342,113 @@ impl<'a> CCSBuilder<'a> {
         let inverse_m_i_multiset: Vec<usize> =
             (idx_inverse_m_i..idx_inverse_m_i + GOLDILOCKS_S_BOX_DEGREE).collect();
         self.multisets.push(inverse_m_i_multiset);
+        self.coeffs.push(Ring::one());
+    }
+
+    fn ivc_step_external_terminal_rounds_sponge_pass_1(&mut self) {
+        let after_last_round_internal_idx: [usize; WIDE_POSEIDON2_WIDTH] =
+            self.layout.ivc_h_i_after_internal_idx[
+            // last round of first sponge pass after internal rounds
+            ((PARTIAL_ROUNDS-1) * WIDE_POSEIDON2_WIDTH)..(PARTIAL_ROUNDS*WIDE_POSEIDON2_WIDTH)
+        ]
+                .try_into()
+                .expect("failed to convert slice into array of last indices");
+
+        let after_external_term_rounds_idx = self.layout.ivc_h_i_external_terminal;
+        let external_layers = WIDTH_16_EXTERNAL_CONSTS;
+        let external_terminal_consts = external_layers.get_terminal_constants();
+        assert_eq!(external_terminal_consts.len(), FULL_ROUNDS / 2);
+
+        let number_of_rounds = FULL_ROUNDS / 2;
+
+        // Due to how latticefold's sumcheck_polynomial_comb_fn works, each matrix index
+        // must appear exactly ONCE across all multisets.
+        //
+        // To work around this, and create degree 7 constraint, separate matrices
+        // for the power-7 term and 7 separate matrices for the MDS^-1 * 1^6 term.
+        //
+        // Each matrix contains entries for ALL constraint rows, so 14 matrices total.
+
+        // Create 7 matrices for -(after_init_mds + constant)^7
+        let idx_power7_base = self.matrices.len();
+        for _ in 0..GOLDILOCKS_S_BOX_DEGREE {
+            let mut m_add_round_consts = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+            // ==== Round 0 ====
+            //  the input is after_last_round_internal_idx, not the previous external initial round's output
+            for i in 0..WIDE_POSEIDON2_WIDTH {
+                let coeff_idx = IVC_H_EXT_TERM_ROUNDS_CONSTR[i];
+                let constant = external_terminal_consts[0][i];
+                m_add_round_consts.coeffs[coeff_idx]
+                    .push((Ring::one(), after_last_round_internal_idx[i]));
+                m_add_round_consts.coeffs[coeff_idx]
+                    .push((from_goldilocks(constant), self.layout.const_1_idx));
+            }
+            // ==== Round 0 ====
+
+            for round in 1..number_of_rounds {
+                let previous_round_idx_offset = (round - 1) * WIDE_POSEIDON2_WIDTH;
+                let round_idx_offset = round * WIDE_POSEIDON2_WIDTH;
+
+                for i in 0..WIDE_POSEIDON2_WIDTH {
+                    let coeff_idx = IVC_H_EXT_TERM_ROUNDS_CONSTR[round_idx_offset + i];
+
+                    let constant = external_terminal_consts[round][i];
+
+                    m_add_round_consts.coeffs[coeff_idx].push((
+                        Ring::one(),
+                        after_external_term_rounds_idx[previous_round_idx_offset + i],
+                    ));
+
+                    m_add_round_consts.coeffs[coeff_idx]
+                        .push((from_goldilocks(constant), self.layout.const_1_idx));
+                }
+            }
+
+            self.matrices.push(m_add_round_consts);
+        }
+
+        // Multiset for -(after_init_mds + constant)^7 or -(previous_round + constant)^7
+        let power7_multiset: Vec<usize> =
+            (idx_power7_base..idx_power7_base + GOLDILOCKS_S_BOX_DEGREE).collect();
+        self.multisets.push(power7_multiset);
+        self.coeffs.push(Ring::one().neg());
+
+        // Create 1 matrix for MDS^-1 * external_initial
+        let idx_inverse_mds = self.matrices.len();
+        let mut m_inverse_mds = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        for round in 0..number_of_rounds {
+            let round_idx_offset = round * WIDE_POSEIDON2_WIDTH;
+
+            for i in 0..WIDE_POSEIDON2_WIDTH {
+                let coeff_idx = IVC_H_EXT_TERM_ROUNDS_CONSTR[round_idx_offset + i];
+
+                for (k, &coeff) in MDS_INVERSE_TRANSPOSED[i].iter().enumerate() {
+                    m_inverse_mds.coeffs[coeff_idx].push((
+                        from_goldilocks(coeff),
+                        self.layout.ivc_h_i_external_terminal[round_idx_offset + k],
+                    ));
+                }
+            }
+        }
+
+        self.matrices.push(m_inverse_mds);
+
+        // Create 6 matrices for the 1^6 padding (to match degree 7)
+        for _ in 0..(GOLDILOCKS_S_BOX_DEGREE - 1) {
+            let mut m_one = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+            for i in 0..(number_of_rounds * WIDE_POSEIDON2_WIDTH) {
+                let coeff_idx = IVC_H_EXT_TERM_ROUNDS_CONSTR[i];
+                m_one.coeffs[coeff_idx].push((Ring::one(), self.layout.const_1_idx));
+            }
+            self.matrices.push(m_one);
+        }
+
+        // Multiset for MDS^-1 * external_initial * 1^6
+        let inverse_mds_multiset: Vec<usize> =
+            (idx_inverse_mds..idx_inverse_mds + GOLDILOCKS_S_BOX_DEGREE).collect();
+        self.multisets.push(inverse_mds_multiset);
         self.coeffs.push(Ring::one());
     }
 
@@ -624,6 +732,19 @@ const IVC_H_INTERNAL_ROUNDS_CONSTS: [usize;
     let mut i = 0;
     while i < N {
         arr[i] = IVC_H_INTERNAL_ROUNDS_CONSTS_START + i;
+        i += 1;
+    }
+    arr
+};
+
+const IVC_H_EXT_TERM_ROUNDS_CONSTS_START: usize =
+    IVC_H_INTERNAL_ROUNDS_CONSTS[IVC_H_INTERNAL_ROUNDS_CONSTS.len() - 1] + 1;
+const IVC_H_EXT_TERM_ROUNDS_CONSTR: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] = {
+    const N: usize = FULL_ROUNDS * WIDE_POSEIDON2_WIDTH;
+    let mut arr = [0; N];
+    let mut i = 0;
+    while i < N {
+        arr[i] = IVC_H_EXT_TERM_ROUNDS_CONSTS_START + i;
         i += 1;
     }
     arr
