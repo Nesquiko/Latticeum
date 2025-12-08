@@ -11,7 +11,6 @@ use stark_rings::{
     PolyRing,
     cyclotomic_ring::{ICRT, models::goldilocks::Fq},
 };
-use std::usize;
 use tracing::{Level, instrument};
 use vm::riscvm::{
     inst::MemoryOperation,

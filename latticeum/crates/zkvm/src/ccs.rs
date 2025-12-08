@@ -10,7 +10,7 @@ use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 use crate::{
     crypto_consts::{FULL_ROUNDS, PARTIAL_ROUNDS},
     ivc::IVCStepInput,
-    poseidon2::{POSEIDON2_OUT, WIDE_POSEIDON2_13_ELS_SPONGE_PASSES, WIDE_POSEIDON2_WIDTH},
+    poseidon2::{POSEIDON2_OUT, WIDE_POSEIDON2_13_SPONGE_PASSES, WIDE_POSEIDON2_WIDTH},
 };
 
 #[derive(Clone, Copy)]
@@ -50,7 +50,7 @@ pub struct CCSLayout {
 
     /// Intermediate 2 states (because there are 2 sponge passes on 13 preimage elements of the
     /// ivc_h_i commitment) after applying MDS in the first operation in external rounds
-    pub ivc_h_i_after_mds_idx: [usize; WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * WIDE_POSEIDON2_WIDTH],
+    pub ivc_h_i_after_mds_idx: [usize; WIDE_POSEIDON2_13_SPONGE_PASSES * WIDE_POSEIDON2_WIDTH],
 
     /// There are 4 external initial rounds, and there are 2 sponge passes
     ///  so FULL_ROUNDS/2 * 2 * WIDE_POSEIDON2_WIDTH = FULL_ROUNDS * WIDE_POSEIDON2_WIDTH
@@ -58,7 +58,7 @@ pub struct CCSLayout {
 
     /// There are 22 internal rounds, and there are 2 sponge passes
     pub ivc_h_i_after_internal_idx:
-        [usize; WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH],
+        [usize; WIDE_POSEIDON2_13_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH],
 
     /// There are 4 external terminal rounds, and there are 2 sponge passes
     ///  so FULL_ROUNDS/2 * 2 * WIDE_POSEIDON2_WIDTH = FULL_ROUNDS * WIDE_POSEIDON2_WIDTH
@@ -132,7 +132,7 @@ impl CCSLayout {
             indices_with_new_cursor::<{ FULL_ROUNDS * WIDE_POSEIDON2_WIDTH }>(w_cursor);
 
         let (ivc_h_i_after_internal_idx, w_cursor) = indices_with_new_cursor::<
-            { WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH },
+            { WIDE_POSEIDON2_13_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH },
         >(w_cursor);
 
         let (ivc_h_i_external_terminal, mut w_cursor) =
@@ -291,7 +291,7 @@ pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLay
     }
 
     let after_internal_rounds: [Goldilocks;
-        WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH] = input
+        WIDE_POSEIDON2_13_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH] = input
         .ivc_step_comm
         .1
         .perm_states

@@ -2,7 +2,7 @@ use crate::{
     ccs::CCSLayout,
     crypto_consts::{FULL_ROUNDS, M_I_INVERSE_TRANSPOSED, MDS_INVERSE_TRANSPOSED, PARTIAL_ROUNDS},
     poseidon2::{
-        GOLDILOCKS_S_BOX_DEGREE, INTERNAL_CONSTS, WIDE_POSEIDON2_13_ELS_SPONGE_PASSES,
+        GOLDILOCKS_S_BOX_DEGREE, INTERNAL_CONSTS, WIDE_POSEIDON2_13_SPONGE_PASSES,
         WIDE_POSEIDON2_RATE, WIDE_POSEIDON2_WIDTH, WIDTH_16_EXTERNAL_CONSTS,
     },
 };
@@ -57,8 +57,7 @@ impl<'a> CCSBuilder<'a> {
         // ivc specific
 
         builder.ivc_step_after_initial_mds();
-        // builder.ivc_step_after_initial_mds_sponge_pass_2();
-        builder.ivc_step_external_initial_rounds_sponge_pass_1();
+        builder.ivc_step_external_initial_rounds();
         builder.ivc_step_internal_rounds_sponge_pass_1();
         builder.ivc_step_external_terminal_rounds_sponge_pass_1();
 
@@ -167,7 +166,7 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(Ring::one());
     }
 
-    fn ivc_step_external_initial_rounds_sponge_pass_1(&mut self) {
+    fn ivc_step_external_initial_rounds(&mut self) {
         let after_init_mds_idx = self.layout.ivc_h_i_after_mds_idx;
         let after_external_init_rounds_idx = self.layout.ivc_h_i_external_initial;
         let external_layers = WIDTH_16_EXTERNAL_CONSTS;
@@ -175,20 +174,30 @@ impl<'a> CCSBuilder<'a> {
         assert_eq!(external_initial_consts.len(), FULL_ROUNDS / 2);
 
         let number_of_rounds = FULL_ROUNDS / 2;
+        let sponge_passes = WIDE_POSEIDON2_13_SPONGE_PASSES;
 
         // Create 7 matrices for -(after_init_mds + constant)^7
         let idx_power7_base = self.matrices.len();
+
         for _ in 0..GOLDILOCKS_S_BOX_DEGREE {
             let mut m_add_round_consts = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
             // ==== Round 0 ====
             //  the input is after_init_mds, not the previous external initial round's output
-            for i in 0..WIDE_POSEIDON2_WIDTH {
-                let coeff_idx = IVC_H_EXT_INIT_ROUNDS_CONSTR[i];
-                let constant = external_initial_consts[0][i];
-                m_add_round_consts.coeffs[coeff_idx].push((Ring::one(), after_init_mds_idx[i]));
-                m_add_round_consts.coeffs[coeff_idx]
-                    .push((from_goldilocks(constant), self.layout.const_1_idx));
+            for pass in 0..sponge_passes {
+                let sponge_pass_offset = pass * number_of_rounds * WIDE_POSEIDON2_WIDTH;
+
+                for i in 0..WIDE_POSEIDON2_WIDTH {
+                    let coeff_idx = IVC_H_EXT_INIT_ROUNDS_CONSTR[sponge_pass_offset + i];
+                    let constant = external_initial_consts[0][i];
+
+                    m_add_round_consts.coeffs[coeff_idx].push((
+                        Ring::one(),
+                        after_init_mds_idx[i + pass * WIDE_POSEIDON2_WIDTH],
+                    ));
+                    m_add_round_consts.coeffs[coeff_idx]
+                        .push((from_goldilocks(constant), self.layout.const_1_idx));
+                }
             }
             // ==== Round 0 ====
 
@@ -196,18 +205,23 @@ impl<'a> CCSBuilder<'a> {
                 let previous_round_idx_offset = (round - 1) * WIDE_POSEIDON2_WIDTH;
                 let round_idx_offset = round * WIDE_POSEIDON2_WIDTH;
 
-                for i in 0..WIDE_POSEIDON2_WIDTH {
-                    let coeff_idx = IVC_H_EXT_INIT_ROUNDS_CONSTR[round_idx_offset + i];
+                for pass in 0..sponge_passes {
+                    let sponge_pass_offset = pass * number_of_rounds * WIDE_POSEIDON2_WIDTH;
 
-                    let constant = external_initial_consts[round][i];
+                    for i in 0..WIDE_POSEIDON2_WIDTH {
+                        let coeff_idx =
+                            IVC_H_EXT_INIT_ROUNDS_CONSTR[sponge_pass_offset + round_idx_offset + i];
+                        let constant = external_initial_consts[round][i];
 
-                    m_add_round_consts.coeffs[coeff_idx].push((
-                        Ring::one(),
-                        after_external_init_rounds_idx[previous_round_idx_offset + i],
-                    ));
+                        m_add_round_consts.coeffs[coeff_idx].push((
+                            Ring::one(),
+                            after_external_init_rounds_idx
+                                [sponge_pass_offset + previous_round_idx_offset + i],
+                        ));
 
-                    m_add_round_consts.coeffs[coeff_idx]
-                        .push((from_goldilocks(constant), self.layout.const_1_idx));
+                        m_add_round_consts.coeffs[coeff_idx]
+                            .push((from_goldilocks(constant), self.layout.const_1_idx));
+                    }
                 }
             }
 
@@ -227,14 +241,20 @@ impl<'a> CCSBuilder<'a> {
         for round in 0..number_of_rounds {
             let round_idx_offset = round * WIDE_POSEIDON2_WIDTH;
 
-            for i in 0..WIDE_POSEIDON2_WIDTH {
-                let coeff_idx = IVC_H_EXT_INIT_ROUNDS_CONSTR[round_idx_offset + i];
+            for pass in 0..sponge_passes {
+                let sponge_pass_offset = pass * number_of_rounds * WIDE_POSEIDON2_WIDTH;
 
-                for (k, &coeff) in MDS_INVERSE_TRANSPOSED[i].iter().enumerate() {
-                    m_inverse_mds.coeffs[coeff_idx].push((
-                        from_goldilocks(coeff),
-                        self.layout.ivc_h_i_external_initial[round_idx_offset + k],
-                    ));
+                for i in 0..WIDE_POSEIDON2_WIDTH {
+                    let coeff_idx =
+                        IVC_H_EXT_INIT_ROUNDS_CONSTR[sponge_pass_offset + round_idx_offset + i];
+
+                    for (k, &coeff) in MDS_INVERSE_TRANSPOSED[i].iter().enumerate() {
+                        m_inverse_mds.coeffs[coeff_idx].push((
+                            from_goldilocks(coeff),
+                            self.layout.ivc_h_i_external_initial
+                                [sponge_pass_offset + round_idx_offset + k],
+                        ));
+                    }
                 }
             }
         }
@@ -244,7 +264,7 @@ impl<'a> CCSBuilder<'a> {
         // Create 6 matrices for the 1^6 padding (to match degree 7)
         for _ in 0..(GOLDILOCKS_S_BOX_DEGREE - 1) {
             let mut m_one = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-            for i in 0..(number_of_rounds * WIDE_POSEIDON2_WIDTH) {
+            for i in 0..(sponge_passes * number_of_rounds * WIDE_POSEIDON2_WIDTH) {
                 let coeff_idx = IVC_H_EXT_INIT_ROUNDS_CONSTR[i];
                 m_one.coeffs[coeff_idx].push((Ring::one(), self.layout.const_1_idx));
             }
@@ -738,8 +758,8 @@ const IVC_H_INTERNAL_ROUNDS_CONSTS_START: usize =
     IVC_H_EXT_INIT_ROUNDS_CONSTR[IVC_H_EXT_INIT_ROUNDS_CONSTR.len() - 1] + 1;
 
 const IVC_H_INTERNAL_ROUNDS_CONSTS: [usize;
-    WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH] = {
-    const N: usize = WIDE_POSEIDON2_13_ELS_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH;
+    WIDE_POSEIDON2_13_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH] = {
+    const N: usize = WIDE_POSEIDON2_13_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH;
     let mut arr = [0; N];
     let mut i = 0;
     while i < N {

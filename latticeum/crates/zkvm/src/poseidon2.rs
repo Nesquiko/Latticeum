@@ -59,8 +59,7 @@ pub const WIDE_POSEIDON2_WIDTH: usize = 16;
 /// With CAPACITY=4 for 128-bit security, RATE = WIDTH - CAPACITY = 16 - 4 = 12
 pub const WIDE_POSEIDON2_RATE: usize = 12;
 
-pub const WIDE_POSEIDON2_13_ELS_SPONGE_PASSES: usize =
-    WIDE_POSEIDON2_WIDTH / WIDE_POSEIDON2_RATE + 1;
+pub const WIDE_POSEIDON2_13_SPONGE_PASSES: usize = WIDE_POSEIDON2_WIDTH / WIDE_POSEIDON2_RATE + 1;
 
 #[derive(Clone)]
 pub struct WideZkVMPoseidon2Perm {
