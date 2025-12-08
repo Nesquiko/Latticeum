@@ -273,7 +273,7 @@ fn initialize_accumulator(
     // create witness with private witness part only
     // the z-vector structure is [x_ccs, 1, w_ccs] = layout.size + 1 total
     // so the private witness (w_ccs) should be layout.w_size elements
-    assert_eq!(ccs.n - ccs.l - 1, layout.w_size);
+    assert_eq!(ccs.n - ccs.l - CCSLayout::CONST_ELEMS_SIZE, layout.w_size);
     let zero_w_ccs = vec![GoldilocksRingNTT::zero(); layout.w_size];
 
     let zero_wit = Witness::from_w_ccs::<GoldiLocksDP>(zero_w_ccs);

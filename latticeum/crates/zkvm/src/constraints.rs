@@ -56,8 +56,8 @@ impl<'a> CCSBuilder<'a> {
 
         // ivc specific
 
-        // TODO sponge pass 2 after the whole 1st pass
-        builder.ivc_step_after_initial_mds_sponge_pass_1();
+        builder.ivc_step_after_initial_mds();
+        // builder.ivc_step_after_initial_mds_sponge_pass_2();
         builder.ivc_step_external_initial_rounds_sponge_pass_1();
         builder.ivc_step_internal_rounds_sponge_pass_1();
         builder.ivc_step_external_terminal_rounds_sponge_pass_1();
@@ -65,16 +65,24 @@ impl<'a> CCSBuilder<'a> {
         builder.build()
     }
 
-    fn ivc_step_after_initial_mds_sponge_pass_1(&mut self) {
+    fn ivc_step_after_initial_mds(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         let ivc_h_i_state_0_comm_idx = self.layout.ivc_h_i_state_0_comm_idx;
         let ivc_h_i_state_i_comm_idx = self.layout.ivc_h_i_state_i_comm_idx;
         let acc_comm_idx = self.layout.ivc_h_i_acc_i_comm_idx;
 
+        let after_external_term_idx: [usize; WIDE_POSEIDON2_WIDTH] =
+            self.layout.ivc_h_i_external_terminal[
+            // last round of first sponge pass after external terminal
+            ((FULL_ROUNDS / 2 - 1) * WIDE_POSEIDON2_WIDTH)..((FULL_ROUNDS/2)*WIDE_POSEIDON2_WIDTH)
+        ]
+                .try_into()
+                .expect("failed to convert slice into array of last indices");
+
         let mut m_after_mds = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
-        let state_indices: [usize; WIDE_POSEIDON2_RATE] = [
+        let pass1_state_indices: [usize; WIDE_POSEIDON2_RATE] = [
             self.layout.ivc_h_i_step_idx,
             ivc_h_i_state_0_comm_idx[0],
             ivc_h_i_state_0_comm_idx[1],
@@ -88,6 +96,27 @@ impl<'a> CCSBuilder<'a> {
             acc_comm_idx[1],
             acc_comm_idx[2],
         ];
+
+        let pass2_state_indices: [usize; WIDE_POSEIDON2_WIDTH] = [
+            acc_comm_idx[3],
+            after_external_term_idx[1],
+            after_external_term_idx[2],
+            after_external_term_idx[3],
+            after_external_term_idx[4],
+            after_external_term_idx[5],
+            after_external_term_idx[6],
+            after_external_term_idx[7],
+            after_external_term_idx[8],
+            after_external_term_idx[9],
+            after_external_term_idx[10],
+            after_external_term_idx[11],
+            // capacity
+            after_external_term_idx[12],
+            after_external_term_idx[13],
+            after_external_term_idx[14],
+            after_external_term_idx[15],
+        ];
+
         let m4_4_coeffs: [[u64; 4]; 4] = [[2, 3, 1, 1], [1, 2, 3, 1], [1, 1, 2, 3], [3, 1, 1, 2]];
 
         for i in 0..WIDE_POSEIDON2_WIDTH {
@@ -119,18 +148,17 @@ impl<'a> CCSBuilder<'a> {
 
             m_after_mds.coeffs[coeff_idx].push((Ring::one(), after_mds_result_idx));
 
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[0].neg(), state_indices[0]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[1].neg(), state_indices[1]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[2].neg(), state_indices[2]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[3].neg(), state_indices[3]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[4].neg(), state_indices[4]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[5].neg(), state_indices[5]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[6].neg(), state_indices[6]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[7].neg(), state_indices[7]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[8].neg(), state_indices[8]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[9].neg(), state_indices[9]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[10].neg(), state_indices[10]));
-            m_after_mds.coeffs[coeff_idx].push((coeffs_in_row[11].neg(), state_indices[11]));
+            if i < WIDE_POSEIDON2_WIDTH {
+                for k in 0..pass1_state_indices.len() {
+                    m_after_mds.coeffs[coeff_idx]
+                        .push((coeffs_in_row[k].neg(), pass1_state_indices[k]));
+                }
+            } else {
+                for k in 0..pass2_state_indices.len() {
+                    m_after_mds.coeffs[coeff_idx]
+                        .push((coeffs_in_row[k].neg(), pass2_state_indices[k]));
+                }
+            }
         }
 
         self.matrices.push(m_after_mds);
@@ -147,14 +175,6 @@ impl<'a> CCSBuilder<'a> {
         assert_eq!(external_initial_consts.len(), FULL_ROUNDS / 2);
 
         let number_of_rounds = FULL_ROUNDS / 2;
-
-        // Due to how latticefold's sumcheck_polynomial_comb_fn works, each matrix index
-        // must appear exactly ONCE across all multisets.
-        //
-        // To work around this, and create degree 7 constraint, separate matrices
-        // for the power-7 term and 7 separate matrices for the MDS^-1 * 1^6 term.
-        //
-        // Each matrix contains entries for ALL constraint rows, so 14 matrices total.
 
         // Create 7 matrices for -(after_init_mds + constant)^7
         let idx_power7_base = self.matrices.len();
@@ -360,14 +380,6 @@ impl<'a> CCSBuilder<'a> {
         assert_eq!(external_terminal_consts.len(), FULL_ROUNDS / 2);
 
         let number_of_rounds = FULL_ROUNDS / 2;
-
-        // Due to how latticefold's sumcheck_polynomial_comb_fn works, each matrix index
-        // must appear exactly ONCE across all multisets.
-        //
-        // To work around this, and create degree 7 constraint, separate matrices
-        // for the power-7 term and 7 separate matrices for the MDS^-1 * 1^6 term.
-        //
-        // Each matrix contains entries for ALL constraint rows, so 14 matrices total.
 
         // Create 7 matrices for -(after_init_mds + constant)^7
         let idx_power7_base = self.matrices.len();
