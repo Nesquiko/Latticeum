@@ -2,71 +2,98 @@
 
 A ZkVM build with lattice based cryptography.
 
+## TODO
+
+- Start writing the paper.
+- Optimize the current code.
+- In the end, compare against https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
+
 ## RISC-V VM specs:
 
 - 32bit
 - 1MB of RAM
-  - page size 4096B
+  - words per page / page size = 256 \* 32bit = 8192 bits = 1024 bytes
   - number of pages 256
 
 ## IVC of RISC-V
 
 The function `F` is defined by the RISC-V specification, then in order to instantiate
-an IVC for `F`, augmented circuit `F'`, represented by the CCS, folded inside LatticeFold
-must contain two parts, IVC part for verifying IVC advancement and then `F` specific
+an IVC for `F`, augmented circuit `F'`, represented by the CCS, folded inside LatticeFold,
+it must contain two parts, IVC part for verifying IVC advancement and then `F` specific
 part for verifying correct execution of `F`. In practice:
 
-1. The public state commitment passed to IVC step `i` from step `i-1`, `h_{i - 1} = poseidon2(i - 1, hash(state_0), hash(state_{i - 1}), hash(U_{i - 1}))`
+### public inputs for the entire IVC chain (step `0`)
 
-   - `i - 1` is just a step number in previous step
-   - `hash(state_0)`, where `state_0` is the public initial state of VM, it includes:
-     - commitment to the program's binary code
-       - Compute a Keccak hash of the binary, this is public, no need to constrain it in CCS.
-       - to get field elements, use the 256-bit Keccak digest to deterministically derive 4 Goldilocks elements (using it as a seed).
-       - **4 goldilocks elements**
-     - programs entrypoint, which is in `pc`
-       - **1 goldilocks element**
-     - Merkle root of all VM's memory pages (zeroes in all pages)
-       - **4 goldilocks element**
-     - Merkle root of all registers, all zeroes
-       - **4 goldilocks elements**
-     - Commitment to an empty memory ops vector `poseidon2(mem_ops_vec = 0, cycle = 0, address = 0, value = 0)`
-       - **4 goldilocks element**
-   - `hash(state_{i - 1})`, where `state_{i - 1}` is complete state of VM after step `i - 1`, it includes:
-     - VM's `pc`
-       - **1 goldilocks element**
-     - new Merkle root of VM memory
-       - **4 goldilocks element**
-     - Commitment to VM's registers
-       - **4 goldilocks elements**
-     - commitment to an memory ops vector `poseidon2(mem_ops_vec_{i - 1}, cycle, address, value)`
-       - **4 goldilocks element**
-   - `hash(U_{i - 1})` binds the running instance
-     - a lot of elements...
+These are the top-level public inputs that the final verifier needs to know.
+They are computed once and remain constant for the entire execution.
 
-2. The private witness for step `i` contains all necessary information for the
-   augmented circuit `F'` to prove the transition from state committed by `h_{i - 1}`
-   to new state commited by `h_i`. It must contain:
+1.  **Initial state commitment `z_0_comm`**: This serves as the **anchor** for
+    the entire computation, binding the proof to a specific program and initial
+    configuration. Its preimage is public and contains:
+    - A Merkle root of the program's binary code (the `code_comm`).
+    - The program's entrypoint (`pc`).
+    - The Merkle root of the VM's initially zeroed memory pages.
+    - A Poseidon2 commitment to the VM's initially zeroed registers.
+    - A commitment to the initially empty memory operations log.
+2.  **Initial IVC Step Commitment `h_0`**: A commitment that establishes the
+    initial state of the IVC, computed as `h_0 = poseidon2(0, z_0_comm, z_0_comm, U_0_comm)`.
 
-   - preimage of the `h_{i - 1}`
-     - previous step counter `i - 1`
-     - the full VM state `z_{i - 1}`
-     - the full accumulator instance `U_{i - 1}`
-   - folding proof from step `i - 1`
-   - the merkle inclusion proof of the new memory merkle root
-   - all registers so that the merkle tree of registers can be recomputed
-   - the execution trace for the application circuit `F`
+### Per-step proof generation (step `i`)
 
-3. The constraints of the `F'` for step `i`:
-   - recalculate the `h_{i - 1}` from its preimage and constraint that it equals the public input `h_{i - 1}`
-   - constraint that the input of the execution trace equals the output of `z_{i - 1}`
-     - including the merkle root recalculation in `z_{i - 1}.registers_comm`
-   - constraint the RISC-V instruction execution
-   - if memory op, then constraint that the memory ops vec commitment is correct
-   - if memory write, then constraint that the new memory merkle root is valid
-   - constraint the LatticeFold's NIFS verifier
+For each step of the VM execution, the prover generates a proof. The `F'`
+circuit for step `i` takes the following as **public inputs**:
 
-Compare against https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
+- **Previous step commitment `h_{i-1}`**: The public hash that commits to the
+  state of the entire IVC scheme after the previous step `i - 1`.
+- **Initial state commitment `z_0_comm`**: The anchor commitment, passed in
+  publicly at every step to ensure the prover does not switch programs.
+
+The `F'` circuit is then satisfied by the following **private witness**:
+
+1.  **IVC witness (proving `i-1` -> `i` transition):**
+    - **Preimage of `h_{i-1}`**:
+      - Previous step counter `i-1`.
+      - Previous state commitment `z_{i-1}_comm`.
+      - Previous accumulator commitment `U_{i-1}_comm`.
+    - **Preimage of `z_{i-1}_comm` (the full VM state `z_{i-1}`):**
+      - The VM's program counter `pc_{i-1}`.
+      - The Merkle root of the VM's memory.
+      - A Poseidon2 commitment to the VM's registers.
+      - A Poseidon2 commitment to the memory operations log.
+    - **Preimage of `U_{i-1}_comm`**: The full running accumulator instance
+      `U_{i-1}` and its witness `w_acc`.
+    - **Folding proof `π_{i-1}`**: The `LatticeFold` proof generated during
+      step `i-1`. (This is `None` for the first step).
+2.  **RISC-V Witness (proving the execution of `F`):**
+    - The **instruction** being executed at `pc_{i-1}`.
+    - A **Merkle proof** proving that this instruction is valid,
+      verifying its inclusion in the tree rooted at `code_comm` (which is part
+      of the public `z_0_comm`).
+    - The full **execution trace** for this single instruction, showing the
+      transition from input state (`z_{i-1}`) to output state (`z_i`).
+    - Any necessary Merkle proofs for memory operations (e.g., proof of a page update).
+
+### Constraints within the augmented circuit `F'`
+
+The CCS for the augmented circuit `F'` enforces the following logic at each step `i`:
+
+1.  **Anchor constraints**: Recalculate `h_{i-1}` from its private preimage
+    components. They constrain this result to equal the **public `h_{i-1}`**.
+2.  **Instruction fetch constraints**: Verify the provided Merkle proof for
+    the current instruction against the `pc_{i-1}` (from the witness) and the
+    `code_comm` (from the public `z_0_comm`). This prevents the prover from
+    executing a malicious instruction.
+3.  **State transition constraints**: Constrain the correctness of the RISC-V
+    instruction execution based on the instruction and the `ExecutionTrace` witness.
+4.  **Memory consistency constraints**:
+    - If a memory operation occurs, it constrains that the memory operations
+      log commitment is correctly updated.
+    - If a memory write occurs, it constrains that the new memory Merkle root
+      is valid by checking the provided Merkle proof for the updated page.
+5.  **Recursive folding constraint**: The circuit conditionally performs one of the following:
+    - **Base case (`i=0`):** Checks that the step is `0` and that there is no folding proof.
+    - **Recursive case (`i>0`):** Constraints the verification of the folding
+      proof `π_{i-1}` by running the `LatticeFold` NIFS verifier logic.
 
 ## Roadmap
 
