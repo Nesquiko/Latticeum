@@ -2,7 +2,7 @@ use crate::{
     ccs::CCSLayout,
     crypto_consts::{FULL_ROUNDS, M_I_INVERSE_TRANSPOSED, MDS_INVERSE_TRANSPOSED, PARTIAL_ROUNDS},
     poseidon2::{
-        GOLDILOCKS_S_BOX_DEGREE, INTERNAL_CONSTS, WIDE_POSEIDON2_13_SPONGE_PASSES,
+        GOLDILOCKS_S_BOX_DEGREE, INTERNAL_CONSTS, POSEIDON2_OUT, WIDE_POSEIDON2_13_SPONGE_PASSES,
         WIDE_POSEIDON2_RATE, WIDE_POSEIDON2_WIDTH, WIDTH_16_EXTERNAL_CONSTS,
     },
 };
@@ -60,6 +60,7 @@ impl<'a> CCSBuilder<'a> {
         builder.ivc_step_external_initial_rounds();
         builder.ivc_step_internal_rounds();
         builder.ivc_step_external_terminal_rounds();
+        builder.ivc_step_result_hash();
 
         builder.build()
     }
@@ -545,6 +546,27 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(Ring::one());
     }
 
+    fn ivc_step_result_hash(&mut self) {
+        // last round of SECOND sponge pass after external terminal
+        let after_external_term_idx: [usize; WIDE_POSEIDON2_WIDTH] =
+            self.layout.ivc_h_i_external_terminal
+                [((FULL_ROUNDS - 1) * WIDE_POSEIDON2_WIDTH)..(FULL_ROUNDS * WIDE_POSEIDON2_WIDTH)]
+                .try_into()
+                .expect("failed to convert slice into array of last indices");
+
+        let mut m_hash = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        for i in 0..POSEIDON2_OUT {
+            let coeff_idx = IVC_H_HASH_CONSTR[i];
+            m_hash.coeffs[coeff_idx].push((Ring::one(), self.layout.ivc_h_i_idx[i]));
+            m_hash.coeffs[coeff_idx].push((Ring::one().neg(), after_external_term_idx[i]));
+        }
+
+        let m_hash_idx = self.matrices.len();
+        self.matrices.push(m_hash);
+        self.multisets.push(vec![m_hash_idx]);
+        self.coeffs.push(Ring::one());
+    }
+
     /// Adds an ADD constraint that handles 32-bit overflow:
     /// z[IS_ADD] * (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2]) = 0
     fn add_constraint(&mut self) {
@@ -830,14 +852,27 @@ const IVC_H_INTERNAL_ROUNDS_CONSTS: [usize;
     arr
 };
 
-const IVC_H_EXT_TERM_ROUNDS_CONSTS_START: usize =
+const IVC_H_EXT_TERM_ROUNDS_CONSTR_START: usize =
     IVC_H_INTERNAL_ROUNDS_CONSTS[IVC_H_INTERNAL_ROUNDS_CONSTS.len() - 1] + 1;
 const IVC_H_EXT_TERM_ROUNDS_CONSTR: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] = {
     const N: usize = FULL_ROUNDS * WIDE_POSEIDON2_WIDTH;
     let mut arr = [0; N];
     let mut i = 0;
     while i < N {
-        arr[i] = IVC_H_EXT_TERM_ROUNDS_CONSTS_START + i;
+        arr[i] = IVC_H_EXT_TERM_ROUNDS_CONSTR_START + i;
+        i += 1;
+    }
+    arr
+};
+
+const IVC_H_HASH_CONSTR_START: usize =
+    IVC_H_EXT_TERM_ROUNDS_CONSTR[IVC_H_EXT_TERM_ROUNDS_CONSTR.len() - 1] + 1;
+const IVC_H_HASH_CONSTR: [usize; POSEIDON2_OUT] = {
+    const N: usize = POSEIDON2_OUT;
+    let mut arr = [0; N];
+    let mut i = 0;
+    while i < N {
+        arr[i] = IVC_H_HASH_CONSTR_START + i;
         i += 1;
     }
     arr

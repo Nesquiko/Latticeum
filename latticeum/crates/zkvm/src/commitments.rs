@@ -175,10 +175,10 @@ impl ZkVmCommitter {
         assert_eq!(r_flat.len(), 312);
         assert_eq!(v_flat.len(), 72);
         assert_eq!(cm_flat.len(), 96);
-        assert_eq!(u_flat.len(), 1392);
+        assert_eq!(u_flat.len(), 1416);
         assert_eq!(x_w_flat.len(), 96);
         assert_eq!(h_flat.len(), 24);
-        assert_eq!(acc_goldilocks.len(), 312 + 72 + 96 + 1392 + 96 + 24);
+        assert_eq!(acc_goldilocks.len(), 312 + 72 + 96 + 1416 + 96 + 24);
 
         self.wide_hasher.hash_iter(acc_goldilocks).0
     }
