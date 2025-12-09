@@ -814,69 +814,35 @@ const BNE_CONSTR: usize = 4;
 const AUIPC_CONSTR: usize = 5;
 const LUI_CONSTR: usize = 6;
 
-const IVC_H_I_AFTER_MDS_CONSTR_START: usize = 7;
-const IVC_H_I_AFTER_MDS_CONSTR: [usize; 2 * WIDE_POSEIDON2_WIDTH] = {
-    let mut arr = [0; 2 * WIDE_POSEIDON2_WIDTH];
-    let mut i = 0;
-    while i < 2 * WIDE_POSEIDON2_WIDTH {
-        arr[i] = IVC_H_I_AFTER_MDS_CONSTR_START + i;
-        i += 1;
-    }
-    arr
-};
+const IVC_H_I_AFTER_MDS_CONSTR: [usize; WIDE_POSEIDON2_13_SPONGE_PASSES * WIDE_POSEIDON2_WIDTH] =
+    index_array(LUI_CONSTR + 1);
 
-const IVC_H_EXT_INIT_ROUNDS_CONSTS_START: usize =
-    IVC_H_I_AFTER_MDS_CONSTR[IVC_H_I_AFTER_MDS_CONSTR.len() - 1] + 1;
-const IVC_H_EXT_INIT_ROUNDS_CONSTR: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] = {
-    let mut arr = [0; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH];
-    let mut i = 0;
-    while i < FULL_ROUNDS * WIDE_POSEIDON2_WIDTH {
-        arr[i] = IVC_H_EXT_INIT_ROUNDS_CONSTS_START + i;
-        i += 1;
-    }
-    arr
-};
-
-const IVC_H_INTERNAL_ROUNDS_CONSTS_START: usize =
-    IVC_H_EXT_INIT_ROUNDS_CONSTR[IVC_H_EXT_INIT_ROUNDS_CONSTR.len() - 1] + 1;
+const IVC_H_EXT_INIT_ROUNDS_CONSTR: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] =
+    index_array(last(IVC_H_I_AFTER_MDS_CONSTR) + 1);
 
 const IVC_H_INTERNAL_ROUNDS_CONSTS: [usize;
-    WIDE_POSEIDON2_13_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH] = {
-    const N: usize = WIDE_POSEIDON2_13_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH;
-    let mut arr = [0; N];
-    let mut i = 0;
-    while i < N {
-        arr[i] = IVC_H_INTERNAL_ROUNDS_CONSTS_START + i;
-        i += 1;
-    }
-    arr
-};
+    WIDE_POSEIDON2_13_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH] =
+    index_array(last(IVC_H_EXT_INIT_ROUNDS_CONSTR) + 1);
 
-const IVC_H_EXT_TERM_ROUNDS_CONSTR_START: usize =
-    IVC_H_INTERNAL_ROUNDS_CONSTS[IVC_H_INTERNAL_ROUNDS_CONSTS.len() - 1] + 1;
-const IVC_H_EXT_TERM_ROUNDS_CONSTR: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] = {
-    const N: usize = FULL_ROUNDS * WIDE_POSEIDON2_WIDTH;
-    let mut arr = [0; N];
-    let mut i = 0;
-    while i < N {
-        arr[i] = IVC_H_EXT_TERM_ROUNDS_CONSTR_START + i;
-        i += 1;
-    }
-    arr
-};
+const IVC_H_EXT_TERM_ROUNDS_CONSTR: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] =
+    index_array(last(IVC_H_INTERNAL_ROUNDS_CONSTS) + 1);
 
-const IVC_H_HASH_CONSTR_START: usize =
-    IVC_H_EXT_TERM_ROUNDS_CONSTR[IVC_H_EXT_TERM_ROUNDS_CONSTR.len() - 1] + 1;
-const IVC_H_HASH_CONSTR: [usize; POSEIDON2_OUT] = {
-    const N: usize = POSEIDON2_OUT;
-    let mut arr = [0; N];
+const IVC_H_HASH_CONSTR: [usize; POSEIDON2_OUT] =
+    index_array(last(IVC_H_EXT_TERM_ROUNDS_CONSTR) + 1);
+
+const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
+    *arr.last().expect("there is no last element")
+}
+
+const fn index_array<const WIDTH: usize>(start: usize) -> [usize; WIDTH] {
+    let mut arr = [0; WIDTH];
     let mut i = 0;
-    while i < N {
-        arr[i] = IVC_H_HASH_CONSTR_START + i;
+    while i < WIDTH {
+        arr[i] = start + i;
         i += 1;
     }
     arr
-};
+}
 
 #[cfg(feature = "debug")]
 use crate::ivc::IVCStepInput;
