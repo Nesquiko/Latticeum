@@ -1,0 +1,78 @@
+% Import default values & document settings
+\input{values}
+
+% Setup document
+\documentclass[\FIITdefaultFontSize,a4paper,twoside,openright,\FIITlanguage]{book}
+
+% Load all necessary packages
+\input{packages}
+
+% Setup bibliography
+\bibliography{bibliography}
+
+% Page design
+\pagestyle{fancy}
+\lhead{\nouppercase{\leftmark}}
+\chead{}
+\rhead{}
+\lfoot{}
+\cfoot{\thepage}
+\rfoot{}
+
+\begin{document}
+
+% Initialize document
+\include{initialize}
+
+% Cover & title page
+\include{pages/titlepage}
+
+\newpage
+\thispagestyle{empty}
+\includepdf[pages=-]{assets/assignment.pdf}
+\newpage
+\emptypage
+
+
+\include{pages/declaration}
+
+\include{pages/annotation}
+
+% Table of contents
+\ifx\FIITlagEN\undefined
+    \renewcommand{\contentsname}{Obsah}
+\else
+    \renewcommand{\contentsname}{Table of contents}
+\fi
+\tableofcontents{}
+
+% List of figures
+\listoffigures
+
+% List of abbreviations
+\include{pages/abbreviations}
+
+% Enable page numbering
+\pagenumbering{arabic}
+
+% Begin references segment
+\begin{refsegment}
+
+    \include{content/introduction}
+
+    \include{content/analysis/analysis}
+
+    % Bibliography
+    \printbibliography[heading=references,segment=\therefsegment]
+
+    % no page numbers for appendices
+    \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
+    \addtocontents{toc}{\cftpagenumbersoff{chapter}}
+
+\end{refsegment}
+
+\appendix
+
+\include{pages/time_schedule}
+
+\end{document}

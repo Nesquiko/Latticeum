@@ -1,0 +1,54 @@
+\section{Ethereum}\label{sec:ethereum}
+
+Ethereum is a decentralized, open-source blockchain with smart contract
+functionality \cite{ethereumEthereumWhitepaper}. Conceptualized by Vitalik
+Buterin in 2013/2014, it went live in 2015, aiming to build a platform for
+decentralized applications that adds Turing complete execution environment
+to blockchain \cite{ethereumWhitePaperPdf}. Ethereum enables developers to
+create and deploy decentralized applications and crypto assets.
+The Ethereum network is comprised of two layers, two peer-to-peer networks,
+consensus layer and execution layer.
+
+\subsection{Consensus}\label{subsec:ethereum_consensus}
+% very good explainer https://ethos.dev/beacon-chain
+
+Consensus on Ethereum is achieved with proof-of-stake (PoS) consensus mechanism
+called Gasper \cite{VitalikGasper}. PoS system relies on crypto-economic incentives,
+rewarding honest stakers (people who put economic capital in the network)
+and penalizing malicious ones.
+
+Stakers, or also called validators, propose new blocks. Validator is selected for
+a block proposal pseudo-randomly from the pool in each slot. A slot is some
+time amount (as of writing of this work it is 12 seconds on Ethereum mainnet),
+in which the pseudo-randomly chosen validator can propose new block. The software
+creating the new block is called consensus client. Proposer's consensus client
+requests a bundle of transactions from the execution layer \ref{subsec:ethereum_execution},
+wraps them into a block and gossips (sends) the new block to other participants
+over the consensus p2p network. The rest of the validator pool can in 32 slot
+(one epoch) attest to that new block's validity. In order for a block to be
+finalized, it must be attested by a super-majority, which is 66\% of the total
+balance of all validators. \cite{ethereumConsensusMechanisms}.
+
+\subsection{Execution}\label{subsec:ethereum_execution}
+
+Software operating on the execution layer is called execution client. Nodes on
+execution layer hold the latest state and database of all Ethereum data. These
+clients gossip incoming transactions over the execution layer p2p network, and
+each stores them in a local mempool. Once they are put inside a block, each
+transaction is executed in Ethereum-Virtual-Machine (EVM). EVM is a stack based
+virtual machine operating 256 bit words which executes smart contract code.
+Ethereum is a decentralized state machine, with rules defined by the EVM.
+EVM can be thought of as a function. Given a valid state and valid set of
+transactions\footnote{validity of transactions, and thus transitively validity
+of state, is guaranteed by the consensus layer \ref{subsec:ethereum_consensus}},
+outputs next valid state:
+
+\[
+	F(S_n, T) = S_{n+1} \label{eq:state_transition}
+\]
+
+Thus, Ethereum's state transition function is described by the EVM. This function
+must be executed by each execution node for each new block in order to keep up
+with the current chain state. \cite{ethereumEthereumVirtual}
+
+
