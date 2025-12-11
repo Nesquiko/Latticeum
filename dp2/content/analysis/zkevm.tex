@@ -98,9 +98,9 @@ microprocessor). The output of step $i$ of the computation ($F$) is fed as input
 into step $i+1$ of the computation, along with a proof $\pi$, which proves that:
 
 \begin{enumerate}
-	\item $F(s_{i-1}, \omega_i) = s_i$ - proves that executing $F$ with $s_{i-1}$
-		and $\omega_i$ correctly outputs $s_i$,
-	\item $V((i-1, s_0, s_{i-1}), \pi_{i-1}) = true$ - proves that $\pi_{i-1}$ is
+	\item $F(z_{i-1}, u_i) = z_i$ - proves that executing $F$ with $z_{i-1}$
+		and $u_i$ correctly outputs $z_i$,
+	\item $V((i-1, z_0, z_{i-1}), \pi_{i-1}) = true$ - proves that $\pi_{i-1}$ is
 		a valid proof relative to the previous step of the computation.
 \end{enumerate}
 
@@ -124,7 +124,7 @@ into step $i+1$ of the computation, along with a proof $\pi$, which proves that:
 			dataNode,
 			text width=2.5cm % allows text to wrap
 		},
-		omegaDataNode/.style={ % specific for omega nodes
+		instanceDataNode/.style={ % specific for instance nodes
 			dataNode,
 			minimum width=1cm
 		},
@@ -139,23 +139,23 @@ into step $i+1$ of the computation, along with a proof $\pi$, which proves that:
 		labelFont/.style={font=\footnotesize}
 	]
 
-	\node[multiLineDataNode] (s0) {$s_0$\\init state};
+	\node[multiLineDataNode] (s0) {$z_0$\\init state};
 	\node[processNode, right=0.5cm of s0] (F1) {F};
 	\node[processNode, right=of F1] (F2) {F};
 	\node[ellipsisNode, right=1.5cm of F2] (dots) {...};
 	\node[processNode, right=2cm of dots] (Fn) {F};
-	\node[multiLineDataNode, right=0.5cm of Fn] (sn) {$(s_n, \pi_n)$\\final output};
+	\node[multiLineDataNode, right=0.5cm of Fn] (sn) {$(z_n, \pi_n)$\\final output};
 
-	\node[omegaDataNode, below=of F1] (w1) {$\omega_1$};
-	\node[omegaDataNode, below=of F2] (w2) {$\omega_2$};
-	\node[omegaDataNode, below=of Fn] (wn) {$\omega_n$};
+	\node[instanceDataNode, below=of F1] (w1) {$u_1$};
+	\node[instanceDataNode, below=of F2] (w2) {$u_2$};
+	\node[instanceDataNode, below=of Fn] (wn) {$u_n$};
 
 	\draw[arrow] (s0) -- (F1);
 	\draw[arrow] (w1) -- (F1);
-	\draw[arrow] (F1) -- node[midway, above, labelFont] {$(s_1, \pi_1)$} (F2);
+	\draw[arrow] (F1) -- node[midway, above, labelFont] {$(z_1, \pi_1)$} (F2);
 	\draw[arrow] (w2) -- (F2);
-	\draw[arrow] (F2) -- node[midway, above, labelFont] {$(s_2, \pi_2)$} (dots);
-	\draw[arrow] (dots) -- node[midway, above, labelFont] {$(s_{n-1}, \pi_{n-1})$} (Fn);
+	\draw[arrow] (F2) -- node[midway, above, labelFont] {$(z_2, \pi_2)$} (dots);
+	\draw[arrow] (dots) -- node[midway, above, labelFont] {$(z_{n-1}, \pi_{n-1})$} (Fn);
 	\draw[arrow] (wn) -- (Fn);
 	\draw[arrow] (Fn) -- (sn);
 
@@ -163,8 +163,8 @@ into step $i+1$ of the computation, along with a proof $\pi$, which proves that:
 	\caption{IVC \cite{ValiantIVC}}
 \end{tikzFigure}
 
-Final proof $\pi_n$ is a succinct proof that prover has $\omega_1, \ldots, \omega_n$,
-s.t., final output $s_n$ is correct. The first implementation of IVC was done
+Final proof $\pi_n$ is a succinct proof that prover has $\u_1, \ldots, \u_n$,
+s.t., final output $z_n$ is correct. The first implementation of IVC was done
 using SNARKs \cite{RecursiveSNARKsIVC}
 
 \subsection{First generation of ZkEVMs}
@@ -203,8 +203,9 @@ Given some relations $R = \alpha(pp,\;x,\;W)$, where:
 For example: $R$ is an equation, $x$ are coefficients and $W$ are concrete
 values that satisfy the equation.
 
-A folding scheme for two relations $R$ and $R_{acc}$ (or $R_1$ and $R_2$) is an
-interactive protocol between folding prover $P$ and folding verifier $V$ where:
+A folding scheme for two relations $R$ and $R_{acc}$ (or $R_1$ and $R_2$, or
+$u_i$ and $U_i$ respectively) is an interactive protocol between folding
+prover $P$ and folding verifier $V$ where:
 
 \begin{enumerate}
 	\item $P$ has $(pp, x_1, w_1) \in R, (pp, x_2, w_2) \in R_{acc}$,
@@ -215,64 +216,94 @@ And the result of their interaction is $(pp, x_3, w_3)$ (where $V$ only knows
 $(pp, x_3)$ and $w_3$ is kept private for $P$). Thus instead of validating two
 instances, verifier only needs to check one.
 
-% TODO IVC instantiation with folding scheme
-To make the interaction between
-$P$ and $V$ non-interactive with Fiat-Shamir heuristic \cite{FiatShamir}, $P$ must also provide
-proof that it was used correctly. And also, $P$ needs to prove that
-the folded instances are all linked together, output of step $i$ is input of
-step $i+1$.
+Folding scheme can be made non-interactive by using \cite{FiatShamir}.
+
+\subsection{Instantiating IVC with folding scheme}
+
+IVC instantiation via folding schemes requires wrapping the base computation
+$F$ within an augmented function $F'$, where $F$ is the application circuit. The
+function $F'$ is structured to perform two primary tasks:
+
+\begin{enumerate}
+	\item \textbf{Base Computation:} $F'$ executes the original state transition
+		$F(z_{i-1}, u_i) \rightarrow z_i$, where $z_{i-1}$ is the state from the
+		previous step and $u_i$ is non-deterministic advice for step $i$. This
+		corresponds to verifying the correct execution of one step of the
+		underlying computation (e.g., a single RISC-V instruction cycle).
+
+	\item \textbf{IVC Maintenance:} This task ensures the integrity of the
+		recursive proof chain. $F'$ takes as non-deterministic advice the full state
+		from the previous step: $(i, z_0, z_{i-1}, U_{i-1})$. It then performs two
+		critical checks:
+		\begin{itemize}
+			\item \textbf{Consistency Check:} $F'$ re-computes the hash of this
+				input state and asserts that it matches the public input $h_{i-1}$. This
+				binds the current step's execution to the correct history.
+			\item \textbf{Recursive Verification:} $F'$ executes the verifier logic
+				of a Non-Interactive Folding Scheme (NIFS). It takes the running
+				accumulator $U_{i-1}$ and the instance $u_{i-1}$ (an instance
+				from the step $i-1$) and outputs a new folded accumulator $U_i$.
+		\end{itemize}
+\end{enumerate}
+
+Finally, $F'$ outputs a new hash $h_i$, committing to the updated state $(i+1,
+z_0, z_i, U_i)$, which serves as the public input for the next step
+\cite{Nova, HyperNova}. Figure~\ref{fig:ivc-folding} illustrates this data flow.
 
 \begin{tikzFigure}
 	\begin{tikzpicture}[
-		node distance=1cm and 2cm, % vertical and horizontal base distance
-		processNode/.style={
-			rectangle, draw, fill=blue!20,
-			minimum size=1cm,
-			align=center
-		},
-		dataNode/.style={
-			parallelogram, draw, fill=green!20,
-			minimum height=0.5cm,
-			align=center,
-			inner xsep=2pt, % padding inside the node
-		},
-		omegaDataNode/.style={
-			dataNode,
-			minimum width=1cm
-		},
-		ellipsisNode/.style={
-			text centered,
-			font=\small
-		},
-		arrow/.style={
-			-Stealth,
-			semithick
-		},
-		labelFont/.style={font=\footnotesize}
-	]
+			node distance=1cm and 2cm,
+			accumulatorNode/.style={
+				rectangle, draw, fill=orange!20,
+				minimum height=0.8cm,
+				align=center, font=\small
+			},
+			instanceNode/.style={
+				rectangle, draw, fill=green!20,
+				minimum height=0.8cm,
+				align=center, font=\small
+			},
+			foldNode/.style={
+				rectangle, rounded corners=5pt, draw, thick, fill=blue!20,
+				minimum height=2cm,
+				align=center, font=\sffamily\small
+			},
+			arrow/.style={ -Stealth, thick },
+			]
 
-	\node[omegaDataNode] (w1) {$(\omega_1, x_1)$};
-	\node[omegaDataNode, below=of w1] (w2) {$(\omega_2, x_2)$};
-	\node[omegaDataNode, below=of F1, xshift=1cm] (w3) {$(\omega_4, x_4)$};
-	\node[omegaDataNode, below=of dots, xshift=1cm, yshift=-.4cm] (wn1) {$(\omega_{n-1}, x_{n-1})$};
-	\node[omegaDataNode, below=of Fn, xshift=3.1cm] (wn) {$(\omega_n, x_n)$};
+			\node[foldNode] (Fold1) {\textbf{Step i}};
+			\node[foldNode, right=of Fold1] (Fold2) {\textbf{Step i+1}};
 
-	\node[processNode, right=0.5cm of w1] (F1) {Folding};
-	\node[processNode, right=of F1] (F2) {Folding};
-	\node[ellipsisNode, right=2cm of F2] (dots) {...};
-	\node[processNode, right=3cm of dots] (Fn) {Folding};
+			\node[accumulatorNode, left=of Fold1, yshift=0.5cm] (U0) {$\mathsf{U}_{i-1}$};
 
-	\draw[arrow] (w1) -- (F1);
-	\draw[arrow] (w2) -- (F1);
-	\draw[arrow] (F1) -- node[midway, above, labelFont] {$(w_3, x_3, \pi_3)$} (F2);
-	\draw[arrow] (w3) -- (F2);
-	\draw[arrow] (F2) -- node[midway, above, labelFont] {$(w_5, x_5, \pi_5)$} (dots);
-	\draw[arrow] (dots) -- node[midway, above, labelFont] {$(w_{n-2}, x_{n-2}, \pi_{n-2})$} (Fn);
-	\draw[arrow] (wn1) -- (Fn);
-	\draw[arrow] (Fn) -- (wn);
+			\node[left=of Fold1, yshift=-0.5cm] (h0) {$h_{i-1}$};
+
+			\node[instanceNode, below left=1cm and 0.5cm of Fold1] (u0) {$u_{i-1}$};
+			\node[instanceNode, below left=1cm and 0.5cm of Fold2] (u1) {$u_{i}$};
+
+			\node[accumulatorNode, right=of Fold2, yshift=0.5cm] (U2) {$\mathsf{U}_{i+1}$};
+			\node[draw=none, right=of Fold2, yshift=-0.5cm, font=\footnotesize] (h2) {$h_{i+1}$};
+
+
+			% step i inputs
+			\draw[arrow] (U0.east) -- ([yshift=0.5cm]Fold1.west);
+			\draw[arrow] (h0.east) -- ([yshift=-0.5cm]Fold1.west);
+			\draw[arrow] (u0) -- (Fold1.225);
+
+			% step i -> step i+1
+			\draw[arrow] ([yshift=0.5cm]Fold1.east) -- node[midway, above, font=\footnotesize] {$\mathsf{U}_{i}$} ([yshift=0.5cm]Fold2.west);
+			\draw[arrow] ([yshift=-0.5cm]Fold1.east) -- node[midway, above, font=\footnotesize] {$h_{i}$} ([yshift=-0.5cm]Fold2.west);
+
+			% step i+1 inputs
+			\draw[arrow] (u1) -- (Fold2.225);
+
+			% step i+1 outputs
+			\draw[arrow] ([yshift=0.5cm]Fold2.east) -- (U2.west);
+			\draw[arrow] ([yshift=-0.5cm]Fold2.east) -- (h2.west);
 
 	\end{tikzpicture}
-	\caption{Folding scheme \cite{Nova}}
+	\caption{IVC instantiation with folding scheme \cite{Nova, HyperNova}}
+	\label{fig:ivc-folding}
 \end{tikzFigure}
 
 \subsection{New generation of ZkEVMs}
