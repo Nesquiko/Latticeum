@@ -1,0 +1,251 @@
+\chapter{Solution Design}\label{chap:design}
+
+This chapter details the architectural and cryptographic design of the
+proposed lattice-based RISC-V ZkVM. It is structured to first
+establish the system's high-level architecture \ref{sec:arch}, describing the
+lifecycle of a proof from high-level Rust code to a finalized succinct
+argument. Following this, the specific cryptographic primitives are defined
+\ref{sec:crypto}, selecting the LatticeFold folding scheme \cite{LatticeFold}
+as the core recursion engine, while identifying Greyhound \cite{Greyhound} as
+the necessary wrapping SNARK for final verification. The design then proceeds
+to the construction of the RISC-V step circuit $F$ \ref{sec:riscv_circuit},
+detailing how 32 bit integer arithmetic is arithmetized into the small fields
+required by lattice schemes using CCS \cite{CCS}. Finally, the recursive
+composition mechanism $F'$ is defined \ref{sec:recursive_mechanism}, outlining
+how IVC \cite{ValiantIVC} is enforced to prove the integrity of long running computations.
+
+\section{High level Architecture}\label{sec:arch}
+
+The proposed system architecture implements a post-quantum ZkVM capable of
+proving the correct execution of arbitrary RISC-V programs. The design
+leverages IVC to break down the execution of a program into individual steps.
+To instantiate IVC a folding scheme LatticeFold \cite{LatticeFold} is used,
+which recursively folds steps into a single, constant-sized cryptographic object.
+
+The architecture is designed to support the 32-bit RISC-V instruction set
+(specifically the \texttt{rv32imac} extensions). Due to the proof-of-concept
+nature of this implementation, a subset of opcodes is supported, sufficient to
+test the viability of a lattice-based ZkVM.
+
+\subsection{The ZkVM IVC}
+
+The lifecycle of a proof within this system proceeds through a pipeline of
+transformation, execution, and cryptographic accumulation, as illustrated in
+Figure \ref{fig:execution_flow}. This workflow is defined by the following stages:
+
+
+\begin{enumerate}
+    \item \textbf{Compilation and loading:} A program written in a high-level
+		language (e.g., Rust) is compiled into a standard RISC-V ELF binary.
+		This binary is loaded into the ZkVM emulator.
+    
+    \item \textbf{Execution and trace generation:} The emulator executes the
+		program one instruction at a time. For every step $i$, the system
+		captures a comprehensive \textit{Execution Trace}. This trace
+		encapsulates the exact state transition of the machine.
+		Mathematically, the trace for step $i$, denoted as $\mathcal{T}_i$, contains:
+    \begin{itemize}
+        \item \textbf{Cycle count:} The global step counter.
+        \item \textbf{Input state:} The Program Counter ($PC$) and the state of all 32 general-purpose registers before execution.
+        \item \textbf{Output state:} The $PC$ and register states after execution.
+        \item \textbf{Decoded instruction:} The raw binary instruction broken down into its opcode, operands, and immediate values.
+        \item \textbf{Side effects:} A set of flags indicating arithmetic overflows, branching behavior (jump targets), and memory operations (address, value, and read/write flags).
+    \end{itemize}
+
+    \item \textbf{Arithmetization and witness generation:} The raw data from
+		$\mathcal{T}_i$ is transformed into a vector of lattice field elements
+		$\mathbb{Z}_q$. This vector serves as the \textit{witness} for the
+		constraint system. The logic verifying the transition from input state
+		to output state based on the decoded instruction defines the
+		\textbf{Step circuit}, denoted as $F$.
+
+    \item \textbf{Folding (the augmented circuit $F'$):} To achieve
+		IVC, the step circuit $F$ is embedded inside a larger augmented
+		circuit, $F'$. This circuit is responsible for the recursive logic.
+		For a step $i$, $F'$ performs the following operations:
+    \begin{enumerate}
+        \item \textbf{IVC integrity checks:} It recalculates the commitment to
+			the previous step's data, ensuring the chain of computation is
+			unbroken. This follows the IVC patterns established in Nova
+			\cite{Nova} and HyperNova \cite{HyperNova}.
+        \item \textbf{Folding verification:} It constrains the LatticeFold
+			verifier. This enforces that the folding of step $i-1$ into the
+			running accumulator was performed correctly.
+        \item \textbf{Step verification:} It enforces the constraints of $F$,
+			guaranteeing that the RISC-V instruction at step $i$ was executed
+			correctly according to the ISA.
+    \end{enumerate}
+
+    \item \textbf{Memory logging:} If the instruction execution triggers a
+		memory operation (load or store), this side effect is captured and
+		appended to a global vector of memory operations. Unlike register
+		transitions, memory consistency is not fully proven within $F'$;
+		instead, it is verified via a deferred memory consistency check after
+		the execution concludes.
+
+	\item \textbf{Final wrapping:} Once the program halts, the system holds a
+		single folded instance-witness pair (the accumulator). To produce a
+		succinct proof suitable for blockchain verification, this large
+		lattice-based artifact is wrapped in a final SNARK as depicted in Figure \ref{fig:snark_wrap}. 
+		This wrapper utilizes the SuperSpartan IOP \cite{HyperNova} to prove the validity of the folded
+		CCS instance, combined with the Greyhound \cite{Greyhound} PCS to
+		ensure post-quantum security and succinct verification.
+\end{enumerate}
+
+\begin{tikzFigure}
+    \begin{tikzpicture}
+		\node[dataNode] (rust) {Rust source};
+		\node[processNode, right=0.8cm of rust] (compiler) {Compiler\\(LLVM/GCC)};
+		\node[dataNode, right=0.8cm of compiler] (elf) {RISC-V\\binary};
+
+		\draw[arrow] (rust) -- (compiler);
+		\draw[arrow] (compiler) -- (elf);
+
+		\node[processNode, below=1cm of elf] (vm) {ZkVM\\emulator};
+		\draw[arrow] (elf) -- (vm);
+
+		\node[dataNode, below=1cm of vm] (witness) {Witness $w_i$\\($\mathbb{Z}_q$ Matrix)};
+		\draw[arrow] (vm) -- node[midway, right] {Exec instruction $i$} (witness);
+
+		\node[processNode, below left=1.5cm and 0.5cm of witness] (stepCircuit) {Step circuit $F$\\ (RISC-V logic)};
+		\node[processNode, below=0.5cm of stepCircuit] (ivcChainCheck) {IVC chain\\check};
+		\node[processNode, below=0.5cm of ivcChainCheck] (foldVerifier) {LatticeFold\\verifier};
+
+		\node[augmentedFrame, fit=(stepCircuit) (foldVerifier)] (augCircuit) {};
+		\node[anchor=south east] at (augCircuit.north east) {\textbf{Augmented circuit $F'$}};
+
+		\node[dataNode, left=1.5cm of augCircuit, yshift=-1.5cm] (accPrev) {Accumulator\\$i-1$};
+		\node[dataNode, left=1.5cm of augCircuit] (ivcProofPrev) {Folding proof\\of step $i-1$};
+		\node[dataNode, left=1.5cm of augCircuit, yshift=1.5cm] (ivcHPrev) {IVC commitment $h$\\to step $i-1$};
+
+		\node[dataNode, right=1.5cm of augCircuit, yshift=-1.5cm] (accNext) {Accumulator\\$i$};
+		\node[dataNode, right=1.5cm of augCircuit] (ivcProofNext) {Folding proof\\of step $i$};
+		\node[dataNode, right=1.5cm of augCircuit, yshift=1.5cm] (ivcHNext) {IVC commitment $h$\\to step $i$};
+
+		\draw[arrow] (witness.south) -- (stepCircuit.east);
+		\draw[arrow] (accPrev.east) -- (accPrev -| augCircuit.west);
+		\draw[arrow] (ivcProofPrev.east) -- (ivcProofPrev -| augCircuit.west);
+		\draw[arrow] (ivcHPrev.east) -- (ivcHPrev -| augCircuit.west);
+
+		\draw[arrow] (augCircuit.east) -- (accNext.west);
+		\draw[arrow] (augCircuit.east) -- (ivcProofNext.west);
+		\draw[arrow] (augCircuit.east) -- (ivcHNext.west);
+
+		\node[dataNode, below=1cm of augCircuit, xshift=0.5cm] (memLog) {Memory\\operations log};
+		\draw[dashedArrow] (stepCircuit.west) -- ++(-1.5,-1) -- ++(0,-1.5) -- (memLog.west) node[midway, left] {\scriptsize Memory logs};
+
+		\node[left=0.8cm of ivcProofPrev] (dotsStart) {\Large$\dots$};
+		\draw[dashedArrow] (dotsStart) -- (accPrev);
+		\draw[dashedArrow] (dotsStart) -- (ivcHPrev);
+		\draw[dashedArrow] (dotsStart) -- (ivcProofPrev);
+
+		\node[right=0.8cm of ivcProofNext] (dotsEnd) {\Large$\dots$};
+		\draw[dashedArrow] (accNext) -- (dotsEnd);
+		\draw[dashedArrow] (ivcHNext) -- (dotsEnd);
+		\draw[dashedArrow] (ivcProofNext) -- (dotsEnd);
+    \end{tikzpicture}
+
+	\caption{Execution flow of the lattice-based RISC-V ZkVM IVC instantiation.}
+	\label{fig:execution_flow}
+\end{tikzFigure}
+
+\begin{tikzFigure}
+    \begin{tikzpicture}
+		\node[wrapperNode] (wrapper) {Wrapper SNARK\\(SuperSpartan + Greyhound)};
+		\node[dataNode, above=0.5cm of wrapper, xshift=-2cm] (accNext) {Accumulator\\$final$};
+		\node[dataNode, above=0.5cm of wrapper, xshift=2cm] (memLog) {Memory\\operations log};
+
+		\node[dataNode, right=1.5cm of wrapper] (proof) {Final proof\\$\pi_{final}$};
+		\draw[arrow] (memLog) -- (wrapper);
+		\draw[arrow] (accNext.south) -- (wrapper.north);
+		\draw[arrow] (wrapper) -- (proof);
+    \end{tikzpicture}
+
+    \caption{Wrapping last folding step into SNARK.}
+    \label{fig:snark_wrap}
+\end{tikzFigure}
+\pagebreak
+
+\subsection{Prover and Verifier Roles}
+
+The system distinguishes between the computational roles of the Prover and the
+Verifier, particularly regarding the recursive steps versus the final verification.
+
+\subsubsection{The Prover}
+
+The Prover is responsible for the entire computational workload of the VM. Its duties include:
+
+\begin{itemize}
+    \item \textbf{Witness generation:} Running the RISC-V emulator to produce execution traces.
+    \item \textbf{Folding:} Computing the non-interactive folding steps to compress the current step's witness into the running accumulator.
+    \item \textbf{Proof generation:} Generating the final wrapping proof once the recursion is complete.
+\end{itemize}
+
+\subsubsection{The Verifier}
+
+The verification logic exists at two distinct levels:
+
+\begin{enumerate}
+    \item \textbf{The circuit verifier (in circuit):} This is the logic
+		embedded within $F'$ (the augmented circuit). It does not run on an
+		external machine but is simulated by the Prover to generate the proof.
+		It verifies the mathematical correctness of the folding mechanism at every step.
+    \item \textbf{The final verifier:} This is the external entity (e.g., an
+		Ethereum smart contract). It receives the final proof. Its role is to
+		verify the succinct proof of the final folded instance.
+\end{enumerate}
+
+% 3.2 Cryptographic Foundations (The Primitives):
+% 	- Why this section is here: You need to define the rules of the game before playing it.
+% 	- LatticeFold Instantiation:
+% 		- Specify that you are using Module-SIS commitments.
+% 		- Define the relations used (likely CCS - Customizable Constraint Systems). Explain why CCS is better for RISC-V than R1CS (better for high-degree gates like bit-decomposition).
+% 		- Discuss the security assumption changes (e.g., how LatticeFold+ improves on the witness norm growth problem compared to basic LatticeFold).
+% 	- The Wrapping SNARK (Final Proof):
+% 		- Goal: Compressing the final folded accumulator.
+% 		- Selection Greyhound.
+% \section{Cryptographic Primitives}\label{sec:crypto}
+%     \subsection{Primary Folding Scheme: LatticeFold}
+%         % Discuss using CCS relation
+%         % Discuss security assumptions (SIS, LWE)
+%     \subsection{The Wrapping SNARK: Greyhound}
+        % Justify choice: Post-quantum, lattice-compatibility, succinct verification.
+% \subsection{The Final Wrapping Statement}
+% The Wrapper SNARK proves a relation between the final folded instance $U_{\text{final}}$ (public) and the final folded witness $W_{\text{final}}$ (private). Specifically, the SNARK verifies:
+% \begin{enumerate}
+%     \item \textbf{Consistency:} The private witness $W_{\text{final}}$ corresponds to the public commitment contained in $U_{\text{final}}$.
+%     \[
+%     \text{Commit}(W_{\text{final}}) = U_{\text{final}}.\text{comm}_W
+%     \]
+%     
+%     \item \textbf{Satisfiability:} The witness $W_{\text{final}}$ satisfies the Relaxed CCS relation parameterized by the scalar $u$ and error term $E$ found in $U_{\text{final}}$:
+%     \[
+%     \sum_{i=1}^{q} c_i \cdot \bigcirc_{j \in S_i} (M_j \cdot z) = u \cdot \sum_{j=1}^{t} M_j \cdot z + E_{\text{final}}
+%     \]
+%     Where $z = (W_{\text{final}}, 1, x)$.
+% \end{enumerate}
+% This separation ensures that the on-chain verifier only needs to handle the small object $U_{\text{final}}$, while the computational correctness of the witness is guaranteed cryptographically.
+
+% 3.3 The RISC-V Virtual Machine (\(F\)):
+% 	- Execution Trace Generation: How binary instructions are turned into a matrix of values.
+% 	- Arithmetization (CCS):
+% 		- How to represent 32-bit/64-bit logic in the specific lattice field (likely a small field like \(\mathbb{Z}_q\)).
+% 		- Decomposition strategies for arithmetic operations.
+% 	- Memory Consistency:
+% 		- How to prove that read(addr) returns the last write(addr). (Usually done via permutation arguments or lookup arguments adapted for lattices).
+% \section{Designing the RISC-V Circuit ($F$)}\label{sec:riscv_circuit}
+%     \subsection{Execution Trace Generation}
+%         % From Binary to Matrix
+%     \subsection{Arithmetization using CCS}
+%         % Efficient encoding of opcodes and registers in Lattice fields
+%     \subsection{Memory Consistency Checks}
+        % Permutation arguments for RAM
+
+% 3.4 The Recursive Mechanism (\(F'\)):
+% 	- IVC Integrity: How the current step enforces that the previous step was valid.
+% 	- The NIFS Verifier Gadget: Describe the circuit that runs inside the SNARK that verifies the lattice folding math.
+% 	- Error Handling: What happens if the program crashes or halts?
+% \section{Recursive Composition ($F'$)}\label{sec:recursive_mechanism}
+%     \subsection{Enforcing IVC Integrity}
+%     \subsection{The On-Circuit NIFS Verifier}
+    % How the folding is checked inside the circuit

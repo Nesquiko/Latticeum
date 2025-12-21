@@ -71,3 +71,62 @@
 		\vspace{0.5cm}
 	\end{figure}
 }
+
+\tikzset{
+    % Global Font and Arrow Tip
+    every picture/.style={font=\sffamily\footnotesize, >=Stealth},
+    % Process/Function Nodes (Blue)
+    processNode/.style={
+        rectangle, 
+        rounded corners=3pt, 
+        draw=blue!80!black, 
+        thick, 
+        fill=blue!5, 
+        minimum width=2.5cm, 
+        minimum height=1cm, 
+        align=center
+    },
+    % Data/State Nodes (Green)
+    dataNode/.style={
+        rectangle, 
+        draw=green!60!black, 
+        thick, 
+        fill=green!5, 
+        minimum height=0.8cm, 
+        minimum width=2cm,
+        align=center,
+    },
+    % The Wrapping SNARK (Distinct Style - Purple)
+    wrapperNode/.style={
+        rectangle, 
+        rounded corners=3pt, 
+        draw=purple!80!black, 
+        very thick, 
+        fill=purple!5, 
+        minimum width=4cm, 
+        minimum height=1.2cm, 
+        align=center
+    },
+    % Augmented Circuit Container (Dashed Box)
+    augmentedFrame/.style={
+        draw=black!60, 
+        dashed, 
+        thick, 
+        rounded corners=5pt, 
+        inner sep=12pt
+    },
+    % Connector lines
+    arrow/.style={
+        ->, 
+        thick, 
+        draw=black!70,
+        rounded corners=5pt
+    },
+    dashedArrow/.style={
+        ->, 
+        thick, 
+        dashed,
+        draw=black!70,
+        rounded corners=5pt
+    }
+}
