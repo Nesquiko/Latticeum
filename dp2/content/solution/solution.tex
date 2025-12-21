@@ -195,36 +195,80 @@ The verification logic exists at two distinct levels:
 		verify the succinct proof of the final folded instance.
 \end{enumerate}
 
-% 3.2 Cryptographic Foundations (The Primitives):
-% 	- Why this section is here: You need to define the rules of the game before playing it.
-% 	- LatticeFold Instantiation:
-% 		- Specify that you are using Module-SIS commitments.
-% 		- Define the relations used (likely CCS - Customizable Constraint Systems). Explain why CCS is better for RISC-V than R1CS (better for high-degree gates like bit-decomposition).
-% 		- Discuss the security assumption changes (e.g., how LatticeFold+ improves on the witness norm growth problem compared to basic LatticeFold).
-% 	- The Wrapping SNARK (Final Proof):
-% 		- Goal: Compressing the final folded accumulator.
-% 		- Selection Greyhound.
-% \section{Cryptographic Primitives}\label{sec:crypto}
-%     \subsection{Primary Folding Scheme: LatticeFold}
-%         % Discuss using CCS relation
-%         % Discuss security assumptions (SIS, LWE)
-%     \subsection{The Wrapping SNARK: Greyhound}
-        % Justify choice: Post-quantum, lattice-compatibility, succinct verification.
-% \subsection{The Final Wrapping Statement}
-% The Wrapper SNARK proves a relation between the final folded instance $U_{\text{final}}$ (public) and the final folded witness $W_{\text{final}}$ (private). Specifically, the SNARK verifies:
-% \begin{enumerate}
-%     \item \textbf{Consistency:} The private witness $W_{\text{final}}$ corresponds to the public commitment contained in $U_{\text{final}}$.
-%     \[
-%     \text{Commit}(W_{\text{final}}) = U_{\text{final}}.\text{comm}_W
-%     \]
-%     
-%     \item \textbf{Satisfiability:} The witness $W_{\text{final}}$ satisfies the Relaxed CCS relation parameterized by the scalar $u$ and error term $E$ found in $U_{\text{final}}$:
-%     \[
-%     \sum_{i=1}^{q} c_i \cdot \bigcirc_{j \in S_i} (M_j \cdot z) = u \cdot \sum_{j=1}^{t} M_j \cdot z + E_{\text{final}}
-%     \]
-%     Where $z = (W_{\text{final}}, 1, x)$.
-% \end{enumerate}
-% This separation ensures that the on-chain verifier only needs to handle the small object $U_{\text{final}}$, while the computational correctness of the witness is guaranteed cryptographically.
+\section{Cryptographic Primitives}\label{sec:crypto}
+
+The design of this ZkVM represents a synthesis of several breakthroughs in
+zero-knowledge cryptography. Rather than relying on a monolithic proof system,
+the solution composes these primitives to instantiate IVC using a folding
+scheme. This layered approach allows the system to inherit the efficiency of
+folding for the recursive steps while maintaining the post-quantum security
+guarantees provided by lattice-based assumptions. This section defines the
+specific cryptographic building blocks selected for the implementation.
+
+\subsection{Incrementally Verifiable Computation (IVC)}
+The foundational theoretical model for this ZkVM is IVC, introduced by Valiant
+\cite{ValiantIVC}. IVC enables a single proof to attest to the correct
+execution of a long-running computation $y = F^{(n)}(x)$ by recursively
+proving that the state at step $i$ is valid and that a valid proof exists for
+step $i-1$. RISC-V execution traces of unbounded length perfectly align with
+this model.
+
+\subsection{Folding schemes and Nova}
+To make IVC practical, this work utilizes the concept of \textit{Folding
+schemes} as introduced in the Nova system \cite{Nova}. Unlike traditional
+recursion, where a circuit must fully verify a SNARK at every step, folding
+allows the prover to compress two instances of the same relation (one
+representing the current step and one representing the accumulator) into a
+single instance. The cryptographic cost of folding is negligible compared to
+SNARK verification.
+
+\subsection{HyperNova and Customizable Constraint Systems (CCS)}
+While Nova relies on R1CS (Rank-1 Constraint Systems), describing complex VM
+instruction sets in R1CS often leads to inefficient circuits with many
+auxiliary variables. To address this, the RISC-V ISA and IVC constraints are
+represented as Customizable Constraint System (CCS) \cite{CCS}
+CCS generalizes R1CS, allowing for high-degree gates without overhead. This is
+advantageous for representing IVC constraints. These check commitments of previous
+steps and parts of it's preimage, which can be of high-degree.
+
+\subsection{Lattice-based hardness assumptions}
+To achieve post-quantum security, the cryptographic primitives in this work
+rely on hardness assumptions over lattices rather than the Discrete Logarithm
+Problem (DLP) used in Nova or HyperNova. The security relies on the hardness
+of the Shortest Integer Solution (SIS) and Module-SIS problems. These problems
+remain hard even in the presence of quantum computers \cite{AjtaiLattices,
+Ajtai1998, LatticeTutorial, LatticesInZKP}.
+
+\subsection{LatticeFold}
+LatticeFold \cite{LatticeFold} can be though of as a HyperNova \cite{HyperNova},
+but with post-quantum guarantees. It utilizes the Module-SIS \cite{MSIS}
+problem to construct Ajtai vector commitment scheme. Unlike DLP-based folding,
+the challenge in LatticeFold is the growth of the witness norm during folding
+steps. To maintain the binding property of the commitments, the protocol
+incorporates a sum-check range proof to ensure the folded witness remains
+within a small, predefined norm bound. This allows the scheme to operate
+over small prime fields while providing $O(\log n)$ proof size and achieving
+transparency, as no trusted setup is required.
+
+\subsection{The wrapping SNARK SuperSpartan + Greyhound}
+While LatticeFold allows for efficient recursion, the final artifact is a
+large lattice-based accumulator that is expensive to verify directly on-chain.
+To compress this into a succinct proof, a wrapping SNARK is employed.
+This wrapper is constructed by combining the \textbf{SuperSpartan} \cite{HyperNova}
+IOP, which verifies the satisfiability of the CCS relation, with
+\textbf{Greyhound} \cite{Greyhound}, a lattice-based PCS with polylogarithmic
+verification complexity.
+
+\subsection{Future optimization - LatticeFold+}
+It is noted that a newer iteration of the folding scheme, LatticeFold+
+\cite{LatticeFoldPlus}, has recently been proposed. LatticeFold+ introduces
+purely algebraic range proofs and double commitments, which reduce the prover
+overhead by eliminating the need for bit decomposition during witness norm
+management. However, at the time of system design, the available libraries for
+LatticeFold+ did not support CCS constraints. Thus, this work utilizes the
+standard LatticeFold protocol. The architecture is modular, allowing for the
+backend to be upgraded to LatticeFold+ in future iterations to further
+optimize proving time.
 
 % 3.3 The RISC-V Virtual Machine (\(F\)):
 % 	- Execution Trace Generation: How binary instructions are turned into a matrix of values.
