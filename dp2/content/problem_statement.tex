@@ -1,0 +1,84 @@
+\chapter{Problem statement and research objectives}\label{chap:problem_statement}
+
+Based on the analysis of the current state of ZkVMs and the theoretical
+properties of lattice-based cryptography, this chapter defines the specific
+problems addressed by this thesis. It outlines the research gap regarding
+post-quantum secure ZkVMs and establishes the specific scientific questions
+and objectives that guide the subsequent solution design and implementation.
+
+\section{Problem statement}
+
+The integration of ZKPs into blockchain architectures, particularly Ethereum,
+offers a path toward massive scalability. As detailed in the previous chapter,
+the industry standard has converged on ZkVMs that execute instruction sets
+like RISC-V. These systems allow developers to write programs in more familiar
+languages (such as Rust or C++) and prove their correct execution.
+
+However, the majority of currently deployed ZkEVMs and ZkVMs rely on
+cryptographic hardness assumptions, specifically the Discrete Logarithm Problem
+in elliptic curve groups, that are vulnerable to attacks by sufficiently
+powerful quantum computers. While hash-based STARKs offer a post-quantum
+alternative, they often incur significant costs in terms of proof size or
+verification complexity compared to SNARKs based on specific algebraic structures.
+
+Lattice-based cryptography presents a promising third path. It offers
+post-quantum security based on the hardness of the Shortest Vector Problem
+and the Module Short Integer Solution \cite{AjtaiLattices, LatticeTutorial}.
+Furthermore, lattice-based commitment schemes possess additive homomorphic
+properties that make them theoretically suitable for highly efficient folding
+schemes, such as LatticeFold \cite{LatticeFold}.
+
+Despite these theoretical advantages, a significant gap exists in the
+literature and open-source ecosystem, \textbf{there is currently no practical
+implementation of a general-purpose RISC-V ZkVM built entirely upon lattice-based primitives.}
+
+The problem addressed by this thesis is the lack of a concrete instantiation
+of a RISC-V ZkVM that leverages lattice-based folding schemes. It remains
+unproven whether the theoretical efficiency of lattice folding translates to
+practical performance for complex computations like a VM. Without such an
+implementation, it is impossible to accurately compare the performance
+trade-offs between lattice-based approaches and the elliptic curve architectures.
+
+\section{Research objectives}
+
+The primary objective of this work is to design and implement a functional
+prototype of a RISC-V ZkVM using lattice-based cryptography, specifically
+leveraging the LatticeFold protocol for instantiating Incrementally Verifiable
+Computation of a RISC-V VM. This implementation aims to serve as a
+proof-of-concept for post-quantum execution environment for proving
+Ethereum blocks. The specific objectives are defined as follows:
+
+\begin{itemize}
+    \item \textbf{Architectural Design: } Design a system architecture for a
+		ZkVM that maps the RISC-V instruction set architecture to the
+		constraints of the LatticeFold folding scheme. This involves defining
+		the arithmetization of 32-bit CPU logic into a Customizable Constraint
+		Systems (CCS) \cite{CCS} structure, suitable to be used by LatticeFold.
+    \item \textbf{Implementation:} Implement the proposed design using the
+		Rust programming language, integrating with the available LatticeFold
+		libraries.
+    \item \textbf{Comparative evaluation:} Evaluate the performance of the
+		implemented lattice-based ZkVM. The goal is to benchmark the system
+		against establishing metrics for proving time and memory usage,
+		comparing these results with theoretical expectations and, where
+		applicable, existing non-post-quantum baselines.
+\end{itemize}
+
+\section{Scientific Questions}
+
+To achieve the stated objectives, this thesis seeks to answer the following
+scientific questions:
+
+\begin{enumerate}
+    \item \textbf{Feasibility of lattice-based instantiation:} \textit{Is it
+		feasible to instantiate a full RISC-V execution environment using
+		CCS compatible with the LatticeFold protocol?}
+    \item \textbf{Performance trade-offs:} \textit{How does the performance of
+		a lattice-based folding scheme compare to traditional
+		elliptic-curve-based folding schemes when applied to general-purpose
+		VM execution?}
+    \item \textbf{Suitability for long-running computations:} \textit{Does the
+		noise growth inherent in lattice-based cryptography hinder the ability
+		to prove long execution traces, such as those required for Ethereum block validation?}
+\end{enumerate}
+
