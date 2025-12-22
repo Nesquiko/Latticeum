@@ -1,0 +1,120 @@
+\section{IVC ($F'$)}\label{sec:ivc}
+
+To achieve incrementally verifiable computation, the step circuit $F$ is
+embedded within a larger augmented circuit, denoted as $F'$. This circuit is
+responsible for maintaining the integrity of the proof chain and verifying the
+correct folding of previous steps \cite{Nova}.
+
+\subsection{Enforcing IVC integrity}
+
+The validity of the recursion relies on linking the current step $i$ to the
+authenticated history of the computation terminating at step $i-1$. This
+linkage is enforced through the hash commitment chain. The augmented circuit
+$F'$ accepts a public input $h_{i-1}$, which is a Poseidon2 \cite{Poseidon2}
+hash commitment to the state of the IVC scheme after the previous step.
+The private witness supplied by the prover contains preimage of the $h_{i-1}$.
+The preimage consists of:
+
+\begin{enumerate}
+	\item \textbf{Previous step counter} $i-1$
+	\item \textbf{Initial state commitment} $z_{0_\text{comm}}$
+	\item \textbf{Previous state commitment} $z_{i-1\_\text{comm}}$
+	\item \textbf{Previous accumulator commitment} $U_{i-1\_\text{comm}}$.
+\end{enumerate}
+
+Inside the circuit, the integrity check is performed by first recomputing
+the Poseidon2 step commitment $h'_{i-1}$ from preimage elements from private
+witness. Then after recomputing it, a constraint asserts that the recomputed
+candidate $h'_{i-1}$ is equal to the provided public input $h_{i-1}$.
+
+This mechanism ensures that the prover cannot forge a history or substitute
+arbitrary accumulators. They must possess the valid preimage data
+corresponding to the public commitment.
+
+\subsubsection*{Secure all the way down}
+
+The IVC construction in Nova \cite{Nova} enforces a security model with
+only a "one layered step commitment" $h$. However, in the context of a ZkVM, the
+state tuple $z_i$ does not comprise of only raw values, but a of more cryptographic
+commitments to a complex machine state. If the internal structure of $z_i$'s
+preimage is not constrained within the circuit, a malicious prover could
+substitute the state commitment $z_{i-1\_\text{comm}}$ for an arbitrary value
+that is disconnected from the actual ZkVM execution history.
+
+To prevent such attacks and ensure the integrity of the virtual machine state
+transitions, the augmented circuit $F'$ must enforce constraints on the
+specific components of the $z_i$ preimage:
+
+\begin{enumerate}
+    \item \textbf{Code integrity:} The preimage contains the Merkle root of
+		the program's binary code. This root enables the verification of
+		instruction decoding via Merkle opening proofs. Since the program code
+		is static and immutable, this root must not change during execution.
+		To enforce this, the circuit accepts the expected code Merkle root as
+		a public input (supplied by the verifier). The circuit constrains that
+		the code root contained within the preimage of $z_{i-1\_\text{comm}}$
+		matches this global input, preventing the prover from executing
+		instructions from a different program.
+
+    \item \textbf{Program counter:} The program entry point and current
+		execution pointer are tracked. The circuit logic $F$ determines the
+		next $pc$ based on the current instruction (e.g., sequential execution
+		or branching). The circuit constrains that the $pc$ component in the
+		preimage of $z_{i\_\text{comm}}$ matches this calculated value.
+
+    \item \textbf{Memory pages:} The VM memory is represented by a Merkle
+		root. When a store instruction is executed, the circuit requires a
+		Merkle opening proof for the target page against the root in
+		$z_{i-1\_\text{comm}}$. It then calculates the new root resulting from
+		the memory update and constrains that this new root matches the memory
+		component in the preimage of $z_{i\_\text{comm}}$.
+
+    \item \textbf{Register state:} The state includes a Poseidon2 commitment
+		to the 32 general purpose registers. The values of these registers
+		before and after the instruction are provided as part of the private
+		witness for the step circuit $F$. The circuit recalculates the
+		commitment to the output register values and asserts equality with the
+		register component of the $z_{i\_\text{comm}}$ preimage.
+
+    \item \textbf{Memory operations log:} The log represents a history of all
+		memory operations. The commitment to this log must be updated
+		incrementally. If a memory operation occurs during step $i$, the
+		circuit computes the new log commitment by hashing the previous
+		commitment (from $z_{i-1\_\text{comm}}$) together with the details of
+		the current operation. This result is constrained to match the log
+		commitment in $z_{i\_\text{comm}}$.
+\end{enumerate}
+
+
+\subsection{The on circuit NIFS verifier}
+
+Following the integrity check, $F'$ executes the verification logic for the
+LatticeFold Non Interactive Folding Scheme (NIFS). This component effectively
+verifies the mathematical correctness of the folding process without re
+executing the prior computation.
+
+The logic branches based on the step index:
+
+\begin{itemize}
+    \item \textbf{Base case ($i=0$):} The circuit verifies that the step
+		counter is zero and that the accumulator is in its initial empty
+		state. No folding proof verification occurs.
+    \item \textbf{Recursive case ($i>0$):} The circuit accepts the folding
+		proof $\pi_{i-1}$ as part of the witness. It then executes the
+		LatticeFold verifier with the previous accumulator $U_{i-1}$ and proof
+		$\pi_{i-1}$, both taken from the private witness.
+\end{itemize}
+
+Upon successful verification of the folding, the circuit executes the RISC-V
+step circuit $F$, as detailed in Section \ref{sec:riscv_circuit}.
+
+\subsection{Output generation}
+
+The execution of $F'$ concludes by generating the artifacts required for the
+subsequent step. This includes the new folded accumulator instance and the new
+folding proof. Finally, the circuit computes the new IVC commitment $h_i$ by
+hashing the updated step counter, the initial state commitment
+$z_{0\_\text{comm}}$, the new state commitment $z_{i\_\text{comm}}$, and the
+new accumulator commitment $U_{i\_\text{comm}}$ using Poseidon2. This
+$h_i$ becomes the public input for the next iteration of the recursive loop.
+

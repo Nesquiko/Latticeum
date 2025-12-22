@@ -47,16 +47,16 @@ fn main() {
         .with_span_events(FmtSpan::CLOSE)
         .init();
 
-    let program = PathBuf::from(
-        "/home/nesquiko/fiit/dp/latticeum/target/riscv32imac-unknown-none-elf/release/fibonacci",
-    );
+    let program_path =
+        "/home/nesquiko/fiit/dp/latticeum/target/riscv32imac-unknown-none-elf/release/fibonacci";
+    let program = PathBuf::from(program_path);
 
-    tracing::info!("proving program '{}'", program.display().to_string());
+    tracing::info!("proving program '{}'", program_path);
 
     let vm = new_vm_1mb();
     let mut vm = match vm.load_elf(program) {
         Ok(vm) => vm,
-        Err(e) => panic!("failed to load `fibonacci` elf, {}", e),
+        Err(e) => panic!("failed to load '{}' elf, {}", program_path, e),
     };
 
     let start_zkvm_run = std::time::Instant::now();

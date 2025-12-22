@@ -674,7 +674,7 @@ impl<'a> CCSBuilder<'a> {
     /// - If is_branching = 1 (branch taken), then rs1 - rs2 != 0 and constraint becomes 0 * (...) = 0
     ///
     /// Since the Goldilocks field is used and it is proving a 32-bit machine,
-    /// the rs1 - rs2 = 0 can be directly constrained.
+    /// the rs1 - rs2 = 0 can be directly constrained without overflow.
     fn bne_constraint(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
@@ -684,7 +684,7 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix B: selects (1 - z[IS_BRANCHING])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[BNE_CONSTR].push((Ring::one(), 0)); // constant 1 is at() index 0() in z-vector
+        m_b.coeffs[BNE_CONSTR].push((Ring::one(), self.layout.const_1_idx));
         m_b.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.layout.is_branching_idx));
 
         // Matrix C: selects (z[VAL_RS1] - z[VAL_RS2])
