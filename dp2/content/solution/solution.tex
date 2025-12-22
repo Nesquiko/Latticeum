@@ -22,7 +22,7 @@ leverages IVC to break down the execution of a program into individual steps.
 To instantiate IVC a folding scheme LatticeFold \cite{LatticeFold} is used,
 which recursively folds steps into a single, constant-sized cryptographic object.
 
-The architecture is designed to support the 32-bit RISC-V instruction set
+The architecture is designed to support the 32 bit RISC-V instruction set
 (specifically the \texttt{rv32imac} extensions). Due to the proof-of-concept
 nature of this implementation, a subset of opcodes is supported, sufficient to
 test the viability of a lattice-based ZkVM.
@@ -270,20 +270,95 @@ standard LatticeFold protocol. The architecture is modular, allowing for the
 backend to be upgraded to LatticeFold+ in future iterations to further
 optimize proving time.
 
-% 3.3 The RISC-V Virtual Machine (\(F\)):
-% 	- Execution Trace Generation: How binary instructions are turned into a matrix of values.
-% 	- Arithmetization (CCS):
-% 		- How to represent 32-bit/64-bit logic in the specific lattice field (likely a small field like \(\mathbb{Z}_q\)).
-% 		- Decomposition strategies for arithmetic operations.
-% 	- Memory Consistency:
-% 		- How to prove that read(addr) returns the last write(addr). (Usually done via permutation arguments or lookup arguments adapted for lattices).
-% \section{Designing the RISC-V Circuit ($F$)}\label{sec:riscv_circuit}
-%     \subsection{Execution Trace Generation}
-%         % From Binary to Matrix
-%     \subsection{Arithmetization using CCS}
-%         % Efficient encoding of opcodes and registers in Lattice fields
-%     \subsection{Memory Consistency Checks}
-        % Permutation arguments for RAM
+\section{Designing the RISC-V circuit ($F$)}\label{sec:riscv_circuit}
+
+This section details the construction of the step circuit $F$, which encodes
+the transition function of the RISC-V VM according to RISC-V ISA \cite{RISCV}.
+The design targets a 32 bit architecture, with 1MB of RAM.
+
+\subsection{Field representations and arithmetization}
+
+The target architecture is a 32 bit RISC-V machine. To represent the state of
+this machine within the cryptographic proof system, the Goldilocks field is
+used. The Goldilocks prime is defined as $p = 2^{64} - 2^{32} + 1$. Since $p >
+2^{32}$, a single field element can losslessly represent any 32 bit register
+value or memory address without overflow during standard representation.
+
+The LatticeFold protocol operates over cyclotomic rings. A Goldilocks field
+element is mapped into the ring $R_q$ using a Number Theoretic Transform (NTT)
+representation, where the base field is a degree-3 extension of the Goldilocks
+field, and the NTT form consists of 8 components.
+
+Arithmetization is process of converting numbers, with which the VM works,
+captured in the execution trace, into the cyclotomic ring Goldilocks elements.
+
+\subsection{State representation}
+
+The execution state at any step $i$ is encapsulated by the tuple $z_i$, which
+contains the following components:
+
+\begin{itemize}
+    \item \textbf{Program counter ($pc_i$):} A 32 bit integer indicating the address of the next instruction.
+    \item \textbf{Registers:} An array of 32 general purpose 32 bit registers.
+    \item \textbf{Memory state:} Represented by the root of a Merkle tree covering the machine's RAM. The system models 1MB of RAM, divided into 256 pages, with each page containing 256 words (1024 bytes).
+    \item \textbf{Memory log:} A commitment to the vector of memory operations performed up to step $i$.
+\end{itemize}
+
+The initial state $z_0$ serves as a public anchor for the computation. Its
+commitment $z_{0\_\text{comm}}$ binds the proof to a specific ELF binary
+(represented by a \texttt{code\_comm} Merkle root), the entrypoint, and the
+initial zeroed state of memory and registers. All of these values are public,
+known to both prover and verifier, which means, they do not have to be recomputed
+and constrained by the prover nor inside the circuit.
+
+\subsection{Instruction decoding and execution}
+
+For each step, the circuit $F$ enforces valid transitions between $z_{i-1}$
+and $z_i$. This process involves the following constraints:
+
+\begin{enumerate}
+    \item \textbf{Instruction fetch:} The circuit verifies that the
+		instruction executed corresponds to the value stored at $pc_{i-1}$.
+		This is enforced by verifying a Merkle proof against the static
+		\texttt{code\_comm} root derived from the ELF binary.
+    \item \textbf{Decoding:} The 32 bit instruction word is decomposed to
+		extract the opcode, source registers ($rs1, rs2$), destination
+		register ($rd$), and immediate values, according to the RISC-V ISA \cite{RISCV}.
+    \item \textbf{Execution logic:} Based on the decoded opcode, the circuit
+		enforces the semantic logic of the instruction.
+    \item \textbf{State update:} The circuit constrains the output state
+		$z_i$. For arithmetic instructions, this involves updating the
+		destination register. For branch instructions, it involves updating
+		the $pc$.
+\end{enumerate}
+
+\subsection{Memory consistency checks}
+
+Memory consistency ensures that a load operation at step $i$ returns the value
+written by the most recent store operation to that address. The verification of
+the memory consistency is deferred until the end, when all memory read/write logs
+have been collected and the consistency can be proven with one check.
+
+When a load or store instruction is executed:
+
+\begin{enumerate}
+    \item \textbf{Operation capture:} The circuit captures the operation,
+		which contains the cycle count $i$, the address, the value, and a
+		boolean flag indicating a write operation.
+    \item \textbf{Log update:} This operation is appended to the memory log.
+		Within $F$, this is enforced by updating the Poseidon2 commitment to
+		the log vector.
+    \item \textbf{Page validation:} For store operations, the circuit
+		additionally verifies a Merkle proof for the memory page being
+		modified, calculates the new page root, and updates the memory Merkle
+		root in the state $z_i$.
+\end{enumerate}
+
+The memory log is not fully verified against the register state at every step.
+Instead, the correctness of the read/write history is verified in the final
+wrapping SNARK (discussed in Section \ref{sec:crypto}) using a permutation
+argument on the complete vector of operations collected throughout the execution.
+This is discussed in more detail in Section \ref{sec:memory_check}.
 
 % 3.4 The Recursive Mechanism (\(F'\)):
 % 	- IVC Integrity: How the current step enforces that the previous step was valid.

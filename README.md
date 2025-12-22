@@ -63,7 +63,7 @@ The `F'` circuit is then satisfied by the following **private witness**:
     - **Preimage of `U_{i-1}_comm`**: The full running accumulator instance
       `U_{i-1}` and its witness `w_acc`.
     - **Folding proof `π_{i-1}`**: The `LatticeFold` proof generated during
-      step `i-1`. (This is `None` for the first step).
+      step `i-1`.
 2.  **RISC-V Witness (proving the execution of `F`):**
     - The **instruction** being executed at `pc_{i-1}`.
     - A **Merkle proof** proving that this instruction is valid,
@@ -83,8 +83,8 @@ The CCS for the augmented circuit `F'` enforces the following logic at each step
     the current instruction against the `pc_{i-1}` (from the witness) and the
     `code_comm` (from the public `z_0_comm`). This prevents the prover from
     executing a malicious instruction.
-3.  **State transition constraints**: Constrain the correctness of the RISC-V
-    instruction execution based on the instruction and the `ExecutionTrace` witness.
+3.  **State transition constraints**: Constrain the correct decoding of the RISC-V
+    instruction and its execution based on the instruction and the `ExecutionTrace` witness.
 4.  **Memory consistency constraints**:
     - If a memory operation occurs, it constrains that the memory operations
       log commitment is correctly updated.
