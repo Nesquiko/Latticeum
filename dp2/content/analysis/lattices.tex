@@ -11,14 +11,14 @@ problems on lattices, such as the Shortest Vector Problem (SVP) \cite{AjtaiLatti
 
 A lattice $L$ is a discrete subgroup of $\mathbb{R}^n$, typically
 represented as the set of all integer linear combinations of a set of linearly
-independent basis vectors $B = \{\mathbf{b}_1, \mathbf{b}_2, \dots, \mathbf{b}_m\}$
+independent basis vectors $B = \{\mathbf{b}_1, \mathbf{b}_2, \dots, \mathbf{b}_n\}$
 where $\mathbf{b}_i \in \mathbb{R}^n$. That is:
 
 \[
-	L(B) = \left\{ \sum_{i=1}^{m} x_i \mathbf{b}_i \mid x_i \in \mathbb{Z} \right\}
+	L(B) = \left\{ \sum_{i=1}^{n} x_i \mathbf{b}_i \mid x_i \in \mathbb{Z} \right\}
 \]
 
-The dimension of the lattice is $m$. Many cryptographic constructions are
+The dimension of the lattice is $n$. Many cryptographic constructions are
 built upon the difficulty of solving problems like finding the shortest
 non-zero vector in a lattice (SVP) or finding the lattice point closest to a
 given target vector (CVP), especially in high dimensions.
@@ -37,11 +37,31 @@ Lattice-based cryptography offers several advantages:
 		multiplications over small integers \cite{LatticeTutorial}.
     \item \textbf{Versatility:} Lattices have been used to construct a wide
 		array of cryptographic primitives, including public-key encryption,
-		digital signatures, and importantly for this thesis, commitment
+		digital signatures, and importantly for this thesis, vector commitment
 		schemes \cite{LatticeTutorial}.
 \end{itemize}
 
-\subsection{Ajtai Commitments}
+\subsection{Rings instead of matrices}
+
+In lattice-based cryptography, it is more efficient to use polynomial ring
+elements, instead of the traditional matrix representations. In these
+constructions, operations are performed in the quotient
+ring $R_q = \mathbb{Z}_q[x]/(x^n + 1)$, where polynomials are considered
+modulo $x^n + 1$. This polynomial modulus induces a negacyclic structure.
+Multiplying by $x$ corresponds to a right rotation of coefficient vectors,
+with a sign inversion when elements wrap around \cite{Lyubashevsky2013}. The
+ring-based approach provides significant advantages over unstructured
+lattices, storing a ring element requires only $n$ coefficients rather than
+$n^2$ matrix entries, yielding key sizes that are an order of magnitude
+smaller \cite{PeikertRingLWE}. Furthermore, polynomial multiplication can be
+computed efficiently in $O(n \log n)$ time using the Number Theoretic
+Transform (NTT), compared to the $O(n^2)$ complexity of matrix vector
+multiplication \cite{Peikert2008}. These efficiency gains, combined with the
+worst-case hardness guarantees inherited from Ring-LWE \cite{Peikert2008},
+have made ring-based schemes the preferred approach for practical lattice
+cryptography.
+
+\subsection{Ajtai commitments}
 
 A commitment scheme is a cryptographic primitive that allows a party (the
 prover) to commit to a value while keeping it hidden from another party (the
@@ -55,8 +75,8 @@ must satisfy two main properties:
 \end{itemize}
 
 The Ajtai commitment scheme from Ajtai's 1996 work \cite{AjtaiLattices}, is a
-lattice-based commitment scheme. Its security is typically based on the
-hardness of the Shortest Integer Solution (SIS) problem \cite{AjtaiLattices, LatticeTutorial}.
+lattice-based commitment scheme. Its security is based on the
+hardness of the Shortest Integer Solution (SIS) problem \cite{AjtaiLattices, LatticeTutorial, MSIS}.
 
 The SIS problem is defined as follows: Given a random matrix
 $A \in \mathbb{Z}_q^{n \times m}$ (where $q$ is a modulus, $n$ is the row
@@ -100,7 +120,7 @@ zero-knowledge proof systems, due to its strong security foundations
 against quantum computers. This makes them a promising candidate for
 future-proofing ZK solutions.
 
-\subsubsection{LaBRADOR: Compact Proofs for R1CS from Module-SIS}
+\subsubsection{LaBRADOR: Compact proofs for R1CS from Module-SIS}
 
 LaBRADOR, introduced by Beullens and Seiler \cite{LaBRADOR}, is a lattice-based
 proof system designed for Rank-1 Constraint Systems (R1CS). An advantage of
@@ -128,7 +148,7 @@ component to achieve succinct proofs of polynomial evaluation.
 
 The construction involves a three-round protocol for proving evaluations for
 polynomials of bounded degree $N$ with a verifier time complexity of
-$O_p(\sqrt{N})$. By composing this with the LaBRADOR proof system, Greyhound
+$O(\sqrt{N})$. By composing this with the LaBRADOR proof system, Greyhound
 obtains a succinct proof of polynomial evaluation that also has a sublinear
 verifier runtime. For large polynomials (e.g., degree up to $N \approx
 2^{30}$), Greyhound produces evaluation proofs of approximately 53KB. This

@@ -73,7 +73,6 @@
 }
 
 \tikzset{
-    % Global Font and Arrow Tip
     every picture/.style={font=\sffamily\footnotesize, >=Stealth},
     % Process/Function Nodes (Blue)
     processNode/.style={
@@ -107,7 +106,7 @@
         minimum height=1.2cm, 
         align=center
     },
-    % Augmented Circuit Container (Dashed Box)
+    % dashed box
     augmentedFrame/.style={
         draw=black!60, 
         dashed, 
@@ -129,4 +128,35 @@
         draw=black!70,
         rounded corners=5pt
     }
+		% settings for node distances
+		node distance=1cm and 1.5cm, % vertical and horizontal base distance
+		% Styles
+		processNode/.style={ % For F1, F2, Fn
+			rectangle, draw, fill=blue!20,
+			minimum size=1cm, % makes F nodes squarish and compact
+			align=center
+		},
+		dataNode/.style={ % For s0, sn, w1, w2, wn
+			rectangle, draw, fill=green!20,
+			minimum height=0.5cm, % consistent height
+			align=center,
+			inner xsep=2pt, % padding inside the node
+		},
+		multiLineDataNode/.style={ % specific for s0 and sn with line breaks
+			dataNode,
+			text width=2.5cm % allows text to wrap
+		},
+		instanceDataNode/.style={ % specific for instance nodes
+			dataNode,
+			minimum width=1cm
+		},
+		ellipsisNode/.style={
+			text centered,
+			font=\small
+		},
+		arrow/.style={
+			-Stealth,
+			semithick
+		},
+		labelFont/.style={font=\footnotesize}
 }

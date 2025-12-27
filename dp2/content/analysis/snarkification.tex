@@ -13,7 +13,7 @@ by decreasing slot time, or increasing block size may raise bandwidth and node
 requirements, thereby ousting less capable nodes and thus hindering Ethereum's
 decentralization.
 
-Snarkification refers to the process of integrating specific type of Zero
+Snarkification refers to the process of integrating a specific type of Zero
 Knowledge Proofs (ZKPs) called SNARK (Succinct Non-interactive Argument of
 Knowledge) in order to offload a computation to one entity (one node, or a
 cluster that is a small subset of the whole network), which performs the
@@ -27,7 +27,7 @@ to convince a verifier of a statement's truth without revealing any
 information beyond the statement's validity itself. The statement typically
 concerns membership in an NP language/relation \cite{GoldreichNPProofs}.
 The membership statements are usually named ZK circuits.
-Traditionally, ZKPs are interactive protocols where a prover, knows a
+Traditionally, ZKPs are interactive protocols where a prover, who knows a
 private witness for a statement (e.g., a solution to a problem), aims to
 convince a verifier of this knowledge. Through a series of back-and-forth
 interactions, the verifier becomes convinced of the prover's claim (if true)
@@ -54,7 +54,7 @@ Ethereum's consensus mechanism. A key aspect of this proposal involves
 leveraging SNARKs to make consensus layer state transitions provable, in near
 real-time. Instead of each validator independently re-validating all
 components of a new consensus state, they would verify a single, compact
-SNARK. Based on this proof's validity, they would accept or
+SNARK. Based on this proof's validity, they can accept or
 reject the proposed state update.\footnote{The entity proposing the state
 update, such as a block proposer, would be responsible for generating and
 submitting this proof.}

@@ -1,14 +1,13 @@
 \section{Cryptographic Primitives}\label{sec:crypto}
 
-The design of this ZkVM represents a synthesis of several breakthroughs in
-zero-knowledge cryptography. Rather than relying on a monolithic proof system,
-the solution composes these primitives to instantiate IVC using a folding
-scheme. This layered approach allows the system to inherit the efficiency of
-folding for the recursive steps while maintaining the post-quantum security
-guarantees provided by lattice-based assumptions. This section defines the
-specific cryptographic building blocks selected for the implementation.
+ZkVM integrates several zero-knowledge cryptography primitives to achieve
+IVC via folding. This compositional approach allows the system to benefit from
+the efficiency of folding in recursive steps while maintaining post-quantum
+security under lattice-based assumptions. The following section details the
+selected cryptographic building blocks.
 
 \subsection{Incrementally Verifiable Computation (IVC)}
+
 The foundational theoretical model for this ZkVM is IVC, introduced by Valiant
 \cite{ValiantIVC}. IVC enables a single proof to attest to the correct
 execution of a long-running computation $y = F^{(n)}(x)$ by recursively
@@ -17,6 +16,7 @@ step $i-1$. RISC-V execution traces of unbounded length perfectly align with
 this model.
 
 \subsection{Folding schemes and Nova}
+
 To make IVC practical, this work utilizes the concept of \textit{Folding
 schemes} as introduced in the Nova system \cite{Nova}. Unlike traditional
 recursion, where a circuit must fully verify a SNARK at every step, folding
@@ -25,16 +25,42 @@ representing the current step and one representing the accumulator) into a
 single instance. The cryptographic cost of folding is negligible compared to
 SNARK verification.
 
-\subsection{HyperNova and Customizable Constraint Systems (CCS)}
-While Nova relies on R1CS (Rank-1 Constraint Systems), describing complex VM
-instruction sets in R1CS often leads to inefficient circuits with many
-auxiliary variables. To address this, the RISC-V ISA and IVC constraints are
-represented as Customizable Constraint System (CCS) \cite{CCS}
-CCS generalizes R1CS, allowing for high-degree gates without overhead. This is
-advantageous for representing IVC constraints. These check commitments of previous
-steps and parts of it's preimage, which can be of high-degree.
+\subsection{Customizable Constraint Systems (CCS)}
+
+CCS generalizes R1CS \cite{CCS}, allowing for high-degree gates without overhead. This is
+advantageous for representing IVC constraints (such as constraining Poseidon2's
+S-Box, which is exponentiation to the 7th degree \cite{Poseidon2}). A CCS structure $S$
+consists of:
+
+\begin{itemize}
+    \item Size bounds $m, n, N, \ell, t, q, d \in \mathbb{N}$ where $n > \ell$.
+    \item A sequence of matrices $M_0, \dots, M_{t-1} \in \mathbb{F}^{m \times n}$.
+    \item A sequence of $q$ multisets $[S_0, \dots, S_{q-1}]$, where an
+		element in each multiset is from the domain $\{0, \dots, t-1\}$ and
+		the cardinality of each multiset is at most $d$.
+    \item A sequence of $q$ constants $[c_0, \dots, c_{q-1}]$, where each
+		constant is from $\mathbb{F}$.
+\end{itemize}
+
+A CCS instance consists of a public input $x \in \mathbb{F}^\ell$. A CCS
+witness consists of a vector $w \in \mathbb{F}^{n-\ell-1}$. A CCS
+structure-instance tuple $(S, x)$ is satisfied by a CCS witness $w$ if:
+
+$$ \sum_{i=0}^{q-1} c_i \cdot \bigcirc_{j \in S_i} (M_j \cdot z) = \mathbf{0}, $$
+
+where $z = (w, 1, x) \in \mathbb{F}^n$, $M_j \cdot z$ denotes matrix-vector
+multiplication, $\bigcirc$ denotes the Hadamard (entry-wise) product between
+vectors, and $\mathbf{0}$ is an $m$-sized vector with entries equal to the
+additive identity in $\mathbb{F}$.
+
+Informally, for each constant $c_i$, multiply it by the element-wise product
+of all $(M_j \cdot z)$ vectors where $j$ comes from multiset $S_i$. Sum all
+these results together, and check if the final vector equals zero.
+If all constraints are satisfied, the result is zero, indicating
+the witness correctly follows the rules defined by the system.
 
 \subsection{Lattice-based hardness assumptions}
+
 To achieve post-quantum security, the cryptographic primitives in this work
 rely on hardness assumptions over lattices rather than the Discrete Logarithm
 Problem (DLP) used in Nova or HyperNova. The security relies on the hardness
@@ -43,6 +69,7 @@ remain hard even in the presence of quantum computers \cite{AjtaiLattices,
 Ajtai1998, LatticeTutorial, LatticesInZKP}.
 
 \subsection{LatticeFold}
+
 LatticeFold \cite{LatticeFold} can be though of as a HyperNova \cite{HyperNova},
 but with post-quantum guarantees. It utilizes the Module-SIS \cite{MSIS}
 problem to construct Ajtai vector commitment scheme. Unlike DLP-based folding,
@@ -54,22 +81,75 @@ over small prime fields while providing $O(\log n)$ proof size and achieving
 transparency, as no trusted setup is required.
 
 \subsection{The wrapping SNARK SuperSpartan + Greyhound}
+
 While LatticeFold allows for efficient recursion, the final artifact is a
-large lattice-based accumulator that is expensive to verify directly on-chain.
-To compress this into a succinct proof, a wrapping SNARK is employed.
+large lattice-based accumulator that is expensive to verify directly.
+A wrapping SNARK is used to compress this into a succinct proof.
+
 This wrapper is constructed by combining the \textbf{SuperSpartan} \cite{HyperNova}
 IOP, which verifies the satisfiability of the CCS relation, with
 \textbf{Greyhound} \cite{Greyhound}, a lattice-based PCS with polylogarithmic
 verification complexity.
 
+SuperSpartan is agnostic to the underlying algebraic structure (field vs. ring),
+allowing instantiation of the Sum-Check protocol over the lattice
+ring $R_q$. The final polynomial evaluation query required by SuperSpartan is
+then proven using the Greyhound PCS, which supports the same ring structure \cite{HyperNova, Greyhound}.
+
+\subsection{Memory consistency check}\label{subsec:memory_check}
+
+The correctness of the RISC-V execution depends on the integrity of the
+Random Access Memory (RAM). To avoid the massive overhead of embedding a
+Merkle Tree or cryptographic accumulator within the step circuit $F$, this
+work employs \textbf{Offline memory checking}, a technique formalized for
+SNARKs by Ozdemir, Laufer, and Boneh \cite{MemoryAccessInSnarks}.
+
+Instead of verifying every memory access immediately, the prover maintains a
+transcript $tr$ of all memory operations (reads and writes) in the order they
+occurred. Each access is represented as a tuple $\acc_i = (a_i, v_i, w_i)$ where
+$a_i \in \mathbb{F}$ is the address, $v_i \in \mathbb{F}$ is the value, and $w_i \in \{0,1\}$
+is a write-bit (1 for write, 0 for read).
+
+To prove that these operations are consistent with read-over-write semantics,
+the system constructs a second transcript $tr'$ by sorting $tr$ lexicographically
+by $(a, t)$, where each access is augmented with a time field $t_i = i$.
+The prover must demonstrate three properties:
+\begin{enumerate}
+    \item $tr'$ is a \textbf{permutation} of $tr$ (same accesses, different order);
+    \item $tr'$ is \textbf{$(a, t)$-ordered}: accesses are grouped by address and
+          time-ordered within each group;
+    \item $tr'$ respects \textbf{read-over-write (RoW)} semantics: reads return the
+          most recent written value to each address.
+\end{enumerate}
+
+The full memory consistency proof consists of three components, as described
+by Ozdemir, Laufer, and Boneh \cite{MemoryAccessInSnarks}:
+
+\begin{enumerate}
+	\item \textbf{Permutation proof:} demonstrates that $tr'$ is a permutation of
+		$tr$. Both transcripts contain the same multiset of memory
+		accesses \cite{MemoryAccessInSnarks}.
+
+	\item \textbf{$(a, t)$-ordering proof}: verifies that $tr'$ is correctly sorted
+		by address and time within each address group, using conditional ordering
+		and conditional uniqueness sub-proofs \cite{MemoryAccessInSnarks}.
+
+	\item \textbf{RoW proof}: enforces read-over-write semantics, ensuring
+		that each read returns the most recent written value to its address
+		\cite{MemoryAccessInSnarks}.
+\end{enumerate}
+
+for the detailed construction and security analysis of these protocols, refer
+to the original work \cite{MemoryAccessInSnarks}.
+
 \subsection{Future optimization - LatticeFold+}
+
 It is noted that a newer iteration of the folding scheme, LatticeFold+
-\cite{LatticeFoldPlus}, has recently been proposed. LatticeFold+ introduces
-purely algebraic range proofs and double commitments, which reduce the prover
+\cite{LatticeFoldPlus}, has been proposed. LatticeFold+ introduces
+algebraic range proofs and double commitments, which reduce the prover
 overhead by eliminating the need for bit decomposition during witness norm
 management. However, at the time of system design, the available libraries for
 LatticeFold+ did not support CCS constraints. Thus, this work utilizes the
 standard LatticeFold protocol. The architecture is modular, allowing for the
 backend to be upgraded to LatticeFold+ in future iterations to further
 optimize proving time.
-

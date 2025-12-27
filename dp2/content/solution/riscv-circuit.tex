@@ -17,8 +17,9 @@ element is mapped into the ring $R_q$ using a Number Theoretic Transform (NTT)
 representation, where the base field is a degree-3 extension of the Goldilocks
 field, and the NTT form consists of 8 components.
 
-Arithmetization is process of converting numbers, with which the VM works,
-captured in the execution trace, into the cyclotomic ring Goldilocks elements.
+Arithmetization is the process of converting numbers handled by the VM,
+captured in the execution trace, into cyclotomic ring elements over the
+Goldilocks field. 
 
 \subsection{State representation}
 
@@ -36,8 +37,8 @@ The initial state $z_0$ serves as a public anchor for the computation. Its
 commitment $z_{0\_\text{comm}}$ binds the proof to a specific ELF binary
 (represented by a \texttt{code\_comm} Merkle root), the entrypoint, and the
 initial zeroed state of memory and registers. All of these values are public,
-known to both prover and verifier, which means, they do not have to be recomputed
-and constrained by the prover nor inside the circuit.
+known to both prover and verifier, this means, they do not have to be recomputed
+or constrained by the prover within the circuit.
 
 \subsection{Instruction decoding and execution}
 
@@ -120,9 +121,10 @@ When a load or store instruction is executed:
     \item \textbf{Operation capture:} The circuit captures the operation,
 		which contains the cycle count $i$, the address, the value, and a
 		boolean flag indicating a write operation.
-    \item \textbf{Log update:} This operation is appended to the memory log.
-		Within $F$, this is enforced by updating the Poseidon2 commitment to
-		the log vector.
+    \item \textbf{Log update:} This operation is appended to the memory log,
+		and new commitment (from the previous one and the parts of the new memory
+		operation) is passed as public input. Within $F$, this new commitment is
+		recalculated and compared to the supplied public input.
     \item \textbf{Page validation:} For store operations, the circuit
 		additionally verifies a Merkle proof for the memory page being
 		modified, calculates the new page root, and updates the memory Merkle
@@ -133,4 +135,5 @@ The memory log is not fully verified against the register state at every step.
 Instead, the correctness of the read/write history is verified in the final
 wrapping SNARK (discussed in Section \ref{sec:crypto}) using a permutation
 argument on the complete vector of operations collected throughout the execution.
-This is discussed in more detail in Section \ref{sec:memory_check}.
+This is discussed in more detail in previous Subsection \ref{subsec:memory_check}.
+

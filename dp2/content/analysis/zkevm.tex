@@ -2,22 +2,22 @@
 
 ZkEVM, as mentioned in \ref{subsec:snarkifying_execution}, is a modified EVM,
 which given state and list of transactions produces next state and a proof $\pi$
-attesting to correctness of that execution. Primary use case of ZkEVMs today is
+attesting to correctness of that execution. The primary use case of ZkEVMs today is
 enabling "ZK rollups", L2s which execute a bundle of transactions offchain,
 generate a proof and submit the bundle with the proof on the L1, where only the
-proof is validated. Second use case, but not used today, is to enshrine ZkEVM
+proof is validated. A second use case, though not used today, is to enshrine ZkEVM
 into EVM as described in \ref{subsec:snarkifying_execution}.
 
 \subsection{Challenges of EVM}
 
-EVM was not designed with ZK taken into consideration:
+The EVM was not designed with ZK taken into consideration:
 
 \begin{enumerate}
 	\item Many EVM opcodes are complex and expensive to prove with ZK. This has
 		led to different types of EVM compatibility among ZkEVMs \cite{VitalikButerinZkEVMTypes}.
 	\item 256 bit word size means that ZK systems working over prime fields must
 		include range proofs, which increases the ZkEVM complexity.
-	\item It's harder to prove stack based VM. For example, Starkware developed
+	\item It is harder to prove a stack based VM. For example, Starkware developed
 		Cairo \cite{Cairo}, a register based model in order to implement its ZkEVM.
 		This requires a custom smart contract compiler.
 	\item EVM storage uses Merkle Patricia Tries with Keccak, which are not
@@ -91,18 +91,46 @@ produce a proof of a knowledge of a proof.
 	\caption{Recursive proving}
 \end{tikzFigure}
 
-The recursive ZKP is an instantiation of Incrementally-Verifiable-Computation (IVC)
-\cite{ValiantIVC}. IVC is a cryptographic primitive for proving the
-correctness of an iterated and incremental computation (such as EVM, or RISC-V
-microprocessor). The output of step $i$ of the computation ($F$) is fed as input
-into step $i+1$ of the computation, along with a proof $\pi$, which proves that:
+The recursive ZKP is an instantiation of Incrementally Verifiable Computation (IVC)
+\cite{ValiantIVC}. IVC is a cryptographic primitive for proving the correctness of an
+iterated and incremental computation (such as an EVM or RISC-V microprocessor execution).
+
+Let $F$ be a step function (e.g., representing the execution of a single
+instruction). The output state of step $i$ is fed as input into step $i+1$,
+along with a proof $\pi_i$ attesting to the validity of the history up to that
+point.
+
+Formally, at each step $i$, the prover demonstrates that:
 
 \begin{enumerate}
-	\item $F(z_{i-1}, u_i) = z_i$ - proves that executing $F$ with $z_{i-1}$
-		and $u_i$ correctly outputs $z_i$,
-	\item $V((i-1, z_0, z_{i-1}), \pi_{i-1}) = true$ - proves that $\pi_{i-1}$ is
-		a valid proof relative to the previous step of the computation.
+    \item \textbf{State transition correctness:}
+    \[
+        F(z_{i-1}, u_i) = z_i
+    \]
+		This proves that executing the step function $F$ with the previous public
+		state $z_{i-1}$ (e.g., program counter, registers, memory root) and
+		the current non-deterministic advice $u_i$ (e.g., private witness
+		data, memory values) correctly produces the new state $z_i$.
+
+    \item \textbf{Recursive verification:}
+    \[
+        V((i-1, z_0, z_{i-1}), \pi_{i-1}) = \text{true}
+    \]
+		This proves that $\pi_{i-1}$ is a valid proof for the computation path
+		from the initial state $z_0$ to the previous state $z_{i-1}$.
 \end{enumerate}
+
+Where the variables are defined as:
+
+\begin{itemize}
+    \item $i$: The current step counter.
+    \item $z_0$: The immutable initial state.
+    \item $z_{i-1}$: The output state of the previous step.
+    \item $u_i$: The private witness or non-deterministic advice required for
+		the current step.
+    \item $\pi_{i-1}$: The proof generated at the previous step, which is
+		verified recursively inside the current step.
+\end{itemize}
 
 \begin{tikzFigure}
 	\begin{tikzpicture}[
@@ -110,62 +138,69 @@ into step $i+1$ of the computation, along with a proof $\pi$, which proves that:
 		node distance=1cm and 1.5cm, % vertical and horizontal base distance
 		% Styles
 		processNode/.style={ % For F1, F2, Fn
-			rectangle, draw, fill=blue!20,
+			rectangle, draw, thick, fill=blue!10,
 			minimum size=1cm, % makes F nodes squarish and compact
-			align=center
+			align=center, font=\sffamily\bfseries
 		},
-		dataNode/.style={ % For s0, sn, w1, w2, wn
-			rectangle, draw, fill=green!20,
-			minimum height=0.5cm, % consistent height
+		dataNode/.style={ % For s0, sn, u1, u2, un
+			rectangle, draw, fill=green!10,
+			minimum height=0.6cm, % consistent height
 			align=center,
-			inner xsep=2pt, % padding inside the node
+			font=\ttfamily\small,
+			inner xsep=4pt, % padding inside the node
 		},
 		multiLineDataNode/.style={ % specific for s0 and sn with line breaks
 			dataNode,
-			text width=2.5cm % allows text to wrap
+			text width=2.2cm, % allows text to wrap
+            font=\sffamily\small
 		},
-		instanceDataNode/.style={ % specific for instance nodes
+		instanceDataNode/.style={ % specific for instance nodes (witnesses)
 			dataNode,
-			minimum width=1cm
+			minimum width=0.8cm
 		},
 		ellipsisNode/.style={
 			text centered,
-			font=\small
+			font=\large\bfseries
 		},
 		arrow/.style={
 			-Stealth,
-			semithick
+			thick,
+            draw=black!80
 		},
-		labelFont/.style={font=\footnotesize}
+		labelFont/.style={font=\sffamily\footnotesize, color=black!70}
 	]
 
-	\node[multiLineDataNode] (s0) {$z_0$\\init state};
-	\node[processNode, right=0.5cm of s0] (F1) {F};
-	\node[processNode, right=of F1] (F2) {F};
-	\node[ellipsisNode, right=1.5cm of F2] (dots) {...};
-	\node[processNode, right=2cm of dots] (Fn) {F};
-	\node[multiLineDataNode, right=0.5cm of Fn] (sn) {$(z_n, \pi_n)$\\final output};
+	\node[multiLineDataNode] (s0) {$z_0$\\ \textit{Initial State}};
+	\node[processNode, right=0.8cm of s0] (F1) {F};
+	\node[processNode, right=1.5cm of F1] (F2) {F};
+	\node[ellipsisNode, right=1.2cm of F2] (dots) {...};
+	\node[processNode, right=2.0cm of dots] (Fn) {F};
+	\node[multiLineDataNode, right=0.8cm of Fn] (sn) {$z_n, \pi_n$\\ \textit{Final State}};
 
-	\node[instanceDataNode, below=of F1] (w1) {$u_1$};
-	\node[instanceDataNode, below=of F2] (w2) {$u_2$};
-	\node[instanceDataNode, below=of Fn] (wn) {$u_n$};
+	\node[instanceDataNode, below=0.8cm of F1] (u1) {$u_1$};
+	\node[instanceDataNode, below=0.8cm of F2] (u2) {$u_2$};
+	\node[instanceDataNode, below=0.8cm of Fn] (un) {$u_n$};
 
 	\draw[arrow] (s0) -- (F1);
-	\draw[arrow] (w1) -- (F1);
+	\draw[arrow] (u1) -- (F1);
 	\draw[arrow] (F1) -- node[midway, above, labelFont] {$(z_1, \pi_1)$} (F2);
-	\draw[arrow] (w2) -- (F2);
+	\draw[arrow] (u2) -- (F2);
 	\draw[arrow] (F2) -- node[midway, above, labelFont] {$(z_2, \pi_2)$} (dots);
 	\draw[arrow] (dots) -- node[midway, above, labelFont] {$(z_{n-1}, \pi_{n-1})$} (Fn);
-	\draw[arrow] (wn) -- (Fn);
+	\draw[arrow] (un) -- (Fn);
 	\draw[arrow] (Fn) -- (sn);
 
 	\end{tikzpicture}
-	\caption{IVC \cite{ValiantIVC}}
+	\caption{Visualization of the IVC chain \cite{ValiantIVC}}
+    \label{fig:ivc_diagram}
 \end{tikzFigure}
 
-Final proof $\pi_n$ is a succinct proof that prover has $\u_1, \ldots, \u_n$,
-s.t., final output $z_n$ is correct. The first implementation of IVC was done
-using SNARKs \cite{RecursiveSNARKsIVC}
+The final proof $\pi_n$ serves as a cryptographic certificate. It attests that
+the prover possesses a valid sequence of private witnesses (non-deterministic
+advice) $u_1, \ldots, u_n$, such that applying the transition function $F$
+sequentially starting from the initial state $z_0$ results in the final public
+state $z_n$. The first practical implementation of IVC was achieved using
+recursive SNARKs \cite{RecursiveSNARKsIVC}.
 
 \subsection{First generation of ZkEVMs}
 
@@ -180,12 +215,12 @@ include Scroll, zkSync Era, Polygon ZkEVM.
 \subsection{Folding schemes}
 
 Even though recursion proofs enabled teams to build ZkEVMs, they are not without
-their flaws. Prover needs to have circuit which contains the whole verification
+their flaws. The prover needs to have a circuit which contains the whole verification
 algorithm of another proof system. It must verify expensive evaluation proofs
 for polynomial commitments.
 
 Folding scheme takes almost all of the verification steps out of the circuit.
-There are no FFTs, only multi-exponentiations, which do not require big
+There are no FFTs, only multi-exponentiations, which do not require large
 memory overhead. Also no embedded elliptic curve pairings are needed, because
 there is no need to switch curves like in recursive proofs.
 
@@ -193,53 +228,60 @@ It compresses two instances into one. Folding prover will fold two instances,
 with corresponding witnesses, and produce single instance, s.t., if it is correct,
 it is implied that also the two original instances were correct \cite{Nova}.
 
-Given some relations $R = \alpha(pp,\;x,\;W)$, where:
+Given a relation $R$, which defines valid instance-witness pairs $(u, w)$ such that $R(pp, u, w) = 1$:
+
 \begin{itemize}
 	\item $pp$ = public parameters,
-	\item $x$ = instance or public inputs,
-	\item $W$ = witness.
+	\item $u$ = instance (public inputs, commitments),
+	\item $w$ = witness (private data).
 \end{itemize}
 
-For example: $R$ is an equation, $x$ are coefficients and $W$ are concrete
+For example, $R$ is an equation, $u$ are coefficients and $w$ are concrete
 values that satisfy the equation.
 
-A folding scheme for two relations $R$ and $R_{acc}$ (or $R_1$ and $R_2$, or
-$u_i$ and $U_i$ respectively) is an interactive protocol between folding
-prover $P$ and folding verifier $V$ where:
+A folding scheme for a relation $R$ is an interactive protocol where the
+prover $P$ and verifier $V$ reduce two instances $u$ and $U$ into a single instance $U'$.
+
+Let the incoming step be denoted by the pair $(u_i, w_i)$ and the running
+accumulator be denoted by $(U_i, W_i)$. The folding protocol proceeds as follows:
 
 \begin{enumerate}
-	\item $P$ has $(pp, x_1, w_1) \in R, (pp, x_2, w_2) \in R_{acc}$,
-	\item $V$ has $(pp, x_1), (pp, x_2)$.
+	\item $P$ has $(u_i, w_i) \in R$ and $(U_i, W_i) \in R$.
+	\item $V$ has $u_i$ and $U_i$ (but does not know the witnesses).
 \end{enumerate}
 
-And the result of their interaction is $(pp, x_3, w_3)$ (where $V$ only knows
-$(pp, x_3)$ and $w_3$ is kept private for $P$). Thus instead of validating two
-instances, verifier only needs to check one.
+The result of their interaction is a new folded instance $U_{i+1}$ (known to
+both) and a new folded witness $W_{i+1}$ (known only to $P$), such that
+$(U_{i+1}, W_{i+1}) \in R$.
 
-Folding scheme can be made non-interactive by using \cite{FiatShamir}.
+Thus, instead of verifying two distinct instances ($u_i$ and $U_i$), the
+verifier only needs to check the single folded instance $U_{i+1}$ at the very
+end of the computation.
+
+Folding scheme can be made non-interactive by using Fiat-Shamir heuristic \cite{FiatShamir}.
 
 \subsection{Instantiating IVC with folding scheme}
 
 IVC instantiation via folding schemes requires wrapping the base computation
-$F$ within an augmented function $F'$, where $F$ is the application circuit. The
-function $F'$ is structured to perform two primary tasks:
+$F$ within an augmented function $F'$, where $F$ is the "application" circuit \cite{Nova, HyperNova}.
+The function $F'$ is structured to perform two primary tasks:
 
 \begin{enumerate}
-	\item \textbf{Base Computation:} $F'$ executes the original state transition
+	\item \textbf{Base computation:} $F'$ executes the original state transition
 		$F(z_{i-1}, u_i) \rightarrow z_i$, where $z_{i-1}$ is the state from the
 		previous step and $u_i$ is non-deterministic advice for step $i$. This
 		corresponds to verifying the correct execution of one step of the
 		underlying computation (e.g., a single RISC-V instruction cycle).
 
-	\item \textbf{IVC Maintenance:} This task ensures the integrity of the
+	\item \textbf{IVC maintenance:} This task ensures the integrity of the
 		recursive proof chain. $F'$ takes as non-deterministic advice the full state
 		from the previous step: $(i, z_0, z_{i-1}, U_{i-1})$. It then performs two
 		critical checks:
 		\begin{itemize}
-			\item \textbf{Consistency Check:} $F'$ re-computes the hash of this
+			\item \textbf{Consistency check:} $F'$ re-computes the hash of the
 				input state and asserts that it matches the public input $h_{i-1}$. This
 				binds the current step's execution to the correct history.
-			\item \textbf{Recursive Verification:} $F'$ executes the verifier logic
+			\item \textbf{Recursive verification:} $F'$ executes the verifier logic
 				of a Non-Interactive Folding Scheme (NIFS). It takes the running
 				accumulator $U_{i-1}$ and the instance $u_{i-1}$ (an instance
 				from the step $i-1$) and outputs a new folded accumulator $U_i$.
@@ -308,11 +350,11 @@ z_0, z_i, U_i)$, which serves as the public input for the next step
 
 \subsection{New generation of ZkEVMs}
 
-Nowadays, industry is moving towards ZkVMs, dominantly RISC-V ZkVMs. RISC-V is
-an open sourced Instruction Set Architecture (ISA) \cite{RISCV}. RISC-V's
+Currently, the industry is moving towards ZkVMs, dominantly RISC-V ZkVMs. RISC-V is
+an open-source Instruction Set Architecture (ISA) \cite{RISCV}. RISC-V's
 simpler, reduced instruction set is better suited for ZK proof computations.
 Its register-based architecture is generally more efficient for proving than
-the EVM's stack-based architecture. Another benefit is a mature tooling
+the EVM's stack-based architecture. Another benefit is the mature tooling
 ecosystem, including compilers like GCC and LLVM, debuggers, and libraries.
 This allows developers to write provable programs in familiar languages like
 Rust, C, and C++. RISC-V is a general purpose ISA, which opens possibilities

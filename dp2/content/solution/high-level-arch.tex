@@ -20,30 +20,34 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 
 \begin{enumerate}
     \item \textbf{Compilation and loading:} A program written in a high-level
-		language (e.g., Rust) is compiled into a standard RISC-V ELF binary.
+		language (e.g., Rust) is compiled into a \texttt{rv32imac} ELF binary.
 		This binary is loaded into the ZkVM emulator.
     
     \item \textbf{Execution and trace generation:} The emulator executes the
 		program one instruction at a time. For every step $i$, the system
-		captures a comprehensive \textit{Execution Trace}. This trace
+		captures a comprehensive \textit{execution trace}. This trace
 		encapsulates the exact state transition of the machine.
-		Mathematically, the trace for step $i$, denoted as $\mathcal{T}_i$, contains:
+		Mathematically, the trace for step $i$ contains:
     \begin{itemize}
-        \item \textbf{Cycle count:} The global step counter.
-        \item \textbf{Input state:} The Program Counter ($PC$) and the state of all 32 general-purpose registers before execution.
+        \item \textbf{Cycle count:} The step counter.
+        \item \textbf{Input state:} The Program Counter ($PC$) and the state
+			of all 32 general-purpose registers before execution.
         \item \textbf{Output state:} The $PC$ and register states after execution.
-        \item \textbf{Decoded instruction:} The raw binary instruction broken down into its opcode, operands, and immediate values.
-        \item \textbf{Side effects:} A set of flags indicating arithmetic overflows, branching behavior (jump targets), and memory operations (address, value, and read/write flags).
+        \item \textbf{Decoded instruction:} The raw binary instruction broken
+			down into its opcode, operands, and immediate values.
+        \item \textbf{Side effects:} A set of flags indicating arithmetic
+			overflows, branching behavior (jump targets), and memory
+			operations (address, value, and read/write flags).
     \end{itemize}
 
-    \item \textbf{Arithmetization and witness generation:} The raw data from
-		$\mathcal{T}_i$ is transformed into a vector of lattice field elements
-		$\mathbb{Z}_q$. This vector serves as the \textit{witness} for the
-		constraint system. The logic verifying the transition from input state
-		to output state based on the decoded instruction defines the
-		\textbf{Step circuit}, denoted as $F$.
+    \item \textbf{Arithmetization and witness generation:} The raw data is
+		transformed into a vector of Goldilocks ring elements $\mathbb{Z}_q$.
+		This vector serves as the \textit{witness} for the constraint system.
+		The logic verifying the transition from input state to output state
+		based on the decoded instruction defines the \textbf{Step circuit},
+		denoted as $F$.
 
-    \item \textbf{Folding (the augmented circuit $F'$):} To achieve
+    \item \textbf{The augmented circuit $F'$:} To achieve
 		IVC, the step circuit $F$ is embedded inside a larger augmented
 		circuit, $F'$. This circuit is responsible for the recursive logic.
 		For a step $i$, $F'$ performs the following operations:
@@ -60,15 +64,23 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 			correctly according to the ISA.
     \end{enumerate}
 
+	\item \textbf{Cryptographic folding:} The prover executes the non-interactive
+        folding protocol off-circuit. It takes the current step's instance-witness
+        pair $(u_i, w_i)$ and the running accumulator from the previous step
+        $(U_{i-1}, W_{i-1})$. Using the LatticeFold scheme, these are compressed
+        into a new updated accumulator $(U_i, W_i)$. This process generates a
+		\texttt{folding proof}, which serves as a private input for the
+        augmented circuit checks.
+
     \item \textbf{Memory logging:} If the instruction execution triggers a
 		memory operation (load or store), this side effect is captured and
 		appended to a global vector of memory operations. Unlike register
-		transitions, memory consistency is not fully proven within $F'$;
+		transitions, memory consistency is not fully proven within $F'$,
 		instead, it is verified via a deferred memory consistency check after
 		the execution concludes.
 
 	\item \textbf{Final wrapping:} Once the program halts, the system holds a
-		single folded instance-witness pair (the accumulator). To produce a
+		single folded instance-witness pair. To produce a
 		succinct proof suitable for blockchain verification, this large
 		lattice-based artifact is wrapped in a final SNARK as depicted in Figure \ref{fig:snark_wrap}. 
 		This wrapper utilizes the SuperSpartan IOP \cite{HyperNova} to prove the validity of the folded
@@ -98,13 +110,16 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 		\node[augmentedFrame, fit=(stepCircuit) (foldVerifier)] (augCircuit) {};
 		\node[anchor=south east] at (augCircuit.north east) {\textbf{Augmented circuit $F'$}};
 
-		\node[dataNode, left=1.5cm of augCircuit, yshift=-1.5cm] (accPrev) {Accumulator\\$i-1$};
-		\node[dataNode, left=1.5cm of augCircuit] (ivcProofPrev) {Folding proof\\of step $i-1$};
+		\node[dataNode, left=1.5cm of augCircuit, yshift=-1.5cm] (accPrev) {Accumulator\\$U_{i-1}$};
+		\node[dataNode, left=1.5cm of augCircuit] (ivcProofPrev) {Folding proof $\pi_{i-1}$\\of step $i-1$};
 		\node[dataNode, left=1.5cm of augCircuit, yshift=1.5cm] (ivcHPrev) {IVC commitment $h$\\to step $i-1$};
 
-		\node[dataNode, right=1.5cm of augCircuit, yshift=-1.5cm] (accNext) {Accumulator\\$i$};
-		\node[dataNode, right=1.5cm of augCircuit] (ivcProofNext) {Folding proof\\of step $i$};
+		\node[dataNode, right=1.5cm of augCircuit, yshift=-1.5cm] (accNext) {Accumulator\\$U_i$};
+		\node[dataNode, right=1.5cm of augCircuit] (ivcProofNext) {Folding proof $\pi_i$\\of step $i$};
 		\node[dataNode, right=1.5cm of augCircuit, yshift=1.5cm] (ivcHNext) {IVC commitment $h$\\to step $i$};
+
+		\node[augmentedFrame, inner sep=20pt, fit=(witness) (stepCircuit) (foldVerifier) (accPrev) (ivcProofPrev) (ivcHPrev) (accNext) (ivcProofNext) (ivcHNext)] (outerBox) {};
+		\node[anchor=south west] at (outerBox.north west) {\textbf{For each instruction}};
 
 		\draw[arrow] (witness.south) -- (stepCircuit.east);
 		\draw[arrow] (accPrev.east) -- (accPrev -| augCircuit.west);
@@ -116,17 +131,17 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 		\draw[arrow] (augCircuit.east) -- (ivcHNext.west);
 
 		\node[dataNode, below=1cm of augCircuit, xshift=0.5cm] (memLog) {Memory\\operations log};
-		\draw[dashedArrow] (stepCircuit.west) -- ++(-1.5,-1) -- ++(0,-1.5) -- (memLog.west) node[midway, left] {\scriptsize Memory logs};
+		\draw[arrow] (stepCircuit.west) -- ++(-1.5,-1) -- ++(0,-1.5) -- (memLog.west) node[midway, left] {\scriptsize Memory logs};
 
 		\node[left=0.8cm of ivcProofPrev] (dotsStart) {\Large$\dots$};
-		\draw[dashedArrow] (dotsStart) -- (accPrev);
-		\draw[dashedArrow] (dotsStart) -- (ivcHPrev);
-		\draw[dashedArrow] (dotsStart) -- (ivcProofPrev);
+		\draw[arrow] (dotsStart) -- (accPrev);
+		\draw[arrow] (dotsStart) -- (ivcHPrev);
+		\draw[arrow] (dotsStart) -- (ivcProofPrev);
 
 		\node[right=0.8cm of ivcProofNext] (dotsEnd) {\Large$\dots$};
-		\draw[dashedArrow] (accNext) -- (dotsEnd);
-		\draw[dashedArrow] (ivcHNext) -- (dotsEnd);
-		\draw[dashedArrow] (ivcProofNext) -- (dotsEnd);
+		\draw[arrow] (accNext) -- (dotsEnd);
+		\draw[arrow] (ivcHNext) -- (dotsEnd);
+		\draw[arrow] (ivcProofNext) -- (dotsEnd);
     \end{tikzpicture}
 
 	\caption{Execution flow of the lattice-based RISC-V ZkVM IVC instantiation.}
@@ -136,7 +151,7 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 \begin{tikzFigure}
     \begin{tikzpicture}
 		\node[wrapperNode] (wrapper) {Wrapper SNARK\\(SuperSpartan + Greyhound)};
-		\node[dataNode, above=0.5cm of wrapper, xshift=-2cm] (accNext) {Accumulator\\$final$};
+		\node[dataNode, above=0.5cm of wrapper, xshift=-2cm] (accNext) {Accumulator\\$U_{final}$};
 		\node[dataNode, above=0.5cm of wrapper, xshift=2cm] (memLog) {Memory\\operations log};
 
 		\node[dataNode, right=1.5cm of wrapper] (proof) {Final proof\\$\pi_{final}$};
@@ -176,6 +191,7 @@ The verification logic exists at two distinct levels:
 		It verifies the mathematical correctness of the folding mechanism at every step.
     \item \textbf{The final verifier:} This is the external entity (e.g., an
 		Ethereum smart contract). It receives the final proof. Its role is to
-		verify the succinct proof of the final folded instance.
+		supply initial public arguments and verify the succinct proof of the
+		whole RISC-V VM execution.
 \end{enumerate}
 

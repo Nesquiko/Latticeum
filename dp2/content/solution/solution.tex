@@ -9,8 +9,8 @@ argument. Following this, the specific cryptographic primitives are defined
 as the core recursion engine, while identifying Greyhound \cite{Greyhound} as
 the necessary wrapping SNARK for final verification. The design then proceeds
 to the construction of the RISC-V step circuit $F$ \ref{sec:riscv_circuit},
-detailing how 32 bit integer arithmetic is arithmetized into the Goldilocks extension
-field elements required by lattice schemes using CCS \cite{CCS}. Finally, the recursive
+detailing how 32 bit integer arithmetic is arithmetized into the Goldilocks ring
+elements required by lattice schemes using CCS \cite{CCS}. Finally, the recursive
 mechanism $F'$ is defined \ref{sec:ivc}, outlining
 how IVC \cite{ValiantIVC} is enforced to prove the integrity of long running
 computations.
