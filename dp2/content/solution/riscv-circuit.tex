@@ -2,7 +2,7 @@
 
 This section details the construction of the step circuit $F$, which encodes
 the transition function of the RISC-V VM according to RISC-V ISA \cite{RISCV}.
-The design targets a 32 bit architecture, with 1MB of RAM.
+The design targets a 32 bit architecture.
 
 \subsection{Field representations and arithmetization}
 
@@ -14,7 +14,7 @@ value or memory address without overflow during standard representation.
 
 The LatticeFold protocol operates over cyclotomic rings. A Goldilocks field
 element is mapped into the ring $R_q$ using a Number Theoretic Transform (NTT)
-representation, where the base field is a degree-3 extension of the Goldilocks
+representation, where the base field is a 3rd degree extension of the Goldilocks
 field, and the NTT form consists of 8 components.
 
 Arithmetization is the process of converting numbers handled by the VM,
@@ -29,7 +29,7 @@ contains the following components:
 \begin{itemize}
     \item \textbf{Program counter ($pc_i$):} A 32 bit integer indicating the address of the next instruction.
     \item \textbf{Registers:} An array of 32 general purpose 32 bit registers.
-    \item \textbf{Memory state:} Represented by the root of a Merkle tree covering the machine's RAM. The system models 1MB of RAM, divided into 256 pages, with each page containing 256 words (1024 bytes).
+    \item \textbf{Memory state:} Represented by the root of a Merkle tree covering the machine's RAM.
     \item \textbf{Memory log:} A commitment to the vector of memory operations performed up to step $i$.
 \end{itemize}
 
@@ -46,74 +46,78 @@ For each step, the circuit $F$ enforces valid transitions between $z_{i-1}$
 and $z_i$. This process involves the following constraints:
 
 \begin{enumerate}
-    \item \textbf{Instruction fetch:} The circuit verifies that the
+    \item \textbf{Fetch:} The circuit verifies that the
 		instruction executed corresponds to the value stored at $pc_{i-1}$.
 		This is enforced by verifying a Merkle proof against the static
 		\texttt{code\_comm} root derived from the ELF binary.
-    \item \textbf{Decoding:} The 32 bit instruction word is decomposed to
-		extract the opcode, source registers ($rs1, rs2$), destination
-		register ($rd$), and immediate values, according to the RISC-V ISA \cite{RISCV}.
-    \item \textbf{Execution logic:} Based on the decoded opcode, the circuit
-		enforces the semantic logic of the instruction.
+
+	\item \textbf{Validation:} To ensure that the claimed decoded instruction
+		corresponds to exactly one valid instruction, the circuit enforces
+		three conditions on the set of selector flags $S = \{z_{\texttt{IS\_ADD}}, z_{\texttt{IS\_MUL}}, \dots\}$:
+
+		\begin{enumerate}
+			\item \textbf{Booleanity (are 0 or 1):} $\forall s \in S, s \cdot (1-s) = 0$.
+
+			\item \textbf{Mutual exclusion (only one is 1):} $\sum_{s \in S} s = 1$.
+
+			\item \textbf{\texttt{OPCODE} consistency:} Each instruction word contains a 7 bit
+				\texttt{OPCODE}\footnote{E.g. \texttt{0110011} for R type,
+				register-to-register, instructions}. To enforce consistency
+				between the active selector flag and the instruction, opcode
+				bits $z_{\texttt{INSTRUCTION}}[0:7]$ are constrained to
+                match the weighted sum of opcode constants:
+				\[
+					\sum_{s \in S} (s \cdot \texttt{OPCODE}_s) = z_{\texttt{INSTRUCTION}}[0:7]
+				\]
+				Where $\texttt{OPCODE}_s$ is the corresponding constant to the
+				instruction $s$\footnote{\texttt{ADD} and \texttt{SUB} are R type instruction,
+				which means, for them $\texttt{OPCODE}_s = 0110011$}.
+                Since only one flag $s$ is active, this sum collapses to the
+				constant $\texttt{OPCODE}_s$ of the selected instruction.
+				
+			\item \textbf{\texttt{functX} consistency:}
+				Certain instructions need additional fields from their binary format
+				to be uniquely decodable. Instruction flags subset of those
+				that require \texttt{funct3} is defined as $S_{\texttt{F3}}
+				\subset S$ and subset for those that require \texttt{funct7} as
+				$S_{\texttt{F7}} \subset S$\footnote{Instruction \texttt{ADD}
+				and \texttt{SUB} have the same \texttt{OPCODE} and
+				\texttt{funct3}, but their \texttt{funct7} differ}.
+				The circuit enforces:
+				\[
+					\sum_{s \in S_{\texttt{F3}}} s \cdot (z_{\texttt{INSTRUCTION}}[12:14] - \texttt{F3}_s) = 0
+				\]
+                \[
+					\sum_{s \in S_{\texttt{F7}}} s \cdot (z_{\texttt{INSTRUCTION}}[25:31] - \texttt{F7}_s) = 0
+				\]
+                Instructions that do not require these fields, are not in the
+				subsets, and these terms equal to 0.
+
+		\end{enumerate}
+
+	\item \textbf{Range checks:} Based on the decoded instruction, source
+		registers ($rs1, rs2$), destination register ($rd$), and/or immediate
+		values are checked inside the circuit.
+		Register indices must be bounded $rs1, rs2, rd \in [0, 31]$
+		and immediate values are constrained to the valid bit width for each
+		instruction type.
+
+    \item \textbf{Execution logic:} Based on the decoded instruction, the circuit
+		enforces it's semantic logic.
+
     \item \textbf{State update:} The circuit constrains the output state
 		$z_i$. For arithmetic instructions, this involves updating the
 		destination register. For branch instructions, it involves updating
 		the $pc$.
 \end{enumerate}
 
-\subsubsection*{Example BNE constraint}
-
-To illustrate the application of CCS \cite{CCS} within the step circuit, the constraint
-logic for the \texttt{BNE} (Branch if Not Equal) instruction is described
-here. Unlike R1CS, which is limited to quadratic degree-2 constraints
-($A \cdot z \circ B \cdot z = C \cdot z$), CCS allows for high-degree
-constraints, enabling more expressive logic in a single step.
-
-The \texttt{BNE} instruction logic requires that if the branch is \textit{not}
-taken, the values in source registers $rs1$ and $rs2$ must be equal. This is
-enforced via a degree-3 polynomial constraint involving the execution trace
-witness vector $z$:
-
-\begin{equation}
-    z_{\texttt{IS\_BNE}} \cdot (1 - z_{\texttt{IS\_BRANCHING}}) \cdot (z_{\texttt{VAL\_RS1}} - z_{\texttt{VAL\_RS2}}) = 0
-\end{equation}
-
-This equation enforces the correct behavior through the following logic cases:
-
-\begin{enumerate}
-    \item \textbf{Instruction inactive ($z_{\texttt{IS\_BNE}} = 0$):} The
-		first term is zero, satisfying the equation regardless of register
-		values. This ensures the constraint does not interfere with other instructions.
-    \item \textbf{Branch taken ($z_{\texttt{IS\_BRANCHING}} = 1$):} The second
-		term $(1 - 1)$ becomes zero, satisfying the equation. Note that a
-		separate complementary constraint is required to prove that
-		$rs1 \neq rs2$ when the branch \textit{is} taken.
-    \item \textbf{Branch not taken ($z_{\texttt{IS\_BRANCHING}} = 0$):} The
-		first two terms are non-zero ($1 \cdot 1$). Consequently, the third
-		term $(z_{\texttt{VAL\_RS1}} - z_{\texttt{VAL\_RS2}})$ must equal zero
-		to satisfy the equation. In the Goldilocks field, this strictly
-		implies $rs1 = rs2$.
-\end{enumerate}
-
-In the implementation, this is mapped to the CCS structure using three sparse
-matrices $M_A, M_B, M_C$ and a multiset $S=\{A, B, C\}$:
-
-\begin{itemize}
-    \item $M_A \cdot z$ extracts the value at the index \texttt{IS\_BNE}.
-    \item $M_B \cdot z$ computes the linear combination $1 - z_{\texttt{IS\_BRANCHING}}$.
-    \item $M_C \cdot z$ computes the difference $z_{\texttt{VAL\_RS1}} - z_{\texttt{VAL\_RS2}}$.
-\end{itemize}
-
-The CCS relation check $\bigcirc_{j \in S} M_j \cdot z = \mathbf{0}$ computes
-the Hadamard product of these three vectors, enforcing the logic across all
-rows of the execution trace simultaneously.
-
 \subsection{Memory consistency checks}
 
 Memory consistency ensures that a load operation at step $i$ returns the value
 written by the most recent store operation to that address. The verification of
-the memory consistency is deferred until the end, when all memory read/write logs
-have been collected and the consistency can be proven with one check.
+the memory consistency is deferred until the end, when all memory access logs
+have been collected. Done this way, the circuit inside IVC is less complex
+and does not need to keep track of the history of memory accesses in state.
 
 When a load or store instruction is executed:
 
@@ -133,7 +137,5 @@ When a load or store instruction is executed:
 
 The memory log is not fully verified against the register state at every step.
 Instead, the correctness of the read/write history is verified in the final
-wrapping SNARK (discussed in Section \ref{sec:crypto}) using a permutation
-argument on the complete vector of operations collected throughout the execution.
-This is discussed in more detail in previous Subsection \ref{subsec:memory_check}.
-
+wrapping SNARK (discussed in subsection \ref{subsec:wrapping_snark}) using
+checks described in previous subsection \ref{subsec:memory_check}.

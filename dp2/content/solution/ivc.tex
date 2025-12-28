@@ -8,7 +8,7 @@ correct folding of previous steps \cite{Nova}.
 \subsection{Enforcing IVC integrity}
 
 The validity of the recursion relies on linking the current step $i$ to the
-authenticated history of the computation terminating at step $i-1$. This
+verified history of the computation terminating at step $i-1$. This
 linkage is enforced through the hash commitment chain. The augmented circuit
 $F'$ accepts a public input $h_{i-1}$, which is a Poseidon2 \cite{Poseidon2}
 hash commitment to the state of the IVC scheme after the previous step.
@@ -24,26 +24,24 @@ The preimage consists of:
 
 Inside the circuit, the integrity check is performed by first recomputing
 the Poseidon2 step commitment $h'_{i-1}$ from preimage elements from private
-witness. Then after recomputing it, a constraint asserts that the recomputed
-candidate $h'_{i-1}$ is equal to the provided public input $h_{i-1}$.
-
-This mechanism ensures that the prover cannot forge a history or substitute
-arbitrary accumulators. They must possess the valid preimage data
-corresponding to the public commitment.
+witness. A constraint asserts that the recomputed candidate $h'_{i-1}$ is
+equal to the provided public input $h_{i-1}$.
 
 \subsubsection*{Secure all the way down}
 
 The IVC construction in Nova \cite{Nova} enforces a security model with
 only a "one layered step commitment" $h$. However, in the context of a ZkVM, the
-state tuple $z_i$ does not comprise of only raw values, but a of more cryptographic
-commitments to a complex machine state. If the internal structure of $z_i$'s
-preimage is not constrained within the circuit, a malicious prover could
-substitute the state commitment $z_{i-1\_\text{comm}}$ for an arbitrary value
-that is disconnected from the actual ZkVM execution history.
+step commitment $h$ is not comprised of only raw values but of more cryptographic
+commitments.
+
+If the internal structure of $z_{i-1\_\text{comm}}$'s and $U_{i-1\_\text{comm}}$'s
+preimages are not constrained within the circuit, a malicious prover could
+forge a $h_{i-1}$ to commit to fake $z^*_{i-1}$ or fake $U^*_{i-1}$.
 
 To prevent such attacks and ensure the integrity of the virtual machine state
-transitions, the augmented circuit $F'$ must enforce constraints on the
-specific components of the $z_i$ preimage:
+transitions, the augmented circuit $F'$ must recompute the Poseidon2 $U_{i-1\_\text{comm}}$
+commitment from its preimage $U_{i-1}$ supplied through the private witness.
+And also it must enforce constraints on the $z_{i-1\_\text{comm}}$'s preimage:
 
 \begin{enumerate}
     \item \textbf{Code integrity:} The preimage contains the Merkle root of
@@ -65,16 +63,14 @@ specific components of the $z_i$ preimage:
     \item \textbf{Memory pages:} The VM memory is represented by a Merkle
 		root. When a store instruction is executed, the circuit requires a
 		Merkle opening proof for the target page against the root in
-		$z_{i-1\_\text{comm}}$. It then calculates the new root resulting from
-		the memory update and constrains that this new root matches the memory
-		component in the preimage of $z_{i\_\text{comm}}$.
+		$z_{i-1\_\text{comm}}$'s preimage.
 
     \item \textbf{Register state:} The state includes a Poseidon2 commitment
 		to the 32 general purpose registers. The values of these registers
 		before and after the instruction are provided as part of the private
 		witness for the step circuit $F$. The circuit recalculates the
 		commitment to the output register values and asserts equality with the
-		register component of the $z_{i\_\text{comm}}$ preimage.
+		register component of the $z_{i\_\text{comm}}$'s preimage.
 
     \item \textbf{Memory operations log:} The log represents a history of all
 		memory operations. The commitment to this log must be updated
@@ -82,37 +78,28 @@ specific components of the $z_i$ preimage:
 		circuit computes the new log commitment by hashing the previous
 		commitment (from $z_{i-1\_\text{comm}}$) together with the details of
 		the current operation. This result is constrained to match the log
-		commitment in $z_{i\_\text{comm}}$.
+		commitment in $z_{i\_\text{comm}}$'s preimage.
 \end{enumerate}
 
 
 \subsection{The on circuit NIFS verifier}
 
 Following the integrity check, $F'$ executes the verification logic for the
-LatticeFold Non Interactive Folding Scheme (NIFS). This component effectively
-verifies the mathematical correctness of the folding process without re
+LatticeFold Non Interactive Folding Scheme (NIFS). This verifies the
+mathematical correctness of the folding process without re
 executing the prior computation.
 
-The logic branches based on the step index:
-
-\begin{itemize}
-    \item \textbf{Base case ($i=0$):} The circuit verifies that the step
-		counter is zero and that the accumulator is in its initial empty
-		state. No folding proof verification occurs.
-    \item \textbf{Recursive case ($i>0$):} The circuit accepts the folding
-		proof $\pi_{i-1}$ as part of the witness. It then executes the
-		LatticeFold verifier with the previous accumulator $U_{i-1}$ and proof
-		$\pi_{i-1}$, both taken from the private witness.
-\end{itemize}
-
+The circuit accepts the folding proof $\pi_{i-1}$ as part of the witness. It
+then executes the LatticeFold verifier with the previous accumulator $U_{i-1}$
+and proof $\pi_{i-1}$, both taken from the private witness.
 Upon successful verification of the folding, the circuit executes the RISC-V
 step circuit $F$, as detailed in Section \ref{sec:riscv_circuit}.
 
 \subsection{Output generation}
 
 The execution of $F'$ concludes by generating the artifacts required for the
-subsequent step. This includes the new folded accumulator instance and the new
-folding proof. Finally, the circuit computes the new IVC commitment $h_i$ by
+subsequent step. This includes the new folded accumulator instance $U_i$, the new
+folding proof $\pi_i$, and the new IVC commitment $h_i$. $h_i$ is calculated by
 hashing the updated step counter, the initial state commitment
 $z_{0\_\text{comm}}$, the new state commitment $z_{i\_\text{comm}}$, and the
 new accumulator commitment $U_{i\_\text{comm}}$ using Poseidon2. This
