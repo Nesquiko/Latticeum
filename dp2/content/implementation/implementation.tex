@@ -1,3 +1,220 @@
 \chapter{Implementation}\label{chap:implementation}
 
-% TODO a table with different lattice fold params
+% in the beginning mention that latticefold (not latticefold+) is used, because
+% as of designing and writing this work latticefold+ library wasn't ready.
+
+% disclaimer which will go away in final work, only the IVC step commitment constrains
+% and not all RISC-V instruction are implemented. Need to add the folding proof
+% verification, wrapping snark of the last folding + memory consistency check.
+
+% AFTER ALL ELSE IS READY, CREATE SOME SORT OF INTRO TO THIS CHAPTER, BUT NOT NOW!!!
+
+\section{Technology stack}\label{sec:tech_stack}
+
+The prototype implementation of the lattice-based RISC-V ZkVM is developed
+using the Rust programming language (\texttt{nightly-2025-08-19}). Rust was
+selected due to its dominance in the cryptography and zero-knowledge ecosystem.
+
+The cryptographic foundations and virtual machine components rely on several
+crates:
+
+\begin{itemize}
+    \item \textbf{Plonky3\footnote{\url{https://github.com/Plonky3/Plonky3}}:} The \texttt{Plonky3} meta crate is utilized to
+		provide the core arithmetization primitives. The \texttt{p3-field} and
+		\texttt{p3-goldilocks} crates are used for Goldilocks field
+		arithmetic. \texttt{p3-poseidon2} for the construction of Poseidon2
+		hashes and \texttt{p3-merkle-tree} for memory and code commitments.
+    
+    \item \textbf{LatticeFold\footnote{\url{https://github.com/NethermindEth/latticefold}}:} The core folding mechanism is based on the
+		\texttt{latticefold} implementation provided by Nethermind. This
+		crate implements the Ajtai commitment scheme and the NIFS prover and
+		verifier logic. It is the primary component of the
+		IVC loop, enabling the recursive accumulation of execution steps.
+    
+    \item \textbf{Cyclotomic-rings\footnote{\url{https://github.com/NethermindEth/latticefold}}:} From the same source as LatticeFold crate,
+		the \texttt{cyclotomic-rings} crate is used to handle the specific
+		algebraic structures required for lattice-based cryptography over ring
+		$R_q = \mathbb{Z}_q[X]/(X^d+1)$. It provides the necessary NTT
+		implementations and ring arithmetic for polynomials over the
+		Goldilocks field.
+\end{itemize}
+
+\section{Cryptography}
+
+Cryptographic crates (and majority of all cryptographic libraries, not just for Rust)
+expose high level API. Developers provide inputs to this API and get back the
+desired hash, encrypted text, key, etc. In context of ZkVM, also the intermediate
+states are needed to populate the witness. Main hurdle during implementation
+was to reuse exposed parts of used cryptographic crates, in order to collect
+internal states of these primitives.
+
+\subsection{Poseidon2}
+
+The Poseidon2 hash function is used to commit to the IVC state. While the
+\texttt{Plonky3} library provides a implementation of Poseidon2, its standard
+interface treats the permutation as a black box, returning only the final digest.
+To correctly constrain the Poseidon2 execution within a CCS requires access to
+the intermediate states of the permutation. This is because Poseidon2 has
+a 7th degree S-box, which is dependent on previous rounds, and those on ones
+before them. Thus, the computation is broken down into smaller
+steps, where each step verifies a transition of a one computational segment.
+
+A custom implementation of the Poseidon2 permutation was
+constructed, structurally identical to the \texttt{Plonky3} implementation but
+modified to capture and return the state vector at desired boundaries:
+
+\begin{itemize}
+    \item The state after the initial MDS matrix application.
+    \item The state after each of the external initial full rounds.
+    \item The state after each of the internal partial rounds.
+    \item The state after each of the external terminal full rounds.
+\end{itemize}
+
+\subsection{LatticeFold Integration}
+
+The LatticeFold library is utilized to perform the non-interactive folding of
+the witness-instance pairs. The internal logic of the LatticeFold prover was
+not modified to expose intermediate states, because this step was not implemented
+as of writing this work.
+
+\section{RISC-V Emulator}
+
+A custom, lightweight RISC-V interpreter was developed to execute the program
+and generate the necessary cryptographic witnesses. The emulator supports the
+\texttt{rv32imac} instruction set architecture. Since it being only a PoC, not
+all instruction handlers are implemented, but sufficient amount of them to execute
+Rust binaries compiled for the \texttt{riscv32imac-unknown-none-elf} target.
+
+The core of the emulator is structured around an execution loop that fetches,
+decodes, and executes instructions. At each instruction step, the execution
+halts and the full machine state, including the program
+counter, registers, memory pages, and raw instruction bytes, is exposed to an
+interceptor.
+
+This way, the instruction semantics and the proof generation are decoupled. The
+emulator is responsible solely for correct state transitions and the
+generation of the execution trace, while the ZkVM utilizes this trace to
+generate witnesses.
+
+% CCS building
+% 	- briefly describe how the ccs is built
+%		- I can add new vars and just edit the CCS layout and how the witness is created, all other indices are shifted accordingly
+%	- example: 1 sponge pass number of constrains and how does CCS building look like?
+
+\section{Circuit synthesis}\label
+
+The constraints defining the validity of the VM execution and the IVC chain
+are synthesized into a CCS.
+
+\subsection{Layout Management}
+
+A central component of the synthesis is the \texttt{CCSLayout} structure. This
+structure dynamically maps semantic variables (such as \texttt{is\_add},
+\texttt{val\_rs1}, or specific Poseidon2 round constants) to column indices
+within the CCS witness vector $z$.
+
+This dynamic allocation allows for the easy addition of new constraints.
+When a new variable is registered in the layout (e.g., adding support for a
+new instruction), the layout automatically shifts all subsequent indices.
+The witness generation logic in arithmetization and the constraint
+definition logic in remain synchronized without manual recalculation of column
+offsets.
+
+\subsection{Poseidon2 constraint example}
+
+This section illustrates the construction of CCS constraints for Poseidon2
+hash. Poseidon2 permutation in Goldilocks field on 12 elements (rate is 12,
+with capacity 4, total width then being 16) consists of:
+
+\begin{enumerate}
+	\item Applying a maximum distance separable MDS matrix.
+	\item 4 external initial rounds a 7th degree S-box on all elements.
+	\item 22 internal rounds with a partial S-box applied only to the first element.
+	\item 4 external terminal rounds a 7th degree S-box on all elements.
+\end{enumerate}
+
+\paragraph{Initial MDS application.}
+
+The first operation applies the MDS matrix to the absorbed state. The input 12 elements
+and 4 zeroes must be in the witness. Here this input will be denoted as $s = (s_0, s_1, \ldots, s_{11}, 0, 0, 0, 0)$.
+Then the output of the MDS application is captured into the witness, denoted as $s_{after\_mds}$.
+The constraint enforces 
+
+\[
+	s_{after\_mds\_i} - s'_i = 0
+\]
+
+where $i \in (0, 1, \ldots, 15)$ and $s' = \texttt{MDS} \cdot s$.
+
+\paragraph{External initial rounds.}
+
+Next are external rounds where a round constant is added and S-box is applied
+is applied to all state elements. There are 4 external initial rounds, after each
+the state of 16 elements must be captured (denoted as
+$s_{\text{ext\_init\_r\_i}}; \quad r \in (0, 1, 2, 3); \quad i \in (0, 1, \ldots, 15)$).
+Then in circuit, for each round there is a constraint:
+
+\begin{equation}
+	\texttt{MDS}^{-1} \cdot s_{\text{ext\_init\_r\_i}} - (s_{\text{in\_r\_i}} + c_{\text{ext\_init\_r\_i}})^7 = 0
+\end{equation}
+
+where $c_{\text{ext\_init\_r\_i}}$ is the specific constant at index $i$ for round
+$r$, and the $s_{\text{in\_r\_i}}$ is the input to the round, in first one, it
+is the $s_{after\_mds}$, otherwise it is the output of previous round.
+
+\paragraph{Internal rounds.}
+
+Following the external initial rounds, the permutation executes 22 partial
+internal rounds where the S-box is applied only to the first state element.
+The state after each round is captured into witness, denoted as $s_{\text{inter\_r\_i}}; \quad r \in (0, 1, \ldots, 21); \quad i \in (0, 1, \ldots, 15)$.
+Each internal round computes for each first element:
+
+\begin{equation}
+	M_I^{-1} * s_{\text{inter\_r\_0}} - (s_{\text{in\_r\_0}} + c_{\text{inter\_0}})^7 = 0
+\end{equation}
+
+For other than first element ($i \in (1, 2, \ldots, 15)$ it does:
+
+\begin{equation}
+	M_I^{-1} * s_{\text{inter\_r\_i}} - s_{\text{in\_r\_i}} = 0
+\end{equation}
+
+The $s_{\text{in\_0}}$ is the output of the last external initial round, other
+$s_{\text{in\_i}}$ are outputs of the previous internal rounds.
+
+\paragraph{External terminal rounds.}
+
+The permutation concludes with 4 external terminal rounds, mirroring the
+external initial rounds but using terminal round constants and different inputs
+$s_{\text{ext\_term\_r\_i}}; \quad r \in (0, 1, 2, 3); \quad i \in (0, 1, \ldots, 15)$):
+
+\begin{equation}
+	\texttt{MDS}^{-1} \cdot s_{\text{ext\_term\_r\_i}} - (s_{\text{in\_r\_i}} + c_{\text{ext\_term\_r\_i}})^7 = 0
+\end{equation}
+
+
+where $c_{\text{ext\_term\_r\_i}}$ is the specific constant at index $i$ for round
+$r$, and the $s_{\text{in\_r\_i}}$ is the input to the round, in first one, it
+is the last internal round, otherwise it is the output of previous external terminal round.
+
+\paragraph{Output extraction.}
+
+After the final external terminal round, the output digest is extracted
+from first 4 elements of the state
+
+\begin{equation}
+    h = (s_0, s_1, s_2, s_3)
+\end{equation}
+
+And compared to the claimed result.
+
+\paragraph{Complexity analysis.}
+
+For a single Poseidon2 sponge pass, the constraint system captures 388 witness
+variables across the permutation computation. The system requires 44 sparse
+matrices to encode the linear transformations, round constants, and S-box
+operations. The number of matrices remains constant regardless of
+the number of sponge passes, though their dimensions scale with the permutation
+state size. The highest degree constraint is a 7th degree multiset constraint
+corresponding to the Goldilocks S-box, and this degree does not increase with
+additional sponge passes.
