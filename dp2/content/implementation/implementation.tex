@@ -1,13 +1,18 @@
 \chapter{Implementation}\label{chap:implementation}
 
-% in the beginning mention that latticefold (not latticefold+) is used, because
-% as of designing and writing this work latticefold+ library wasn't ready.
+This chapter presents the prototype implementation of the lattice-based RISC-V
+ZkVM architecture described in the Chapter~\ref{chap:design}. As of writing this work,
+the implementation covers a subset of RISC-V instructions sufficient to run
+simple programs such as an Nth Fibonacci number computation, the CCS
+constraints for these instructions, and the CCS constraints for the Poseidon2
+IVC step commitment. The circuit NIFS verifier and the final SuperSpartan+Greyhound wrapper
+are under development.
 
-% disclaimer which will go away in final work, only the IVC step commitment constrains
-% and not all RISC-V instruction are implemented. Need to add the folding proof
-% verification, wrapping snark of the last folding + memory consistency check.
-
-% AFTER ALL ELSE IS READY, CREATE SOME SORT OF INTRO TO THIS CHAPTER, BUT NOT NOW!!!
+Regarding the choice of folding scheme, this work utilizes the LatticeFold
+protocol rather than its successor LatticeFold+, as the latter's library
+implementation was not available at the time of system design and development.
+In future migration to LatticeFold+ or other folding schemes
+is possible.
 
 \section{Technology stack}\label{sec:tech_stack}
 
@@ -96,12 +101,7 @@ emulator is responsible solely for correct state transitions and the
 generation of the execution trace, while the ZkVM utilizes this trace to
 generate witnesses.
 
-% CCS building
-% 	- briefly describe how the ccs is built
-%		- I can add new vars and just edit the CCS layout and how the witness is created, all other indices are shifted accordingly
-%	- example: 1 sponge pass number of constrains and how does CCS building look like?
-
-\section{Circuit synthesis}\label
+\section{Circuit synthesis}
 
 The constraints defining the validity of the VM execution and the IVC chain
 are synthesized into a CCS.

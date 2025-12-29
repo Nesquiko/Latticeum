@@ -219,7 +219,9 @@ their flaws. The prover needs to have a circuit which contains the whole verific
 algorithm of another proof system. It must verify expensive evaluation proofs
 for polynomial commitments.
 
-Folding scheme takes almost all of the verification steps out of the circuit.
+Folding removes the need to verify a full SNARK inside the circuit, replacing
+it with a cheap evaluation of a random linear combination (linearization). It
+still requires a verifier circuit, but a much cheaper one.
 There are no FFTs, only multi-exponentiations, which do not require large
 memory overhead. Also no embedded elliptic curve pairings are needed, because
 there is no need to switch curves like in recursive proofs.

@@ -6,9 +6,9 @@ The design targets a 32 bit architecture.
 
 \subsection{Field representations and arithmetization}
 
-The target architecture is a 32 bit RISC-V machine. To represent the state of
-this machine within the cryptographic proof system, the Goldilocks field is
-used. The Goldilocks prime is defined as $p = 2^{64} - 2^{32} + 1$. Since $p >
+The target architecture is a 32 bit RISC-V machine. The state of this machine
+within the cryptographic proof system is represented by elements from the
+Goldilocks field. The Goldilocks prime is defined as $p = 2^{64} - 2^{32} + 1$. Since $p >
 2^{32}$, a single field element can losslessly represent any 32 bit register
 value or memory address without overflow during standard representation.
 
