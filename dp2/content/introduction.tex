@@ -45,18 +45,44 @@ comparable to classical ZKP methods while ensuring quantum resistance.
 
 \section*{Document Structure}
 
-% TODO after all is done update this
+This work is structured as follows. Chapter~\ref{chap:analysis} provides the
+necessary background and analysis of the current state of ZkVMs and
+lattice-based cryptography. It begins with an overview of Ethereum's consensus
+and execution mechanisms~\ref{sec:ethereum}, followed by an analysis of
+Snarkification initiatives~\ref{sec:snarkification}. The chapter then examines
+ZkEVMs~\ref{sec:zkevm}, discussing the evolution from recursive proofs to modern
+folding schemes and RISC-V based ZkVMs. Finally, it introduces lattice-based
+cryptography~\ref{sec:lattices}, covering Ajtai commitments and recent
+developments in lattice-based zero-knowledge systems.
 
-This work includes the initial analytical work in Analysis
-\ref{chap:analysis}. This chapter begins with an overview of Ethereum
-\ref{sec:ethereum}, covering its consensus and execution mechanisms.
-It then explores the concept of Snarkification of Ethereum \ref{sec:snarkification},
-discussing Zero-Knowledge Proofs and their application to both the consensus
-layer via the 'Lean consensus' \cite{LeanConsensus} initiative and the
-execution layer through enshrined ZkEVMs. Following this, the report analyzes
-ZkEVMs \ref{sec:zkevm}, examining the challenges of proving EVM execution, the
-evolution of solutions from recursive proofs and folding schemes to modern
-ZkVMs. Finally, the analysis introduces Lattice-based cryptography
-\ref{sec:lattices}, outlining Ajtai commitments and the potential of lattices
-for post-quantum zero-knowledge systems, including recent developments like
-LaBRADOR, Greyhound, and LatticeFold/LatticeFold+.
+Chapter~\ref{chap:problem_statement} defines the research gap regarding
+post-quantum secure ZkVMs and establishes the specific scientific questions and
+objectives that guide the solution design and implementation. It outlines the
+problem of the lack of lattice-based RISC-V ZkVM designs and
+specifies the feasibility, performance, and long-running computation questions
+to be addressed.
+
+Chapter~\ref{chap:design} details the architectural and cryptographic design
+of the proposed lattice-based RISC-V ZkVM. It presents the high-level
+architecture~\ref{sec:arch} describing the proof lifecycle from Rust code to
+succinct argument, specifies the cryptographic primitives~\ref{sec:crypto}
+including LatticeFold, SuperSpartan, and Greyhound, and describes the
+construction of the RISC-V step circuit~\ref{sec:riscv_circuit} and the
+IVC-augmented circuit~\ref{sec:ivc}.
+
+Chapter~\ref{chap:implementation} presents the prototype implementation of the
+lattice-based RISC-V ZkVM. It describes the technology stack~\ref{sec:tech_stack}
+and implementation details, including the RISC-V emulator, Poseidon2
+integration, and circuit synthesis with CCS constraints for the IVC step
+commitments.
+
+Chapter~\ref{chap:evaluation} provides an initial evaluation of the implemented
+components. It presents baseline performance measurements from the Fibonacci
+benchmark on consumer hardware, discusses the limitations of the incomplete
+implementation, and addresses the research questions from both design and
+implementation perspectives.
+
+Chapter~\ref{chap:conclusion} concludes the work by summarizing the design
+and implementation achievements and outlining directions for future work,
+including formal verification, LatticeFold+ integration, GPU acceleration, and
+lookup incorporation.

@@ -1,0 +1,125 @@
+\chapter{Evaluation}\label{chap:evaluation}
+
+This chapter provides an initial evaluation of the lattice-based RISC-V ZkVM
+implementation. It is important to note that the implementation is currently
+incomplete and does not represent a fully functional system. The results
+presented here establish baseline performance metrics for the implemented
+components rather than providing a comprehensive performance comparison with
+existing ZkVMs.
+
+The performance measurements were conducted on consumer-grade hardware using
+the following system configuration:
+
+\begin{itemize}
+    \item \textbf{CPU:} 11th Gen Intel i7
+    \item \textbf{OS:} Arch Linux 
+    \item \textbf{Memory:} 16 GB RAM
+\end{itemize}
+
+\section{Limitations}
+
+This evaluation is subject to several important limitations:
+
+\begin{itemize}
+    \item \textbf{Incomplete implementation:} The in-circuit NIFS verifier,
+		memory consistency checks, and final wrapping SNARK are not yet
+		implemented. The measured performance does not reflect the full
+		proving pipeline.
+    \item \textbf{Small test case:} The evaluation uses a simple Fibonacci
+		computation (16 execution traces), which is insufficient to assess
+		performance on realistic workloads like Ethereum block validation.
+    \item \textbf{Consumer hardware:} The benchmarks were run on consumer
+		hardware. Production deployments of other ZkVMs use GPU clusters.
+\end{itemize}
+
+\section{Fibonacci benchmark results}
+
+A simple benchmark was conducted using a program that computes the 100th
+Fibonacci number. This program was chosen because it does not need many RISC-V
+instructions to calculate the result.
+
+The Fibonacci program execution resulted in:
+
+\begin{itemize}
+    \item \textbf{Execution traces:} 16 instructions
+    \item \textbf{Memory operations:} 2 operations (loads/stores)
+	\item \textbf{Total proving time:} 41.95 seconds
+\end{itemize}
+
+\subsection{Comparison with State-of-the-Art ZkVMs}
+
+For context, benchmarks from Fenbushi Capital report proving times for the
+100,000th Fibonacci number on an EC2 g5.x16xlarge instance (64 vCPUs, AMD EPYC
+7R32, 256 GB RAM, NVIDIA A10G GPU with 24 GB VRAM) \cite{FenbushiBenchmarks}:
+
+\begin{center}
+    \begin{tabular}{|l|c|}
+        \hline
+        \textbf{ZkVM} & \textbf{Time (seconds)} \\
+        \hline
+        SP1 & 3.4 \\
+        RISC Zero & 3.7 \\
+        OpenVM & 7.6 \\
+        \hline
+    \end{tabular}
+\end{center}
+
+The measured proving time of approximately 42 seconds for 16 traces provides
+does not sound very "performant" nor nowhere close to real time proving of Ethereum
+blocks. And compared to established ZkVMs it seems miserable.
+However, the interpretation of this measurement does not have to be so negative.
+Firstly, the implementation is not complete, is not optimized and is running only
+on CPU, no GPU acceleration. There is not enough evidence to rule out this design.
+
+\section{Addressing the research objectives}
+
+\subsection*{Feasibility of lattice-based instantiation}
+
+\textit{Is it feasible to instantiate a full RISC-V execution environment using
+CCS compatible with the LatticeFold protocol?}
+
+\textbf{Design perspective:} The proposed architecture provides a complete
+theoretical blueprint. The mapping of RISC-V state transitions to CCS constraints
+and integration with LatticeFold folding is specified, demonstrating
+architectural feasibility.
+
+\textbf{Implementation perspective:} Partial feasibility demonstrated. The
+RISC-V emulator and Poseidon2 CCS constraints are functional and integrated
+with LatticeFold. In-circuit NIFS verifier and complete instruction set coverage
+remain to be implemented.
+
+\subsection*{Performance trade-offs}
+
+\textit{How does the performance of a lattice-based folding scheme compare to
+traditional elliptic curve-based folding schemes when applied to general-purpose
+VM execution?}
+
+\textbf{Design perspective:} The design leverages lattice-based commitments
+with additive homomorphic properties, theoretically suitable for efficient
+folding. Performance trade-offs are architecturally addressed through
+optimization opportunities such as LatticeFold+ and parallelization.
+
+\textbf{Implementation perspective:} No answer can be provided yet, as there
+is not direct comparison yet. When the implementation will be completed,
+then benchmarks can be created and compared to existing ZkVMs.
+
+\subsection*{Suitability for long-running computations}
+
+\textit{Does the noise growth inherent in lattice-based cryptography hinder the
+ability to prove long execution traces, such as those required for Ethereum block
+validation?}
+
+\textbf{Design perspective:} LatticeFold addresses witness norm growth through
+decomposition at each folding step. By decomposing the witness during every fold,
+the system maintains bounded norms, making execution of long-running
+computations secure and feasible.
+
+\textbf{Implementation perspective:} Inconclusive. The 100th Fibonacci benchmark
+with 16 traces does not exercise long-running computation paths. Testing with
+larger programs is required to observe noise growth effects in practice.
+
+% \subsection{Positive Outlook}
+% The design demonstrates architectural soundness, while the implementation
+% validates core component integration. The performance baseline provides a
+% foundation for optimization efforts, and the modular design supports
+% incremental improvements and adoption of advancements like LatticeFold+.
