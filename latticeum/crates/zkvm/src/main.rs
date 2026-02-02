@@ -353,8 +353,6 @@ fn fold(
     let mut prover_transcript =
         PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
 
-    // the folding proof is ignored here, because there needs to be just one
-    // at the end of the whole folding
     let (folded_acc, folded_w_acc, folding_proof) =
         NIFSProver::<
             GoldilocksRingNTT,
