@@ -90,7 +90,7 @@ dependencies = [
  "ark-relations",
  "ark-serialize",
  "ark-snark",
- "ark-std 0.4.0",
+ "ark-std",
  "blake2",
  "derivative",
  "digest",
@@ -106,7 +106,7 @@ dependencies = [
  "ark-ff",
  "ark-poly",
  "ark-serialize",
- "ark-std 0.4.0",
+ "ark-std",
  "derivative",
  "hashbrown 0.13.2",
  "itertools 0.10.5",
@@ -123,7 +123,7 @@ dependencies = [
  "ark-ff-asm",
  "ark-ff-macros",
  "ark-serialize",
- "ark-std 0.4.0",
+ "ark-std",
  "derivative",
  "digest",
  "itertools 0.10.5",
@@ -165,7 +165,7 @@ checksum = "d320bfc44ee185d899ccbadfa8bc31aab923ce1558716e1997a1e74057fe86bf"
 dependencies = [
  "ark-ff",
  "ark-serialize",
- "ark-std 0.4.0",
+ "ark-std",
  "derivative",
  "hashbrown 0.13.2",
 ]
@@ -177,7 +177,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00796b6efc05a3f48225e59cb6a2cda78881e7c390872d5786aaf112f31fb4f0"
 dependencies = [
  "ark-ff",
- "ark-std 0.4.0",
+ "ark-std",
  "tracing",
 ]
 
@@ -188,7 +188,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adb7b85a02b83d2f22f89bd5cac66c9c89474240cb6207cb1efc16d098e822a5"
 dependencies = [
  "ark-serialize-derive",
- "ark-std 0.4.0",
+ "ark-std",
  "digest",
  "num-bigint",
 ]
@@ -213,7 +213,7 @@ dependencies = [
  "ark-ff",
  "ark-relations",
  "ark-serialize",
- "ark-std 0.4.0",
+ "ark-std",
 ]
 
 [[package]]
@@ -221,16 +221,6 @@ name = "ark-std"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94893f1e0c6eeab764ade8dc4c0db24caf4fe7cbbaafc0eba0a9030f447b5185"
-dependencies = [
- "num-traits",
- "rand 0.8.5",
-]
-
-[[package]]
-name = "ark-std"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "246a225cc6131e9ee4f24619af0f19d67761fff15d7ccc22e42b80846e69449a"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
@@ -308,7 +298,7 @@ source = "git+https://github.com/NethermindEth/latticefold.git?branch=main#194d4
 dependencies = [
  "ark-crypto-primitives",
  "ark-ff",
- "ark-std 0.4.0",
+ "ark-std",
  "num-bigint",
  "rand 0.8.5",
  "stark-rings",
@@ -528,7 +518,7 @@ dependencies = [
  "ark-crypto-primitives",
  "ark-ff",
  "ark-serialize",
- "ark-std 0.4.0",
+ "ark-std",
  "cyclotomic-rings",
  "num-bigint",
  "num-traits",
@@ -1025,7 +1015,7 @@ dependencies = [
  "ark-ff",
  "ark-poly",
  "ark-serialize",
- "ark-std 0.4.0",
+ "ark-std",
  "delegate",
  "derive_more",
  "num-bigint",
@@ -1046,7 +1036,7 @@ source = "git+https://github.com/NethermindEth/stark-rings.git?branch=main#886a8
 dependencies = [
  "ark-ff",
  "ark-serialize",
- "ark-std 0.4.0",
+ "ark-std",
  "delegate",
  "derive_more",
  "num-integer",
@@ -1062,7 +1052,7 @@ source = "git+https://github.com/NethermindEth/stark-rings.git?branch=main#886a8
 dependencies = [
  "ark-ff",
  "ark-serialize",
- "ark-std 0.4.0",
+ "ark-std",
  "displaydoc",
  "hashbrown 0.15.4",
  "rand 0.8.5",
@@ -1488,7 +1478,8 @@ dependencies = [
 name = "zkvm"
 version = "0.1.0"
 dependencies = [
- "ark-std 0.5.0",
+ "ark-ff",
+ "ark-std",
  "configuration",
  "cyclotomic-rings",
  "latticefold",

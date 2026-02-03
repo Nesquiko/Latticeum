@@ -2,6 +2,7 @@ mod ccs;
 mod commitments;
 mod constraints;
 mod crypto_consts;
+mod fiat_shamir;
 mod ivc;
 mod poseidon2;
 

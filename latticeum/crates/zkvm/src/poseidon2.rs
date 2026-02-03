@@ -97,7 +97,7 @@ pub struct PermutationIntermediateStates {
 
 /// impl taken from Permutation<[Goldilocks; WIDE_POSEIDON2_WIDTH]>
 impl WideZkVMPoseidon2Perm {
-    fn permute_mut(
+    pub fn permute_mut(
         &self,
         state: &mut [Goldilocks; WIDE_POSEIDON2_WIDTH],
     ) -> PermutationIntermediateStates {
