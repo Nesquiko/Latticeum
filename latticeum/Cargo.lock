@@ -1478,12 +1478,14 @@ dependencies = [
 name = "zkvm"
 version = "0.1.0"
 dependencies = [
+ "ark-crypto-primitives",
  "ark-ff",
  "ark-std",
  "configuration",
  "cyclotomic-rings",
  "latticefold",
  "num-traits",
+ "p3-challenger",
  "p3-commit",
  "p3-field",
  "p3-goldilocks",

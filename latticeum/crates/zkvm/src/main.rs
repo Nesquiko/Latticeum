@@ -16,7 +16,6 @@ use latticefold::{
     },
     transcript::poseidon::PoseidonTranscript,
 };
-
 use num_traits::identities::Zero;
 use p3_field::{PrimeCharacteristicRing, PrimeField64};
 use p3_goldilocks::Goldilocks;
@@ -37,6 +36,9 @@ use crate::{
     ivc::{IVCStepInput, IVCStepOutput, arithmetize},
     poseidon2::{GoldilocksComm, ZERO_GOLDILOCKS_COMM},
 };
+
+// type FiatShamirTranscript = PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>;
+type FiatShamirTranscript = fiat_shamir::Poseidon2Transcript;
 
 fn main() {
     let filter = EnvFilter::try_from_default_env()
@@ -264,6 +266,7 @@ fn main() {
 //     final_proof_time,
 //     verification_time
 // );
+
 #[instrument(skip_all, level = Level::DEBUG)]
 fn initialize_accumulator(
     ccs: &CCS<GoldilocksRingNTT>,
@@ -293,11 +296,13 @@ fn initialize_accumulator(
         x_ccs: zero_x_ccs,
     };
 
-    let mut transcript = PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
-    let (acc, _) = LFLinearizationProver::<
-        _,
-        PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
-    >::prove(&zero_cm_i, &zero_wit, &mut transcript, ccs)
+    let mut transcript = FiatShamirTranscript::default();
+    let (acc, _) = LFLinearizationProver::<_, FiatShamirTranscript>::prove(
+        &zero_cm_i,
+        &zero_wit,
+        &mut transcript,
+        ccs,
+    )
     .expect("failed to create initial accumulator");
 
     (acc, zero_wit)
@@ -351,15 +356,18 @@ fn fold(
     Witness<GoldilocksRingNTT>,
     LFProof<GoldilocksRingNTT>,
 ) {
-    let mut prover_transcript =
-        PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
+    let mut prover_transcript = FiatShamirTranscript::default();
 
     let (folded_acc, folded_w_acc, folding_proof) =
-        NIFSProver::<
-            GoldilocksRingNTT,
-            GoldiLocksDP,
-            PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
-        >::prove(acc, w_acc, cm_i, w_i, &mut prover_transcript, ccs, scheme)
+        NIFSProver::<GoldilocksRingNTT, GoldiLocksDP, FiatShamirTranscript>::prove(
+            acc,
+            w_acc,
+            cm_i,
+            w_i,
+            &mut prover_transcript,
+            ccs,
+            scheme,
+        )
         .expect("NIFS proving failed for a step");
 
     #[cfg(feature = "debug")]
@@ -378,13 +386,14 @@ fn verify_folding(
 ) {
     use latticefold::nifs::NIFSVerifier;
 
-    let mut verifier_transcript =
-        PoseidonTranscript::<GoldilocksRingNTT, GoldilocksChallengeSet>::default();
+    let mut verifier_transcript = FiatShamirTranscript::default();
 
-    NIFSVerifier::<
-        GoldilocksRingNTT,
-        GoldiLocksDP,
-        PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>,
-    >::verify(&acc, &cm_i, &folding_proof, &mut verifier_transcript, &ccs)
+    NIFSVerifier::<GoldilocksRingNTT, GoldiLocksDP, FiatShamirTranscript>::verify(
+        &acc,
+        &cm_i,
+        &folding_proof,
+        &mut verifier_transcript,
+        &ccs,
+    )
     .expect("Final proof verification failed");
 }

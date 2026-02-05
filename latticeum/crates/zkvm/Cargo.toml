@@ -19,6 +19,7 @@ stark-rings-poly = { workspace = true }
 stark-rings-linalg = { workspace = true }
 ark-std = { workspace = true }
 ark-ff = { workspace = true }
+ark-crypto-primitives = { workspace = true }
 
 p3-poseidon2 = { workspace = true }
 p3-goldilocks = { workspace = true }
@@ -28,6 +29,7 @@ p3-merkle-tree = { workspace = true }
 p3-matrix = { workspace = true }
 p3-commit = { workspace = true }
 p3-mds = { workspace = true }
+p3-challenger = { workspace = true }
 
 rand = { workspace = true }
 

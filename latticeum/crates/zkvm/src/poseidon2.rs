@@ -1,16 +1,16 @@
-use std::sync::LazyLock;
-
-use p3_field::PrimeCharacteristicRing;
-use p3_goldilocks::{Goldilocks, MATRIX_DIAG_16_GOLDILOCKS, Poseidon2Goldilocks};
-use p3_mds::MdsPermutation;
-use p3_poseidon2::{ExternalLayerConstants, MDSMat4, add_rc_and_sbox_generic, matmul_internal};
-use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
-use tracing::{Level, instrument};
-
 use crate::crypto_consts::{
     FULL_ROUNDS, PARTIAL_ROUNDS, external_width_8_consts, external_width_16_consts,
     internal_constants_len_22,
 };
+use p3_field::PrimeCharacteristicRing;
+use p3_goldilocks::{Goldilocks, MATRIX_DIAG_16_GOLDILOCKS, Poseidon2Goldilocks};
+use p3_mds::MdsPermutation;
+use p3_poseidon2::{ExternalLayerConstants, MDSMat4, add_rc_and_sbox_generic, matmul_internal};
+use p3_symmetric::{
+    CryptographicPermutation, PaddingFreeSponge, Permutation, TruncatedPermutation,
+};
+use std::sync::LazyLock;
+use tracing::{Level, instrument};
 
 /// Copied from Plonky3, because it is private...
 /// Degree of the chosen permutation polynomial for Goldilocks, used as the Poseidon2 S-Box.
@@ -95,7 +95,7 @@ pub struct PermutationIntermediateStates {
     pub after_ext_terminal_rounds: [[Goldilocks; WIDE_POSEIDON2_WIDTH]; FULL_ROUNDS / 2],
 }
 
-/// impl taken from Permutation<[Goldilocks; WIDE_POSEIDON2_WIDTH]>
+/// impl taken from Permutation<[Goldilocks; WIDE_POSEIDON2_WIDTH]> in Plonky3's Poseidon2
 impl WideZkVMPoseidon2Perm {
     pub fn permute_mut(
         &self,
@@ -171,6 +171,14 @@ impl WideZkVMPoseidon2Perm {
         intermediate
     }
 }
+
+impl Permutation<[Goldilocks; WIDE_POSEIDON2_WIDTH]> for WideZkVMPoseidon2Perm {
+    fn permute_mut(&self, state: &mut [Goldilocks; WIDE_POSEIDON2_WIDTH]) {
+        self.permute_mut(state);
+    }
+}
+
+impl CryptographicPermutation<[Goldilocks; WIDE_POSEIDON2_WIDTH]> for WideZkVMPoseidon2Perm {}
 
 #[derive(Clone)]
 pub struct WideZkVMPoseidon2 {
