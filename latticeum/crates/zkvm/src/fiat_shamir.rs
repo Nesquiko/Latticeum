@@ -23,6 +23,8 @@ type Poseidon2Sponge =
 #[derive(Clone)]
 pub struct Poseidon2Transcript {
     sponge: Poseidon2Sponge,
+
+    pub absorbtions: Vec<Vec<GoldilocksRingNTT>>,
 }
 
 impl Default for Poseidon2Transcript {
@@ -40,7 +42,10 @@ impl Transcript<GoldilocksRingNTT> for Poseidon2Transcript {
     fn new(config: &Self::TranscriptConfig) -> Self {
         let perm = WideZkVMPoseidon2Perm::new(config.0.clone(), config.1.clone());
         let sponge = Poseidon2Sponge::new(perm);
-        Self { sponge }
+        Self {
+            sponge,
+            absorbtions: Vec::new(),
+        }
     }
 
     fn absorb(&mut self, v: &GoldilocksRingNTT) {
@@ -51,6 +56,13 @@ impl Transcript<GoldilocksRingNTT> for Poseidon2Transcript {
                 let goldilocks_elem = Goldilocks::from_u64(u64_val);
                 self.sponge.observe(goldilocks_elem);
             }
+        }
+    }
+
+    fn absorb_slice(&mut self, v: &[GoldilocksRingNTT]) {
+        self.absorbtions.push(v.to_vec());
+        for ring in v {
+            self.absorb(ring);
         }
     }
 

@@ -5,8 +5,9 @@ mod crypto_consts;
 mod fiat_shamir;
 mod ivc;
 mod poseidon2;
+mod zk_latticefold;
 
-use cyclotomic_rings::rings::{GoldilocksChallengeSet, GoldilocksRingNTT, GoldilocksRingPoly};
+use cyclotomic_rings::rings::{GoldilocksRingNTT, GoldilocksRingPoly};
 use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness},
     commitment::AjtaiCommitmentScheme,
@@ -14,7 +15,6 @@ use latticefold::{
         LFProof, NIFSProver,
         linearization::{LFLinearizationProver, LinearizationProver},
     },
-    transcript::poseidon::PoseidonTranscript,
 };
 use num_traits::identities::Zero;
 use p3_field::{PrimeCharacteristicRing, PrimeField64};
@@ -35,6 +35,7 @@ use crate::{
     constraints::CCSBuilder,
     ivc::{IVCStepInput, IVCStepOutput, arithmetize},
     poseidon2::{GoldilocksComm, ZERO_GOLDILOCKS_COMM},
+    zk_latticefold::zk_latticefold_prove,
 };
 
 // type FiatShamirTranscript = PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>;
@@ -359,16 +360,8 @@ fn fold(
     let mut prover_transcript = FiatShamirTranscript::default();
 
     let (folded_acc, folded_w_acc, folding_proof) =
-        NIFSProver::<GoldilocksRingNTT, GoldiLocksDP, FiatShamirTranscript>::prove(
-            acc,
-            w_acc,
-            cm_i,
-            w_i,
-            &mut prover_transcript,
-            ccs,
-            scheme,
-        )
-        .expect("NIFS proving failed for a step");
+        zk_latticefold_prove(acc, w_acc, cm_i, w_i, &mut prover_transcript, ccs, scheme)
+            .expect("NIFS proving failed for a step");
 
     #[cfg(feature = "debug")]
     verify_folding(&acc, &cm_i, &folding_proof, &ccs);
