@@ -12,7 +12,7 @@ use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness},
     commitment::AjtaiCommitmentScheme,
     nifs::{
-        LFProof, NIFSProver,
+        LFProof,
         linearization::{LFLinearizationProver, LinearizationProver},
     },
 };
@@ -35,7 +35,7 @@ use crate::{
     constraints::CCSBuilder,
     ivc::{IVCStepInput, IVCStepOutput, arithmetize},
     poseidon2::{GoldilocksComm, ZERO_GOLDILOCKS_COMM},
-    zk_latticefold::zk_latticefold_prove,
+    zk_latticefold::{generate_verification_witness_vars, zk_latticefold_prove},
 };
 
 // type FiatShamirTranscript = PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>;
@@ -154,6 +154,9 @@ fn main() {
                 cm_i: &cm_i,
                 w_i: &w_i,
             });
+
+            let folding_proof_vars =
+                generate_verification_witness_vars(&ivc_output.acc, &cm_i, &folding_proof, &ccs);
 
             let state_i_comm = zkvm_commiter.state_i_comm(
                 vm_regs,

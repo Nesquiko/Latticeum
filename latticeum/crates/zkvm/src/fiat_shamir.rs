@@ -3,6 +3,7 @@ use crate::poseidon2::{
     WideZkVMPoseidon2Perm,
 };
 use ark_ff::Field;
+use ark_ff::PrimeField;
 use cyclotomic_rings::{
     challenge_set::LatticefoldChallengeSet,
     rings::{GoldilocksChallengeSet, GoldilocksRingNTT, GoldilocksRingPoly},
@@ -110,5 +111,20 @@ impl TranscriptWithShortChallenges<GoldilocksRingNTT> for Poseidon2Transcript {
 
         Self::ChallengeSet::short_challenge_from_random_bytes(&random_bytes)
             .expect("not enough bytes to get a small challenge")
+    }
+}
+
+impl Poseidon2Transcript {
+    /// Modified squeeze_beta_challenges from latticefold's SqueezeBeta trait,
+    /// which is crate private...
+    pub fn squeeze_beta_challenges(&mut self, n: usize) -> Vec<GoldilocksRingNTT> {
+        self.absorb_field_element(&<Fq3 as Field>::from_base_prime_field(
+            <Fq3 as Field>::BasePrimeField::from_be_bytes_mod_order(b"beta_s"),
+        ));
+
+        self.get_challenges(n)
+            .into_iter()
+            .map(|x| x.into())
+            .collect()
     }
 }

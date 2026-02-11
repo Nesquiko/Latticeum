@@ -3,16 +3,21 @@ use cyclotomic_rings::rings::GoldilocksRingNTT;
 use latticefold::decomposition_parameters::DecompositionParams;
 use latticefold::nifs::decomposition::DecompositionProver;
 use latticefold::nifs::decomposition::LFDecompositionProver;
+use latticefold::nifs::error::LinearizationError;
 use latticefold::nifs::folding::FoldingProver;
 use latticefold::nifs::folding::LFFoldingProver;
 use latticefold::nifs::linearization::LFLinearizationProver;
+use latticefold::nifs::linearization::LinearizationProof;
 use latticefold::nifs::linearization::LinearizationProver;
+use latticefold::utils::sumcheck::IPForMLSumcheck;
+use latticefold::utils::sumcheck::MLSumcheck;
 use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness, error::CSError},
     commitment::AjtaiCommitmentScheme,
     nifs::{LFProof, error::LatticefoldError},
     transcript::Transcript,
 };
+use num_traits::Zero;
 use stark_rings::cyclotomic_ring::models::goldilocks::Fq3;
 
 use crate::{ccs::GoldiLocksDP, fiat_shamir::Poseidon2Transcript};
@@ -38,7 +43,6 @@ pub fn zk_latticefold_prove(
     sanity_check(ccs)?;
 
     absorb_public_input(acc, cm_i, transcript);
-    // TODO collect absorbtions here from transcript
 
     let (linearized_cm_i, linearization_proof) =
         LFLinearizationProver::<_, Poseidon2Transcript>::prove(cm_i, w_i, transcript, ccs)?;
@@ -87,6 +91,23 @@ pub fn zk_latticefold_prove(
     ))
 }
 
+pub fn generate_verification_witness_vars(
+    acc: &LCCCS<GoldilocksRingNTT>,
+    cm_i: &CCCS<GoldilocksRingNTT>,
+    proof: &LFProof<GoldilocksRingNTT>,
+    ccs: &CCS<GoldilocksRingNTT>,
+) {
+    let mut transcript = Poseidon2Transcript::default();
+    absorb_public_input(acc, cm_i, &mut transcript);
+
+    let beta_s = transcript.squeeze_beta_challenges(ccs.s);
+
+    // TODO take the latticefold into the repo, not as lib
+    let (point_r, s): (Vec<GoldilocksRingNTT>, GoldilocksRingNTT) =
+        verify_sumcheck_proof(&proof.linearization_proof, &mut transcript, ccs)
+            .expect("failed to verify sumcheck");
+}
+
 /// Modified version of the sanity_check from latticefold library, because it isn't
 /// exposed as public.
 fn sanity_check(ccs: &CCS<GoldilocksRingNTT>) -> Result<(), LatticefoldError<GoldilocksRingNTT>> {
@@ -121,4 +142,39 @@ fn absorb_public_input(
 
     transcript.absorb_slice(cm_i.cm.as_ref());
     transcript.absorb_slice(&cm_i.x_ccs);
+}
+
+/// Modified version of the LFLinearizationVerifier::verify_sumcheck_proof,
+/// because it is private...
+fn verify_sumcheck_proof(
+    proof: &LinearizationProof<GoldilocksRingNTT>,
+    transcript: &mut Poseidon2Transcript,
+    ccs: &CCS<GoldilocksRingNTT>,
+) -> Result<(Vec<GoldilocksRingNTT>, GoldilocksRingNTT), LinearizationError<GoldilocksRingNTT>> {
+    // The polynomial has degree <= ccs.d + 1 and log_m (ccs.s) vars.
+    let nvars = ccs.s;
+    let degree = ccs.d + 1;
+
+    transcript.absorb(&GoldilocksRingNTT::from(nvars as u128));
+    transcript.absorb(&GoldilocksRingNTT::from(degree as u128));
+
+    let mut verifier_state =
+        IPForMLSumcheck::<GoldilocksRingNTT, Poseidon2Transcript>::verifier_init(nvars, degree);
+
+    let lin_proof = proof.linearization_sumcheck;
+    for i in 0..nvars {
+        // let prover_msg = lin_proof.0.get(i).expect("proof is incomplete");
+        //     transcript.absorb_slice(&prover_msg.evaluations);
+        //     let verifier_msg =
+        //         IPForMLSumcheck::verify_round(prover_msg.clone(), &mut verifier_state, transcript);
+        //     transcript.absorb(&verifier_msg.randomness.into());
+    }
+    //
+    // IPForMLSumcheck::<R, T>::check_and_generate_subclaim(verifier_state, claimed_sum)
+
+    // Ok((
+    //     subclaim.point.into_iter().map(|x| x.into()).collect(),
+    //     subclaim.expected_evaluation,
+    // ))
+    todo!()
 }
