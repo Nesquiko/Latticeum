@@ -1,3 +1,9 @@
+// Copyright 2024 Demerzel Solutions Ltd (A.K.A Nethermind) (nethermind.io)
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+//
+// Modified by Nesquiko for master thesis, 2026-02-11:
+// - Made ProverMsg struct field public (pub evaluations: Vec<R1>)
+// - Reordered imports
 //! Prover
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -7,13 +13,13 @@ use rayon::prelude::*;
 use stark_rings::{OverField, Ring};
 use stark_rings_poly::{mle::MultilinearExtension, polynomials::DenseMultilinearExtension};
 
-use super::{verifier::VerifierMsg, IPForMLSumcheck};
+use super::{IPForMLSumcheck, verifier::VerifierMsg};
 
 /// Prover Message
 #[derive(Clone, Debug, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct ProverMsg<R1: Ring> {
     /// evaluations on P(0), P(1), P(2), ...
-    pub(crate) evaluations: Vec<R1>,
+    pub evaluations: Vec<R1>,
 }
 
 /// Prover State

@@ -9,6 +9,7 @@ use latticefold::nifs::folding::LFFoldingProver;
 use latticefold::nifs::linearization::LFLinearizationProver;
 use latticefold::nifs::linearization::LinearizationProof;
 use latticefold::nifs::linearization::LinearizationProver;
+use latticefold::utils::sumcheck::IPForMLSumcheck;
 use latticefold::utils::sumcheck::MLSumcheck;
 use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness, error::CSError},
@@ -155,13 +156,26 @@ fn verify_sumcheck_proof(
     let nvars = ccs.s;
     let degree = ccs.d + 1;
 
-    let subclaim = MLSumcheck::verify_as_subprotocol(
-        transcript,
-        nvars,
-        degree,
-        GoldilocksRingNTT::zero(),
-        &proof.linearization_sumcheck,
-    )?;
+    transcript.absorb(&GoldilocksRingNTT::from(nvars as u128));
+    transcript.absorb(&GoldilocksRingNTT::from(degree as u128));
+
+    let mut verifier_state =
+        IPForMLSumcheck::<GoldilocksRingNTT, Poseidon2Transcript>::verifier_init(nvars, degree);
+    let lin_proof = &proof.linearization_sumcheck;
+    for i in 0..nvars {
+        let prover_msg = lin_proof.0.get(i).expect("proof is incomplete");
+        transcript.absorb_slice(&prover_msg.evaluations);
+        let verifier_msg =
+            IPForMLSumcheck::verify_round(prover_msg.clone(), &mut verifier_state, transcript);
+        transcript.absorb(&verifier_msg.randomness.into());
+    }
+
+    let claimed_sum = GoldilocksRingNTT::zero();
+    let subclaim =
+        IPForMLSumcheck::<GoldilocksRingNTT, Poseidon2Transcript>::check_and_generate_subclaim(
+            verifier_state,
+            claimed_sum,
+        )?;
 
     Ok((
         subclaim.point.into_iter().map(|x| x.into()).collect(),
