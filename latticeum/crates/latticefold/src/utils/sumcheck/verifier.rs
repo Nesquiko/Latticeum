@@ -1,9 +1,17 @@
+// Copyright 2024 Demerzel Solutions Ltd (A.K.A Nethermind) (nethermind.io)
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+//
+// Modified by Nesquiko for master thesis, 2026-02-13:
+// - Made VerifierState fields public: max_multiplicands, polynomials_received
+// - Made interpolate_uni_poly public
+// - Reordered imports
+
 //! Verifier
 use ark_ff::{Field, One, Zero};
 use ark_std::vec::Vec;
 use stark_rings::OverField;
 
-use super::{prover::ProverMsg, IPForMLSumcheck, SumCheckError};
+use super::{IPForMLSumcheck, SumCheckError, prover::ProverMsg};
 use crate::transcript::Transcript;
 
 pub const SQUEEZE_NATIVE_ELEMENTS_NUM: usize = 1;
@@ -19,10 +27,10 @@ pub struct VerifierMsg<R: OverField> {
 pub struct VerifierState<R: OverField> {
     round: usize,
     nv: usize,
-    max_multiplicands: usize,
+    pub max_multiplicands: usize,
     finished: bool,
     /// a list storing the univariate polynomial in evaluation form sent by the prover at each round
-    polynomials_received: Vec<Vec<R>>,
+    pub polynomials_received: Vec<Vec<R>>,
     /// a list storing the randomness sampled by the verifier at each round
     randomness: Vec<R::BaseRing>,
 }
@@ -136,7 +144,7 @@ impl<R: OverField, T: Transcript<R>> IPForMLSumcheck<R, T> {
 /// p_i.len()-1 passing through the y-values in p_i at x = 0,..., p_i.len()-1
 /// and evaluate this  polynomial at `eval_at`. In other words, efficiently compute
 ///  \sum_{i=0}^{len p_i - 1} p_i[i] * (\prod_{j!=i} (eval_at - j)/(i-j))
-pub(crate) fn interpolate_uni_poly<R: OverField>(p_i: &[R], eval_at: R::BaseRing) -> R {
+pub fn interpolate_uni_poly<R: OverField>(p_i: &[R], eval_at: R::BaseRing) -> R {
     let len = p_i.len();
 
     let mut evals = vec![];

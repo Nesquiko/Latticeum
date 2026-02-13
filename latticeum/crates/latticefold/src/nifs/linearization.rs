@@ -1,3 +1,11 @@
+// Copyright 2024 Demerzel Solutions Ltd (A.K.A Nethermind) (nethermind.io)
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+//
+// Modified by Nesquiko for master thesis, 2026-02-13:
+// - Made LFLinearizationVerifier::verify_evaluation_claim public
+// - Made LFLinearizationVerifier::prepare_verifier_output public
+// - Reordered imports
+
 use cyclotomic_rings::rings::SuitableRing;
 use stark_rings::OverField;
 use stark_rings_poly::mle::DenseMultilinearExtension;
@@ -6,13 +14,13 @@ pub use self::structs::*;
 use self::utils::{compute_u, prepare_lin_sumcheck_polynomial, sumcheck_polynomial_comb_fn};
 use super::error::LinearizationError;
 use crate::{
-    arith::{Instance, Witness, CCCS, CCS, LCCCS},
+    arith::{CCCS, CCS, Instance, LCCCS, Witness},
     ark_base::*,
     nifs::linearization::utils::SqueezeBeta,
     transcript::Transcript,
     utils::{
         mle_helpers::{calculate_Mz_mles, evaluate_mles},
-        sumcheck::{utils::eq_eval, MLSumcheck, Proof, SumCheckError::SumCheckFailed},
+        sumcheck::{MLSumcheck, Proof, SumCheckError::SumCheckFailed, utils::eq_eval},
     },
 };
 
@@ -217,7 +225,7 @@ impl<NTT: SuitableRing, T: Transcript<NTT>> LFLinearizationVerifier<NTT, T> {
     /// $$
     /// \mathbf{e} \cdot \left( \sum\_{i=1}^{n\_s} c_i \cdot \prod\_{j \in S\_i} \mathbf{u}\_j \right) \stackrel{?}{=} s.
     /// $$
-    fn verify_evaluation_claim(
+    pub fn verify_evaluation_claim(
         beta_s: &[NTT],
         point_r: &[NTT],
         s: NTT,
@@ -242,7 +250,7 @@ impl<NTT: SuitableRing, T: Transcript<NTT>> LFLinearizationVerifier<NTT, T> {
         Ok(())
     }
 
-    fn prepare_verifier_output(
+    pub fn prepare_verifier_output(
         cm_i: &CCCS<NTT>,
         point_r: Vec<NTT>,
         proof: &LinearizationProof<NTT>,
