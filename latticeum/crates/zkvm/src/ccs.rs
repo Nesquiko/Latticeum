@@ -1,3 +1,4 @@
+use cyclotomic_rings::rings::GoldilocksRingNTT;
 use p3_field::PrimeField64;
 use p3_goldilocks::Goldilocks;
 use std::ops::Range;
@@ -10,7 +11,11 @@ use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 use crate::{
     crypto_consts::{FULL_ROUNDS, PARTIAL_ROUNDS},
     ivc::IVCStepInput,
-    poseidon2::{POSEIDON2_OUT, WIDE_POSEIDON2_13_SPONGE_PASSES, WIDE_POSEIDON2_WIDTH},
+    poseidon2::{
+        GOLDILOCKS_S_BOX_DEGREE, POSEIDON2_OUT, WIDE_POSEIDON2_13_SPONGE_PASSES,
+        WIDE_POSEIDON2_WIDTH,
+    },
+    zk_latticefold::FoldingProofWitnessVars,
 };
 
 #[derive(Clone, Copy)]
@@ -32,6 +37,20 @@ pub const CCS_LAYOUT: CCSLayout = CCSLayout::new();
 pub const KAPPA: usize = 4;
 /// Number of columns in the Ajtai commitment matrix
 pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
+
+/// Change this manually, since building of CCS is dynamic and this needs to be const.
+/// This is log(m) where m is the number of rows in matrices padded to the next power of two,
+/// see the constraint.rs
+const CCS_S: usize = 13;
+/// Change this manually, since building of CCS is dynamic and this needs to be const.
+/// The max degree is of the poseidon2 s box degree 7, then
+///     - +1 because of linearization
+///     - +1 to capture degree x polynom, you must have x+1 coeffs
+const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
+/// Change this manually, since building of CCS is dynamic and this needs to be const.
+const CCS_NUM_MATRICES: usize = 59;
+/// +1 for the initialy claimed '0'
+const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
 /// This struct holds the *indices* for CCS layout. It doesn't hold the data itself,
 /// just the indexes/layout map.
@@ -63,6 +82,15 @@ pub struct CCSLayout {
     /// There are 4 external terminal rounds, and there are 2 sponge passes
     ///  so FULL_ROUNDS/2 * 2 * WIDE_POSEIDON2_WIDTH = FULL_ROUNDS * WIDE_POSEIDON2_WIDTH
     pub ivc_h_i_external_terminal: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH],
+
+    // These are for the GoldilocksRingNTT elements
+    pub lin_beta_s_idx: [usize; CCS_S],
+    pub lin_eval_polynomials_idx: [usize; CCS_S * LINEARIZATION_DEGREE],
+    pub lin_claimed_sums: [usize; LINEARIZATION_CLAIMED_SUMS], //+1 because of the first '0'
+    pub lin_expected_eval: usize,
+    pub lin_eval_point: [usize; CCS_S],
+    pub lin_proof_u: [usize; CCS_NUM_MATRICES],
+    // --------------------------------------------
 
     // input state
     pub pc_in_idx: usize,
@@ -135,8 +163,18 @@ impl CCSLayout {
             { WIDE_POSEIDON2_13_SPONGE_PASSES * PARTIAL_ROUNDS * WIDE_POSEIDON2_WIDTH },
         >(w_cursor);
 
-        let (ivc_h_i_external_terminal, mut w_cursor) =
+        let (ivc_h_i_external_terminal, w_cursor) =
             indices_with_new_cursor::<{ FULL_ROUNDS * WIDE_POSEIDON2_WIDTH }>(w_cursor);
+
+        let (lin_beta_s_idx, w_cursor) = indices_with_new_cursor::<CCS_S>(w_cursor);
+        let (lin_eval_polynomials_idx, w_cursor) =
+            indices_with_new_cursor::<{ CCS_S * LINEARIZATION_DEGREE }>(w_cursor);
+        let (lin_claimed_sums, mut w_cursor) =
+            indices_with_new_cursor::<LINEARIZATION_CLAIMED_SUMS>(w_cursor);
+        let lin_expected_eval = w_cursor;
+        w_cursor += 1;
+        let (lin_eval_point, w_cursor) = indices_with_new_cursor::<CCS_S>(w_cursor);
+        let (lin_proof_u, mut w_cursor) = indices_with_new_cursor::<CCS_NUM_MATRICES>(w_cursor);
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -201,6 +239,12 @@ impl CCSLayout {
             ivc_h_i_external_initial,
             ivc_h_i_after_internal_idx,
             ivc_h_i_external_terminal,
+            lin_beta_s_idx,
+            lin_eval_polynomials_idx,
+            lin_expected_eval,
+            lin_claimed_sums,
+            lin_eval_point,
+            lin_proof_u,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -240,7 +284,7 @@ impl CCSLayout {
 }
 
 #[instrument(skip_all, level = Level::DEBUG)]
-pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLayout) {
+pub fn set_ivc_h_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLayout) {
     z[layout.ivc_h_i_step_idx] = input.ivc_step.as_canonical_u64() as usize;
 
     for (i, &z_idx) in layout.ivc_h_i_state_0_comm_idx.iter().enumerate() {
@@ -329,6 +373,41 @@ pub fn set_ivc_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLay
 
     for (i, &z_idx) in layout.ivc_h_i_external_terminal.iter().enumerate() {
         z[z_idx] = after_ext_term_rounds[i].as_canonical_u64() as usize;
+    }
+}
+
+#[instrument(skip_all, level = Level::DEBUG)]
+pub fn set_folding_proof_witness(
+    z: &mut Vec<GoldilocksRingNTT>,
+    folding_vars: &FoldingProofWitnessVars,
+    layout: &CCSLayout,
+) {
+    let linearization_vars = &folding_vars.linearization_vars;
+
+    for (i, &z_idx) in layout.lin_beta_s_idx.iter().enumerate() {
+        z[z_idx] = linearization_vars.beta_s[i];
+    }
+
+    for (i, &z_idx) in layout
+        .lin_eval_polynomials_idx
+        .iter()
+        .step_by(LINEARIZATION_DEGREE)
+        .enumerate()
+    {
+        for el_idx in 0..LINEARIZATION_DEGREE {
+            z[z_idx + el_idx] = linearization_vars.evaluation_polynomials[i][el_idx];
+        }
+    }
+
+    z[layout.lin_expected_eval] = linearization_vars.expected_evaluation;
+    for (i, &z_idx) in layout.lin_claimed_sums.iter().enumerate() {
+        z[z_idx] = linearization_vars.claimed_sums[i];
+    }
+    for (i, &z_idx) in layout.lin_eval_point.iter().enumerate() {
+        z[z_idx] = linearization_vars.evaluation_point[i];
+    }
+    for (i, &z_idx) in layout.lin_proof_u.iter().enumerate() {
+        z[z_idx] = linearization_vars.linearization_proof_u[i];
     }
 }
 

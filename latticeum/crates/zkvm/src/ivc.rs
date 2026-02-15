@@ -9,8 +9,9 @@ use tracing::{Level, instrument};
 use vm::riscvm::inst::ExecutionTrace;
 
 use crate::{
-    ccs::{CCSLayout, set_ivc_witness, set_trace_witness},
+    ccs::{CCSLayout, set_folding_proof_witness, set_ivc_h_witness, set_trace_witness},
     poseidon2::{GoldilocksComm, IntermediateStates},
+    zk_latticefold::FoldingProofWitnessVars,
 };
 
 /// Holds the complete public and private state at the end of a single IVC step.
@@ -45,6 +46,8 @@ pub struct IVCStepOutput {
     /// The folding proof `π_i` that was generated during this step.
     /// Becomes `folding_proof` for step `i+1`.
     pub folding_proof: Option<LFProof<GoldilocksRingNTT>>,
+
+    pub folding_proof_vars: Option<FoldingProofWitnessVars>,
 }
 
 pub struct IVCStepInput<'a> {
@@ -85,6 +88,8 @@ pub struct IVCStepInput<'a> {
     /// folding proof needed to verify correct IVC step `i - 1` inside the CCS.
     /// When arithmetizing first step, there is not folding proof.
     pub folding_proof: Option<&'a LFProof<GoldilocksRingNTT>>,
+    pub folding_proof_vars: Option<&'a FoldingProofWitnessVars>,
+
     /// needed in verifying [Self::folding_proof] inside the CCS.
     pub w_acc: &'a Witness<GoldilocksRingNTT>,
 
@@ -103,8 +108,14 @@ pub fn arithmetize(input: &IVCStepInput, layout: &CCSLayout) -> Vec<GoldilocksRi
 
     z_vec[layout.const_1_idx] = 1usize;
 
-    set_ivc_witness(&mut z_vec, input, layout);
+    set_ivc_h_witness(&mut z_vec, input, layout);
     set_trace_witness(&mut z_vec, input.trace, layout);
 
-    to_F_vec(z_vec)
+    let mut z_vec = to_F_vec(z_vec);
+
+    if let Some(folding_vars) = input.folding_proof_vars {
+        set_folding_proof_witness(&mut z_vec, folding_vars, layout);
+    }
+
+    z_vec
 }

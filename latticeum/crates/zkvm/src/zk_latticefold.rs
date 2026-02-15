@@ -92,38 +92,23 @@ pub fn zk_latticefold_prove(
     ))
 }
 
+pub struct FoldingProofWitnessVars {
+    pub linearization_vars: LinearizationVars,
+}
+
 pub fn generate_verification_witness_vars(
     acc: &LCCCS<GoldilocksRingNTT>,
     cm_i: &CCCS<GoldilocksRingNTT>,
     proof: &LFProof<GoldilocksRingNTT>,
     ccs: &CCS<GoldilocksRingNTT>,
-) {
+) -> FoldingProofWitnessVars {
     let mut transcript = Poseidon2Transcript::default();
     absorb_public_input(acc, cm_i, &mut transcript);
 
-    let linearized_cm_i =
+    let (linearized_cm_i, linearization_vars) =
         collect_linearization_vars(cm_i, &proof.linearization_proof, ccs, &mut transcript);
-    // TODO Linearization constraints in CCS
-    // 1) Sumcheck subclaim constraints (nvars = ccs.s, degree = ccs.d + 1):
-    //    - expected_0 = 0
-    //    - for each round i:
-    //      - enforce evals_i.len() == degree + 1 (= ccs.d + 2; currently 9)
-    //      - enforce evals_i[0] + evals_i[1] == expected_{i-1}
-    //      - enforce expected_i == interpolate_uni_poly(evals_i, r_i)
-    // 2) Output from sumcheck:
-    //    - point_r = [r_1, ..., r_s]
-    //    - s = expected_s
-    // 3) Linearization step-4 evaluation claim:
-    //    - e = eq(beta_s, point_r)
-    //    - enforce e * (sum_i c_i * prod_{j in S_i} u_j) == s
-    //
-    // Collect (on ring element is 8 vectors of 3 u64s)
-    //  - beta_s ring element (vector of ring elements)
-    //  - evaluation polynomials (vector of vectors of ring elements)
-    //  - claimed_sums (nvars + 1) (vector of ring elements)
-    //  - evaluation_point (vector of ring elements)
-    //  - expected evaluation (one ring element)
-    //  - linearization_proof.u (vector of ring elements)
+
+    FoldingProofWitnessVars { linearization_vars }
 }
 
 /// Modified version of the sanity_check from latticefold library, because it isn't
@@ -162,12 +147,26 @@ fn absorb_public_input(
     transcript.absorb_slice(&cm_i.x_ccs);
 }
 
+// Collect (on ring element is 8 vectors of 3 u64s)
+//  - linearization_proof.u (vector of ring elements)
+
+pub struct LinearizationVars {
+    pub beta_s: Vec<GoldilocksRingNTT>,
+    pub evaluation_polynomials: Vec<Vec<GoldilocksRingNTT>>,
+    pub claimed_sums: Vec<GoldilocksRingNTT>,
+
+    /// in paper, or in latticefold lib `r`
+    pub evaluation_point: Vec<GoldilocksRingNTT>,
+    pub expected_evaluation: GoldilocksRingNTT,
+    pub linearization_proof_u: Vec<GoldilocksRingNTT>,
+}
+
 fn collect_linearization_vars(
     cm_i: &CCCS<GoldilocksRingNTT>,
     lin_proof: &LinearizationProof<GoldilocksRingNTT>,
     ccs: &CCS<GoldilocksRingNTT>,
     transcript: &mut Poseidon2Transcript,
-) -> LCCCS<GoldilocksRingNTT> {
+) -> (LCCCS<GoldilocksRingNTT>, LinearizationVars) {
     let beta_s = transcript.squeeze_beta_challenges(ccs.s);
 
     let lin_sumcheck_vars = collect_linearization_sumcheck_vars(lin_proof, transcript, ccs);
@@ -193,11 +192,22 @@ fn collect_linearization_vars(
     transcript.absorb_slice(&lin_proof.v);
     transcript.absorb_slice(&lin_proof.u);
 
-    LFLinearizationVerifier::<_, Poseidon2Transcript>::prepare_verifier_output(
+    let lcccs = LFLinearizationVerifier::<_, Poseidon2Transcript>::prepare_verifier_output(
         cm_i,
         lin_sumcheck_vars.evaluation_point,
         lin_proof,
-    )
+    );
+
+    let vars = LinearizationVars {
+        beta_s,
+        evaluation_polynomials: lin_sumcheck_vars.polynomials,
+        claimed_sums: lin_sumcheck_vars.claimed_sums,
+        evaluation_point: lcccs.r.clone(),
+        expected_evaluation: lin_sumcheck_vars.expected_evaluation,
+        linearization_proof_u: lin_proof.u.clone(),
+    };
+
+    (lcccs, vars)
 }
 
 struct LinearizationSumcheckVars {

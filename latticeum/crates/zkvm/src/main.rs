@@ -104,6 +104,7 @@ fn main() {
         acc,
         w_acc,
         folding_proof: None,
+        folding_proof_vars: None,
     };
 
     vm.run(
@@ -134,6 +135,7 @@ fn main() {
                 acc: &ivc_output.acc,
                 // these are used to prove correct folding in step `i - 1`
                 folding_proof: ivc_output.folding_proof.as_ref(),
+                folding_proof_vars: ivc_output.folding_proof_vars.as_ref(),
                 w_acc: &ivc_output.w_acc,
 
                 // this is used to prove the RISC-V execution
@@ -141,6 +143,15 @@ fn main() {
             };
 
             let z = arithmetize(&ivc_input, &CCS_LAYOUT);
+
+            assert_eq!(ccs.s, CCS_LAYOUT.lin_beta_s_idx.len());
+            assert_eq!(
+                ccs.s * (ccs.d + 2),
+                CCS_LAYOUT.lin_eval_polynomials_idx.len()
+            );
+            assert_eq!(ccs.s + 1, CCS_LAYOUT.lin_claimed_sums.len());
+            assert_eq!(ccs.s, CCS_LAYOUT.lin_eval_point.len());
+            assert_eq!(ccs.t, CCS_LAYOUT.lin_proof_u.len());
 
             #[cfg(feature = "debug")]
             check_relation_debug(&ccs, &z, &ivc_input);
@@ -178,6 +189,7 @@ fn main() {
                 acc: folded_acc,
                 w_acc: folded_w_acc,
                 folding_proof: Some(folding_proof),
+                folding_proof_vars: Some(folding_proof_vars),
             };
 
             assert_eq!(ccs.s, ivc_output.acc.r.len());

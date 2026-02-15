@@ -31,6 +31,28 @@ pub struct CCSBuilder<'a> {
     coeffs: Vec<Ring>,
 }
 
+// TODO Linearization constraints in CCS
+// 1) Sumcheck subclaim constraints (nvars = ccs.s, degree = ccs.d + 1):
+//    - expected_0 = 0
+//    - for each round i:
+//      - enforce evals_i.len() == degree + 1 (= ccs.d + 2; currently 9)
+//      - enforce evals_i[0] + evals_i[1] == expected_{i-1}
+//      - enforce expected_i == interpolate_uni_poly(evals_i, r_i)
+// 2) Output from sumcheck:
+//    - point_r = [r_1, ..., r_s]
+//    - s = expected_s
+// 3) Linearization step-4 evaluation claim:
+//    - e = eq(beta_s, point_r)
+//    - enforce e * (sum_i c_i * prod_{j in S_i} u_j) == s
+//
+// Collect (on ring element is 8 vectors of 3 u64s)
+//  - beta_s ring element (vector of ring elements)
+//  - evaluation polynomials (vector of vectors of ring elements)
+//  - claimed_sums (nvars + 1) (vector of ring elements)
+//  - evaluation_point (vector of ring elements)
+//  - expected evaluation (one ring element)
+//  - linearization_proof.u (vector of ring elements)
+
 impl<'a> CCSBuilder<'a> {
     fn new<const W: usize>(layout: &'a CCSLayout) -> Self {
         Self {
