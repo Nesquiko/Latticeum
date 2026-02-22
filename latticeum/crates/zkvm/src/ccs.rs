@@ -41,16 +41,16 @@ pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is log(m) where m is the number of rows in matrices padded to the next power of two,
 /// see the constraint.rs
-const CCS_S: usize = 13;
+pub const CCS_S: usize = 13;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// The max degree is of the poseidon2 s box degree 7, then
 ///     - +1 because of linearization
 ///     - +1 to capture degree x polynom, you must have x+1 coeffs
-const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
+pub const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
-const CCS_NUM_MATRICES: usize = 59;
+const CCS_NUM_MATRICES: usize = 60;
 /// +1 for the initialy claimed '0'
-const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
+pub const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
 /// This struct holds the *indices* for CCS layout. It doesn't hold the data itself,
 /// just the indexes/layout map.
@@ -86,7 +86,8 @@ pub struct CCSLayout {
     // These are for the GoldilocksRingNTT elements
     pub lin_beta_s_idx: [usize; CCS_S],
     pub lin_eval_polynomials_idx: [usize; CCS_S * LINEARIZATION_DEGREE],
-    pub lin_claimed_sums: [usize; LINEARIZATION_CLAIMED_SUMS], //+1 because of the first '0'
+    pub lin_claimed_sums: [usize; LINEARIZATION_CLAIMED_SUMS],
+    pub lin_claimed_sums_subterms: [usize; CCS_S * LINEARIZATION_DEGREE],
     pub lin_expected_eval: usize,
     pub lin_eval_point: [usize; CCS_S],
     pub lin_proof_u: [usize; CCS_NUM_MATRICES],
@@ -169,8 +170,12 @@ impl CCSLayout {
         let (lin_beta_s_idx, w_cursor) = indices_with_new_cursor::<CCS_S>(w_cursor);
         let (lin_eval_polynomials_idx, w_cursor) =
             indices_with_new_cursor::<{ CCS_S * LINEARIZATION_DEGREE }>(w_cursor);
-        let (lin_claimed_sums, mut w_cursor) =
+        let (lin_claimed_sums, w_cursor) =
             indices_with_new_cursor::<LINEARIZATION_CLAIMED_SUMS>(w_cursor);
+
+        let (lin_claimed_sums_subterms, mut w_cursor) =
+            indices_with_new_cursor::<{ CCS_S * LINEARIZATION_DEGREE }>(w_cursor);
+
         let lin_expected_eval = w_cursor;
         w_cursor += 1;
         let (lin_eval_point, w_cursor) = indices_with_new_cursor::<CCS_S>(w_cursor);
@@ -243,6 +248,7 @@ impl CCSLayout {
             lin_eval_polynomials_idx,
             lin_expected_eval,
             lin_claimed_sums,
+            lin_claimed_sums_subterms,
             lin_eval_point,
             lin_proof_u,
             pc_in_idx,
@@ -403,6 +409,11 @@ pub fn set_folding_proof_witness(
     for (i, &z_idx) in layout.lin_claimed_sums.iter().enumerate() {
         z[z_idx] = linearization_vars.claimed_sums[i];
     }
+
+    for (i, &z_idx) in layout.lin_claimed_sums_subterms.iter().enumerate() {
+        z[z_idx] = linearization_vars.claimed_sums_subterms[i];
+    }
+
     for (i, &z_idx) in layout.lin_eval_point.iter().enumerate() {
         z[z_idx] = linearization_vars.evaluation_point[i];
     }

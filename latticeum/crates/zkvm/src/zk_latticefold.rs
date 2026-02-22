@@ -10,7 +10,7 @@ use latticefold::nifs::linearization::LFLinearizationVerifier;
 use latticefold::nifs::linearization::LinearizationProof;
 use latticefold::nifs::linearization::LinearizationProver;
 use latticefold::utils::sumcheck::IPForMLSumcheck;
-use latticefold::utils::sumcheck::verifier::interpolate_uni_poly;
+use latticefold::utils::sumcheck::verifier::zk_interpolate_uni_poly;
 use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness, error::CSError},
     commitment::AjtaiCommitmentScheme,
@@ -20,6 +20,8 @@ use latticefold::{
 use num_traits::Zero;
 use stark_rings::cyclotomic_ring::models::goldilocks::Fq3;
 
+use crate::ccs::CCS_S;
+use crate::ccs::LINEARIZATION_CLAIMED_SUMS;
 use crate::poseidon2::GOLDILOCKS_S_BOX_DEGREE;
 use crate::{ccs::GoldiLocksDP, fiat_shamir::Poseidon2Transcript};
 
@@ -154,6 +156,7 @@ pub struct LinearizationVars {
     pub beta_s: Vec<GoldilocksRingNTT>,
     pub evaluation_polynomials: Vec<Vec<GoldilocksRingNTT>>,
     pub claimed_sums: Vec<GoldilocksRingNTT>,
+    pub claimed_sums_subterms: Vec<GoldilocksRingNTT>,
 
     /// in paper, or in latticefold lib `r`
     pub evaluation_point: Vec<GoldilocksRingNTT>,
@@ -202,6 +205,7 @@ fn collect_linearization_vars(
         beta_s,
         evaluation_polynomials: lin_sumcheck_vars.polynomials,
         claimed_sums: lin_sumcheck_vars.claimed_sums,
+        claimed_sums_subterms: lin_sumcheck_vars.claimed_sums_subterms,
         evaluation_point: lcccs.r.clone(),
         expected_evaluation: lin_sumcheck_vars.expected_evaluation,
         linearization_proof_u: lin_proof.u.clone(),
@@ -213,6 +217,7 @@ fn collect_linearization_vars(
 struct LinearizationSumcheckVars {
     polynomials: Vec<Vec<GoldilocksRingNTT>>,
     claimed_sums: Vec<GoldilocksRingNTT>,
+    claimed_sums_subterms: Vec<GoldilocksRingNTT>,
 
     evaluation_point: Vec<GoldilocksRingNTT>,
     expected_evaluation: GoldilocksRingNTT,
@@ -242,6 +247,7 @@ fn collect_linearization_sumcheck_vars(
     let mut eval_point = Vec::with_capacity(nvars);
 
     let mut claimed_sums = Vec::with_capacity(nvars + 1);
+    let mut claimed_sums_subterms = Vec::with_capacity(nvars * ccs.s);
     claimed_sums.push(claimed_sum.clone());
 
     for i in 0..nvars {
@@ -252,11 +258,15 @@ fn collect_linearization_sumcheck_vars(
             IPForMLSumcheck::verify_round(prover_msg.clone(), &mut verifier_state, transcript);
         eval_point.push(verifier_msg.randomness);
 
-        claimed_sum = interpolate_uni_poly(&prover_msg.evaluations, verifier_msg.randomness);
+        let interpolated =
+            zk_interpolate_uni_poly(&prover_msg.evaluations, verifier_msg.randomness);
+        claimed_sum = interpolated.0;
+        claimed_sums_subterms.extend(interpolated.1);
         claimed_sums.push(claimed_sum.clone());
 
         transcript.absorb(&verifier_msg.randomness.into());
     }
+    // populated in the verify_round, it comes from the prover evaluations
     let polynomials_received = verifier_state.polynomials_received.clone();
 
     #[cfg(feature = "debug")]
@@ -279,6 +289,7 @@ fn collect_linearization_sumcheck_vars(
     LinearizationSumcheckVars {
         polynomials: polynomials_received,
         claimed_sums,
+        claimed_sums_subterms,
         evaluation_point: eval_point.into_iter().map(|x| x.into()).collect(),
         expected_evaluation: claimed_sum,
     }

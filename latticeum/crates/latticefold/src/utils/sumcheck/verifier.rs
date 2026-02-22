@@ -264,6 +264,84 @@ pub fn interpolate_uni_poly<R: OverField>(p_i: &[R], eval_at: R::BaseRing) -> R 
     res
 }
 
+pub fn zk_interpolate_uni_poly<R: OverField>(p_i: &[R], eval_at: R::BaseRing) -> (R, Vec<R>) {
+    let len = p_i.len();
+
+    let mut evals = vec![];
+
+    let mut prod = eval_at;
+    evals.push(eval_at);
+
+    //`prod = \prod_{j} (eval_at - j)`
+    let mut check = R::BaseRing::zero();
+    for _ in 1..len {
+        check += R::BaseRing::one();
+
+        let tmp = eval_at - check;
+        evals.push(tmp);
+        prod *= tmp;
+    }
+
+    // we want to compute \prod (j!=i) (i-j) for a given i
+    //
+    // we start from the last step, which is
+    //  denom[len-1] = (len-1) * (len-2) *... * 2 * 1
+    // the step before that is
+    //  denom[len-2] = (len-2) * (len-3) * ... * 2 * 1 * -1
+    // and the step before that is
+    //  denom[len-3] = (len-3) * (len-4) * ... * 2 * 1 * -1 * -2
+    //
+    // i.e., for any i, the one before this will be derived from
+    //  denom[i-1] = - denom[i] * (len-i) / i
+    //
+    // that is, we only need to store
+    // - the last denom for i = len-1, and
+    // - the ratio between the current step and the last step, which is the
+    //   product of -(len-i) / i from all previous steps and we store
+    //   this product as a fraction number to reduce field divisions.
+
+    // We know
+    //  - 2^61 < factorial(20) < 2^62
+    //  - 2^122 < factorial(33) < 2^123
+    // so we will be able to compute the ratio
+    //  - for len <= 20 with i64
+    //  - for len <= 33 with i128
+    //  - for len >  33 with BigInt
+
+    // Removed all other if else branches for the different p_i lengths, I only
+    // need under 20
+    assert!(p_i.len() <= 20);
+    let last_denom = R::BaseRing::from(u64_factorial(len - 1));
+    let mut ratio_numerator = 1i64;
+    let mut ratio_enumerator = 1u64;
+
+    let mut res = R::zero();
+    let mut res_terms = Vec::with_capacity(len);
+
+    for i in (0..len).rev() {
+        let ratio_numerator_f = if ratio_numerator < 0 {
+            -R::BaseRing::from((-ratio_numerator) as u64)
+        } else {
+            R::BaseRing::from(ratio_numerator as u64)
+        };
+
+        let x: R = (prod * R::BaseRing::from(ratio_enumerator)
+            / (last_denom * ratio_numerator_f * evals[i]))
+            .into();
+
+        res += p_i[i] * x;
+        res_terms.push(p_i[i] * x);
+
+        // compute ratio for the next step which is current_ratio * -(len-i)/i
+        if i != 0 {
+            ratio_numerator *= -(len as i64 - i as i64);
+            ratio_enumerator *= i as u64;
+        }
+    }
+
+    (res, res_terms)
+}
+
 /// compute the factorial(a) = 1 * 2 * ... * a
 #[inline]
 fn field_factorial<F: Field>(a: usize) -> F {

@@ -1,5 +1,5 @@
 use crate::{
-    ccs::CCSLayout,
+    ccs::{CCS_S, CCSLayout, LINEARIZATION_CLAIMED_SUMS, LINEARIZATION_DEGREE},
     crypto_consts::{FULL_ROUNDS, M_I_INVERSE_TRANSPOSED, MDS_INVERSE_TRANSPOSED, PARTIAL_ROUNDS},
     poseidon2::{
         GOLDILOCKS_S_BOX_DEGREE, INTERNAL_CONSTS, POSEIDON2_OUT, WIDE_POSEIDON2_13_SPONGE_PASSES,
@@ -31,28 +31,6 @@ pub struct CCSBuilder<'a> {
     coeffs: Vec<Ring>,
 }
 
-// TODO Linearization constraints in CCS
-// 1) Sumcheck subclaim constraints (nvars = ccs.s, degree = ccs.d + 1):
-//    - expected_0 = 0
-//    - for each round i:
-//      - enforce evals_i.len() == degree + 1 (= ccs.d + 2; currently 9)
-//      - enforce evals_i[0] + evals_i[1] == expected_{i-1}
-//      - enforce expected_i == interpolate_uni_poly(evals_i, r_i)
-// 2) Output from sumcheck:
-//    - point_r = [r_1, ..., r_s]
-//    - s = expected_s
-// 3) Linearization step-4 evaluation claim:
-//    - e = eq(beta_s, point_r)
-//    - enforce e * (sum_i c_i * prod_{j in S_i} u_j) == s
-//
-// Collect (on ring element is 8 vectors of 3 u64s)
-//  - beta_s ring element (vector of ring elements)
-//  - evaluation polynomials (vector of vectors of ring elements)
-//  - claimed_sums (nvars + 1) (vector of ring elements)
-//  - evaluation_point (vector of ring elements)
-//  - expected evaluation (one ring element)
-//  - linearization_proof.u (vector of ring elements)
-
 impl<'a> CCSBuilder<'a> {
     fn new<const W: usize>(layout: &'a CCSLayout) -> Self {
         Self {
@@ -83,6 +61,9 @@ impl<'a> CCSBuilder<'a> {
         builder.ivc_step_internal_rounds();
         builder.ivc_step_external_terminal_rounds();
         builder.ivc_step_result_hash();
+
+        // folding proof specific
+        builder.folding_proof_linearization();
 
         builder.build()
     }
@@ -589,6 +570,67 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(Ring::one());
     }
 
+    // TODO Linearization constraints in CCS (matching current CCSLayout witness packing)
+    // Witness sources in `CCSLayout`:
+    //  - beta challenges:          layout.lin_beta_s_idx[0..CCS_S]
+    //  - round eval tables:        layout.lin_eval_polynomials_idx (flattened as [round][k])
+    //  - running claimed sums:     layout.lin_claimed_sums[0..CCS_S+1]
+    //  - optional final expected:  layout.lin_expected_eval
+    //  - sumcheck point r:         layout.lin_eval_point[0..CCS_S]
+    //  - proof u-values:           layout.lin_proof_u[0..CCS_NUM_MATRICES]
+    //
+    // Linearization step-4 evaluation claim:
+    // 4) Compute e = eq(layout.lin_beta_s_idx, layout.lin_eval_point)
+    // 5) Compute inner = sum_i c_i * prod_{j in S_i} layout.lin_proof_u[j]
+    // 6) Constrain e * inner == layout.lin_expected_eval
+    //
+    // Notes:
+    //  - "evals_i.len == degree + 1" is a layout invariant, not an algebraic constraint.
+    //  - Runtime shape checks are already asserted in `main.rs` against ccs.s / ccs.d / ccs.t.
+    fn folding_proof_linearization(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+        let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        // lin_claimed_sums[0] == 0
+        m_a.coeffs[FP_LIN_INITIAL_CLAIM_ZERO].push((Ring::one(), self.layout.lin_claimed_sums[0]));
+
+        for i in 0..CCS_S {
+            let coeff_idx = FP_LIN_CLAIMED_SUM_EQUALS[i];
+            let polyn_evals_start = i * LINEARIZATION_DEGREE;
+            // eval[i][0] + eval[i][1] - layout.lin_claimed_sums[i] == 0
+            m_a.coeffs[coeff_idx].push((
+                Ring::one(),
+                self.layout.lin_eval_polynomials_idx[polyn_evals_start],
+            ));
+            m_a.coeffs[coeff_idx].push((
+                Ring::one(),
+                self.layout.lin_eval_polynomials_idx[polyn_evals_start + 1],
+            ));
+            m_a.coeffs[coeff_idx].push((Ring::one().neg(), self.layout.lin_claimed_sums[i]));
+        }
+
+        for i in 0..CCS_S {
+            let coeff_idx = FP_LIN_CLAIMED_SUM_SUMBTERMS[i];
+            m_a.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_claimed_sums[i + 1])); // +1 skips the first claimed sum which is 0
+            for j in 0..LINEARIZATION_DEGREE {
+                let subterm_idx = i * LINEARIZATION_DEGREE + j;
+                // layout.lin_claimed_sums[i] - layout.lin_claimed_sums_subterms[i + 0] - ... - layout.lin_claimed_sums_subterms[i + j] == 0
+                m_a.coeffs[coeff_idx].push((
+                    Ring::one().neg(),
+                    self.layout.lin_claimed_sums_subterms[subterm_idx],
+                ));
+            }
+        }
+        // layout.lin_expected_eval - layout.lin_claimed_sums[CCS_S] == 0
+        m_a.coeffs[FP_LIN_FINAL_CLAIMED_SUM].push((Ring::one(), self.layout.lin_expected_eval));
+        m_a.coeffs[FP_LIN_FINAL_CLAIMED_SUM]
+            .push((Ring::one().neg(), self.layout.lin_claimed_sums[CCS_S]));
+
+        self.matrices.push(m_a);
+        self.multisets.push(vec![matrix_base_idx]);
+        self.coeffs.push(Ring::one());
+    }
+
     /// Adds an ADD constraint that handles 32-bit overflow:
     /// z[IS_ADD] * (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2]) = 0
     fn add_constraint(&mut self) {
@@ -851,6 +893,12 @@ const IVC_H_EXT_TERM_ROUNDS_CONSTR: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] 
 
 const IVC_H_HASH_CONSTR: [usize; POSEIDON2_OUT] =
     index_array(last(IVC_H_EXT_TERM_ROUNDS_CONSTR) + 1);
+
+const FP_LIN_INITIAL_CLAIM_ZERO: usize = last(IVC_H_HASH_CONSTR) + 1;
+const FP_LIN_CLAIMED_SUM_EQUALS: [usize; CCS_S] = index_array(FP_LIN_INITIAL_CLAIM_ZERO + 1);
+const FP_LIN_CLAIMED_SUM_SUMBTERMS: [usize; CCS_S] =
+    index_array(last(FP_LIN_CLAIMED_SUM_EQUALS) + 1);
+const FP_LIN_FINAL_CLAIMED_SUM: usize = last(FP_LIN_CLAIMED_SUM_SUMBTERMS) + 1;
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")
