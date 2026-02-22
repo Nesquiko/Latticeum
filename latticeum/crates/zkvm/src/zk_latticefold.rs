@@ -10,6 +10,8 @@ use latticefold::nifs::linearization::LFLinearizationVerifier;
 use latticefold::nifs::linearization::LinearizationProof;
 use latticefold::nifs::linearization::LinearizationProver;
 use latticefold::utils::sumcheck::IPForMLSumcheck;
+use latticefold::utils::sumcheck::utils::EqEvalHelperVars;
+use latticefold::utils::sumcheck::utils::zk_eq_eval;
 use latticefold::utils::sumcheck::verifier::zk_interpolate_uni_poly;
 use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness, error::CSError},
@@ -20,8 +22,6 @@ use latticefold::{
 use num_traits::Zero;
 use stark_rings::cyclotomic_ring::models::goldilocks::Fq3;
 
-use crate::ccs::CCS_S;
-use crate::ccs::LINEARIZATION_CLAIMED_SUMS;
 use crate::poseidon2::GOLDILOCKS_S_BOX_DEGREE;
 use crate::{ccs::GoldiLocksDP, fiat_shamir::Poseidon2Transcript};
 
@@ -162,6 +162,8 @@ pub struct LinearizationVars {
     pub evaluation_point: Vec<GoldilocksRingNTT>,
     pub expected_evaluation: GoldilocksRingNTT,
     pub linearization_proof_u: Vec<GoldilocksRingNTT>,
+    pub inner: GoldilocksRingNTT,
+    pub e_helper_vars: EqEvalHelperVars<GoldilocksRingNTT>,
 }
 
 fn collect_linearization_vars(
@@ -191,6 +193,20 @@ fn collect_linearization_vars(
             panic!("verification of linearization failed");
         }
     }
+    let (_, e_helper_vars) = zk_eq_eval(&lin_sumcheck_vars.evaluation_point, &beta_s);
+
+    let inner = ccs
+        .c
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| {
+            let term = ccs.S[i]
+                .iter()
+                .map(|&j| lin_proof.u[j])
+                .product::<GoldilocksRingNTT>();
+            c * term
+        })
+        .sum::<GoldilocksRingNTT>();
 
     transcript.absorb_slice(&lin_proof.v);
     transcript.absorb_slice(&lin_proof.u);
@@ -209,6 +225,8 @@ fn collect_linearization_vars(
         evaluation_point: lcccs.r.clone(),
         expected_evaluation: lin_sumcheck_vars.expected_evaluation,
         linearization_proof_u: lin_proof.u.clone(),
+        inner,
+        e_helper_vars,
     };
 
     (lcccs, vars)

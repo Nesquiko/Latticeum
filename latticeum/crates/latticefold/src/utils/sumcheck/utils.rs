@@ -18,7 +18,7 @@ use rayon::prelude::*;
 use stark_rings::Ring;
 use stark_rings_poly::{
     mle::DenseMultilinearExtension,
-    polynomials::{random_mle_list, ArithErrors, RefCounter},
+    polynomials::{ArithErrors, RefCounter, random_mle_list},
 };
 
 pub fn rand_poly<R: Ring>(
@@ -89,6 +89,46 @@ pub fn eq_eval<R: Ring>(x: &[R], y: &[R]) -> Result<R, ArithErrors> {
     }
     end_timer!(start);
     Ok(res)
+}
+
+pub struct EqEvalHelperVars<R: Ring> {
+    pub xi_yis: Vec<R>,
+    pub factors: Vec<R>,
+    pub sub_res: Vec<R>,
+}
+
+pub fn zk_eq_eval<R: Ring>(x: &[R], y: &[R]) -> (R, EqEvalHelperVars<R>) {
+    assert_eq!(
+        x.len(),
+        y.len(),
+        "DO NOT CALL THIS WITH VECS of non-equal size!",
+    );
+
+    let start = start_timer!(|| "eq_eval");
+    let mut xi_yis = Vec::with_capacity(x.len());
+    let mut factors = Vec::with_capacity(x.len());
+    let mut sub_res = Vec::with_capacity(x.len() + 1);
+
+    let mut res = R::one();
+    sub_res.push(res);
+
+    for (&xi, &yi) in x.iter().zip(y.iter()) {
+        let xi_yi = xi * yi;
+        xi_yis.push(xi_yi);
+        let factor = xi_yi + xi_yi - xi - yi + R::one();
+        factors.push(factor);
+        res *= factor;
+        sub_res.push(res);
+    }
+    end_timer!(start);
+    (
+        res,
+        EqEvalHelperVars {
+            xi_yis,
+            factors,
+            sub_res,
+        },
+    )
 }
 
 /// This function build the eq(x, r) polynomial for any given r.

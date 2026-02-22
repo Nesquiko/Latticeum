@@ -1,5 +1,5 @@
 use crate::{
-    ccs::{CCS_S, CCSLayout, LINEARIZATION_CLAIMED_SUMS, LINEARIZATION_DEGREE},
+    ccs::{CCS_S, CCSLayout, LINEARIZATION_DEGREE},
     crypto_consts::{FULL_ROUNDS, M_I_INVERSE_TRANSPOSED, MDS_INVERSE_TRANSPOSED, PARTIAL_ROUNDS},
     poseidon2::{
         GOLDILOCKS_S_BOX_DEGREE, INTERNAL_CONSTS, POSEIDON2_OUT, WIDE_POSEIDON2_13_SPONGE_PASSES,
@@ -45,6 +45,14 @@ impl<'a> CCSBuilder<'a> {
     pub fn create_riscv_ccs<const W: usize>(layout: &'a CCSLayout) -> CCS<Ring> {
         let mut builder = Self::new::<W>(layout);
 
+        // ivc specific
+        builder.ivc_step_inv_constraint();
+        builder.ivc_step_after_initial_mds();
+        builder.ivc_step_external_initial_rounds();
+        builder.ivc_step_internal_rounds();
+        builder.ivc_step_external_terminal_rounds();
+        builder.ivc_step_result_hash();
+
         // risc-v specific
         builder.pc_non_branching_constraint();
         builder.add_constraint();
@@ -54,18 +62,45 @@ impl<'a> CCSBuilder<'a> {
         builder.auipc_constraint();
         builder.lui_constraint();
 
-        // ivc specific
-
-        builder.ivc_step_after_initial_mds();
-        builder.ivc_step_external_initial_rounds();
-        builder.ivc_step_internal_rounds();
-        builder.ivc_step_external_terminal_rounds();
-        builder.ivc_step_result_hash();
-
-        // folding proof specific
-        builder.folding_proof_linearization();
+        // folding proof specific MUST BE LAST
+        builder.folding_proof_linearization_sumcheck();
+        builder.folding_proof_linearization_final_check();
+        builder.folding_proof_linearization_inner();
 
         builder.build()
+    }
+
+    // step * (step * step_inv - 1) = 0 => step*step*step_inv - step = 0.
+    fn ivc_step_inv_constraint(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        // + step * step * step_inv
+        let mut m_step_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        m_step_a.coeffs[IVC_STEP_CONSTR].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+
+        let mut m_step_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        m_step_b.coeffs[IVC_STEP_CONSTR].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+
+        let mut m_step_inv = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        m_step_inv.coeffs[IVC_STEP_CONSTR].push((Ring::one(), self.layout.ivc_h_i_step_inv_idx));
+
+        self.matrices.push(m_step_a);
+        self.matrices.push(m_step_b);
+        self.matrices.push(m_step_inv);
+        self.multisets.push(vec![
+            matrix_base_idx,
+            matrix_base_idx + 1,
+            matrix_base_idx + 2,
+        ]);
+        self.coeffs.push(Ring::one());
+
+        // - step
+        let mut m_step_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        m_step_linear.coeffs[IVC_STEP_CONSTR].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+
+        self.matrices.push(m_step_linear);
+        self.multisets.push(vec![matrix_base_idx + 3]);
+        self.coeffs.push(Ring::one().neg());
     }
 
     fn ivc_step_after_initial_mds(&mut self) {
@@ -570,26 +605,10 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(Ring::one());
     }
 
-    // TODO Linearization constraints in CCS (matching current CCSLayout witness packing)
-    // Witness sources in `CCSLayout`:
-    //  - beta challenges:          layout.lin_beta_s_idx[0..CCS_S]
-    //  - round eval tables:        layout.lin_eval_polynomials_idx (flattened as [round][k])
-    //  - running claimed sums:     layout.lin_claimed_sums[0..CCS_S+1]
-    //  - optional final expected:  layout.lin_expected_eval
-    //  - sumcheck point r:         layout.lin_eval_point[0..CCS_S]
-    //  - proof u-values:           layout.lin_proof_u[0..CCS_NUM_MATRICES]
-    //
-    // Linearization step-4 evaluation claim:
-    // 4) Compute e = eq(layout.lin_beta_s_idx, layout.lin_eval_point)
-    // 5) Compute inner = sum_i c_i * prod_{j in S_i} layout.lin_proof_u[j]
-    // 6) Constrain e * inner == layout.lin_expected_eval
-    //
-    // Notes:
-    //  - "evals_i.len == degree + 1" is a layout invariant, not an algebraic constraint.
-    //  - Runtime shape checks are already asserted in `main.rs` against ccs.s / ccs.d / ccs.t.
-    fn folding_proof_linearization(&mut self) {
+    fn folding_proof_linearization_sumcheck(&mut self) {
         let matrix_base_idx = self.matrices.len();
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_gated = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
         // lin_claimed_sums[0] == 0
         m_a.coeffs[FP_LIN_INITIAL_CLAIM_ZERO].push((Ring::one(), self.layout.lin_claimed_sums[0]));
@@ -626,8 +645,138 @@ impl<'a> CCSBuilder<'a> {
         m_a.coeffs[FP_LIN_FINAL_CLAIMED_SUM]
             .push((Ring::one().neg(), self.layout.lin_claimed_sums[CCS_S]));
 
+        let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_c = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_d = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_e = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_f = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_g = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        let mut m_gate_step = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_gate_step_inv = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        // matches the computation of e = eq(layout.lin_beta_s_idx, layout.lin_eval_point)
+        for i in 0..CCS_S {
+            // (layout.lin_beta_s_idx[i] * layout.lin_eval_point[i]) - xi_yi[i] == 0
+            {
+                let coeff_idx = FP_LIN_E_XI_YI[i];
+                m_b.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_beta_s_idx[i]));
+                m_c.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_eval_point[i]));
+                m_d.coeffs[coeff_idx].push((Ring::one().neg(), self.layout.lin_e_xi_yi[i]));
+            }
+
+            // (step * step_inv) * (factor[i] - (2*xi_yi[i] - x[i] - y[i] + 1)) == 0
+            //  => (self.layout.ivc_h_i_step_inv_idx * self.layout.ivc_h_i_step_idx) *
+            //  (self.layout.lin_e_factors[i] - 2*xi_yi[i] + self.layout.lin_beta_s_idx[i] + self.layout.lin_eval_point[i] - 1) == 0
+            {
+                let coeff_idx = FP_LIN_E_FACTORS[i];
+                m_gated.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_e_factors[i]));
+                m_gated.coeffs[coeff_idx]
+                    .push((Ring::from(2u64).neg(), self.layout.lin_e_xi_yi[i]));
+                m_gated.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_beta_s_idx[i]));
+                m_gated.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_eval_point[i]));
+                m_gated.coeffs[coeff_idx].push((Ring::one().neg(), self.layout.const_1_idx));
+
+                m_gate_step.coeffs[coeff_idx].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+                m_gate_step_inv.coeffs[coeff_idx]
+                    .push((Ring::one(), self.layout.ivc_h_i_step_inv_idx));
+            }
+
+            {
+                // (step * step_inv) * (sub_res[i+1] - sub_res[i] * factor[i]) == 0
+                // => step*step_inv*sub_res[i+1] - step*step_inv*sub_res[i]*factor[i] == 0
+                let coeff_idx = FP_LIN_E_SUB_RES[i + 1]; // +1 to skip the res[0] == 1, which is below
+                m_gate_step.coeffs[coeff_idx].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+                m_gate_step_inv.coeffs[coeff_idx]
+                    .push((Ring::one(), self.layout.ivc_h_i_step_inv_idx));
+
+                m_e.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_e_sub_res[i + 1]));
+
+                m_f.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_e_sub_res[i]));
+                m_g.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_e_factors[i]));
+            }
+        }
+
+        // self.layout.lin_e_sub_res[0] - 1 == 0
+        m_gated.coeffs[FP_LIN_E_SUB_RES[0]].push((Ring::one(), self.layout.lin_e_sub_res[0]));
+        m_gated.coeffs[FP_LIN_E_SUB_RES[0]].push((Ring::one().neg(), self.layout.const_1_idx));
+        m_gate_step.coeffs[FP_LIN_E_SUB_RES[0]].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+        m_gate_step_inv.coeffs[FP_LIN_E_SUB_RES[0]]
+            .push((Ring::one(), self.layout.ivc_h_i_step_inv_idx));
+
         self.matrices.push(m_a);
         self.multisets.push(vec![matrix_base_idx]);
+        self.coeffs.push(Ring::one());
+
+        self.matrices.push(m_b);
+        self.matrices.push(m_c);
+
+        self.multisets
+            .push(vec![matrix_base_idx + 1, matrix_base_idx + 2]);
+        self.coeffs.push(Ring::one());
+
+        self.matrices.push(m_d);
+        self.multisets.push(vec![matrix_base_idx + 3]);
+        self.coeffs.push(Ring::one());
+
+        self.matrices.push(m_gated);
+        self.matrices.push(m_gate_step.clone());
+        self.matrices.push(m_gate_step_inv.clone());
+        self.multisets.push(vec![
+            matrix_base_idx + 5,
+            matrix_base_idx + 6,
+            matrix_base_idx + 4,
+        ]);
+        self.coeffs.push(Ring::one());
+
+        self.matrices.push(m_gate_step.clone());
+        self.matrices.push(m_gate_step_inv.clone());
+        self.matrices.push(m_e);
+        self.multisets.push(vec![
+            matrix_base_idx + 7,
+            matrix_base_idx + 8,
+            matrix_base_idx + 9,
+        ]);
+        self.coeffs.push(Ring::one());
+
+        self.matrices.push(m_gate_step);
+        self.matrices.push(m_gate_step_inv);
+        self.matrices.push(m_f);
+        self.matrices.push(m_g);
+        self.multisets.push(vec![
+            matrix_base_idx + 10,
+            matrix_base_idx + 11,
+            matrix_base_idx + 12,
+            matrix_base_idx + 13,
+        ]);
+        self.coeffs.push(Ring::one().neg());
+    }
+
+    /// MUST BE LAST added constraint
+    fn folding_proof_linearization_inner(&mut self) {}
+
+    // e * inner == expected_eval
+    fn folding_proof_linearization_final_check(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        let mut m_e = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_inner = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_expected = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        // e * inner - expected_eval == 0
+        m_e.coeffs[FP_LIN_INNER_EVAL].push((Ring::one(), self.layout.lin_e_sub_res[CCS_S]));
+        m_inner.coeffs[FP_LIN_INNER_EVAL].push((Ring::one(), self.layout.lin_inner_idx));
+        m_expected.coeffs[FP_LIN_INNER_EVAL]
+            .push((Ring::one().neg(), self.layout.lin_expected_eval));
+
+        self.matrices.push(m_e);
+        self.matrices.push(m_inner);
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(Ring::one());
+
+        self.matrices.push(m_expected);
+        self.multisets.push(vec![matrix_base_idx + 2]);
         self.coeffs.push(Ring::one());
     }
 
@@ -871,15 +1020,17 @@ fn from_goldilocks(g: Goldilocks) -> Ring {
 
 // Indices of the constraints
 const ADD_CONSTR: usize = 0;
-const PC_NON_BRANCH_CONSTR: usize = 1;
-const JAL_CONSTR: usize = 2;
-const JALR_CONSTR: usize = 3;
-const BNE_CONSTR: usize = 4;
-const AUIPC_CONSTR: usize = 5;
-const LUI_CONSTR: usize = 6;
+const PC_NON_BRANCH_CONSTR: usize = ADD_CONSTR + 1;
+const JAL_CONSTR: usize = PC_NON_BRANCH_CONSTR + 1;
+const JALR_CONSTR: usize = JAL_CONSTR + 1;
+const BNE_CONSTR: usize = JALR_CONSTR + 1;
+const AUIPC_CONSTR: usize = BNE_CONSTR + 1;
+const LUI_CONSTR: usize = AUIPC_CONSTR + 1;
+
+const IVC_STEP_CONSTR: usize = LUI_CONSTR + 1;
 
 const IVC_H_I_AFTER_MDS_CONSTR: [usize; WIDE_POSEIDON2_13_SPONGE_PASSES * WIDE_POSEIDON2_WIDTH] =
-    index_array(LUI_CONSTR + 1);
+    index_array(IVC_STEP_CONSTR + 1);
 
 const IVC_H_EXT_INIT_ROUNDS_CONSTR: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH] =
     index_array(last(IVC_H_I_AFTER_MDS_CONSTR) + 1);
@@ -899,6 +1050,10 @@ const FP_LIN_CLAIMED_SUM_EQUALS: [usize; CCS_S] = index_array(FP_LIN_INITIAL_CLA
 const FP_LIN_CLAIMED_SUM_SUMBTERMS: [usize; CCS_S] =
     index_array(last(FP_LIN_CLAIMED_SUM_EQUALS) + 1);
 const FP_LIN_FINAL_CLAIMED_SUM: usize = last(FP_LIN_CLAIMED_SUM_SUMBTERMS) + 1;
+const FP_LIN_E_XI_YI: [usize; CCS_S] = index_array(FP_LIN_FINAL_CLAIMED_SUM + 1);
+const FP_LIN_E_FACTORS: [usize; CCS_S] = index_array(last(FP_LIN_E_XI_YI) + 1);
+const FP_LIN_E_SUB_RES: [usize; CCS_S + 1] = index_array(last(FP_LIN_E_FACTORS) + 1);
+const FP_LIN_INNER_EVAL: usize = last(FP_LIN_E_SUB_RES) + 1;
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")
