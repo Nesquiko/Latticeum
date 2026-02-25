@@ -1,201 +1,128 @@
 # Latticeum
 
-A ZkVM build with lattice based cryptography.
+Latticeum is a proof-of-concept post-quantum RISC-V zkVM based on lattice
+cryptography, and it is part of my master thesis work. It combines a
+`rv32imac` VM emulator with IVC using LatticeFold over CCS. Current demo is
+proving execution of a Fibonacci guest program.
 
-## TODO
+This repository also contains the thesis research and milestone documents:
 
-- Start writing the paper.
-- Optimize the current code.
-- In the end, compare against https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
+- `research-objectives/`: thesis research objectives, problem framing, and early literature context.
+- `dp0/`: initial thesis assignment/scope definition.
+- `dp1/`: first thesis milestone document and related assets.
+- `dp2/`: second thesis milestone document and related assets.
+- `dp3/`: final thesis document.
 
-## RISC-V VM specs:
+## What this project does
 
-- 32bit
-- 1MB of RAM
-  - words per page / page size = 256 \* 32bit = 8192 bits = 1024 bytes
-  - number of pages 256
+- Executes RISC-V programs and records per-instruction traces.
+- Arithmetizes each step into a CCS witness.
+- Commits and folds those steps into a running accumulator using LatticeFold.
 
-## IVC of RISC-V
+## High-level architecture
 
-The function `F` is defined by the RISC-V specification, then in order to instantiate
-an IVC for `F`, augmented circuit `F'`, represented by the CCS, folded inside LatticeFold,
-it must contain two parts, IVC part for verifying IVC advancement and then `F` specific
-part for verifying correct execution of `F`. In practice:
+```text
+Rust program -> RISC-V ELF -> VM execution trace -> CCS arithmetization
+-> LatticeFold folding -> accumulator -> final wrapping SNARK
+```
 
-### public inputs for the entire IVC chain (step `0`)
+Main crates:
 
-These are the top-level public inputs that the final verifier needs to know.
-They are computed once and remain constant for the entire execution.
+```text
+latticeum/
+├── crates/
+│   ├── configuration/   # constants (e.g. N_REGS, RESULT_ADDRESS)
+│   ├── vm/              # RISC-V emulator and instruction execution
+│   ├── zkvm/            # proving loop, CCS, commitments, IVC
+│   └── guest/           # guest utils
+└── guests/fibonacci/    # Fibonacci guest program
+```
 
-1.  **Initial state commitment `z_0_comm`**: This serves as the **anchor** for
-    the entire computation, binding the proof to a specific program and initial
-    configuration. Its preimage is public and contains:
-    - A Merkle root of the program's binary code (the `code_comm`).
-    - The program's entrypoint (`pc`).
-    - The Merkle root of the VM's initially zeroed memory pages.
-    - A Poseidon2 commitment to the VM's initially zeroed registers.
-    - A commitment to the initially empty memory operations log.
-2.  **Initial IVC Step Commitment `h_0`**: A commitment that establishes the
-    initial state of the IVC, computed as `h_0 = poseidon2(0, z_0_comm, z_0_comm, U_0_comm)`.
+## Cryptographic primitives used
 
-### Per-step proof generation (step `i`)
+- Field over Goldilocks prime `p = 2^64 - 2^32 + 1`.
+- Cyclotomic ring `R_q = Z_q[X]/(X^d+1)` with `q` being Goldilocks prime.
+- Ajtai lattice commitments for folding.
+- LatticeFold non-interactive folding scheme to keep proof state compact across steps.
+- Poseidon2 for VM state, accumulator, and step commitments.
 
-For each step of the VM execution, the prover generates a proof. The `F'`
-circuit for step `i` takes the following as **public inputs**:
+### Step commitment structure:
 
-- **Previous step commitment `h_{i-1}`**: The public hash that commits to the
-  state of the entire IVC scheme after the previous step `i - 1`.
-- **Initial state commitment `z_0_comm`**: The anchor commitment, passed in
-  publicly at every step to ensure the prover does not switch programs.
+```text
+h_i = Poseidon2(i, z_0_comm, z_i_comm, U_i_comm)
+```
 
-The `F'` circuit is then satisfied by the following **private witness**:
+where `z_0_comm` is the initial "anchor" to the vm's states, `z_i_comm` is
+current VM state commitment, and `U_i_comm` is the running accumulator commitment.
 
-1.  **IVC witness (proving `i-1` -> `i` transition):**
-    - **Preimage of `h_{i-1}`**:
-      - Previous step counter `i-1`.
-      - Previous state commitment `z_{i-1}_comm`.
-      - Previous accumulator commitment `U_{i-1}_comm`.
-    - **Preimage of `z_{i-1}_comm` (the full VM state `z_{i-1}`):**
-      - The VM's program counter `pc_{i-1}`.
-      - The Merkle root of the VM's memory.
-      - A Poseidon2 commitment to the VM's registers.
-      - A Poseidon2 commitment to the memory operations log.
-    - **Preimage of `U_{i-1}_comm`**: The full running accumulator instance
-      `U_{i-1}` and its witness `w_acc`.
-    - **Folding proof `π_{i-1}`**: The `LatticeFold` proof generated during
-      step `i-1`.
-2.  **RISC-V Witness (proving the execution of `F`):**
-    - The **instruction** being executed at `pc_{i-1}`.
-    - A **Merkle proof** proving that this instruction is valid,
-      verifying its inclusion in the tree rooted at `code_comm` (which is part
-      of the public `z_0_comm`).
-    - The full **execution trace** for this single instruction, showing the
-      transition from input state (`z_{i-1}`) to output state (`z_i`).
-    - Any necessary Merkle proofs for memory operations (e.g., proof of a page update).
+## VM and trace model
 
-### Constraints within the augmented circuit `F'`
+- ISA target is a subset of `rv32imac`.
+- 1 MB RAM (`WORDS_PER_PAGE = 256`, `PAGE_COUNT = 1024`, word size 4 bytes).
+- One `ExecutionTrace` per executed instruction (includes `pc`, register values in/out, ...)
 
-The CCS for the augmented circuit `F'` enforces the following logic at each step `i`:
+The trace is transformed into CCS witness for both:
 
-1.  **Anchor constraints**: Recalculate `h_{i-1}` from its private preimage
-    components. They constrain this result to equal the **public `h_{i-1}`**.
-2.  **Instruction fetch constraints**: Verify the provided Merkle proof for
-    the current instruction against the `pc_{i-1}` (from the witness) and the
-    `code_comm` (from the public `z_0_comm`). This prevents the prover from
-    executing a malicious instruction.
-3.  **State transition constraints**: Constrain the correct decoding of the RISC-V
-    instruction and its execution based on the instruction and the `ExecutionTrace` witness.
-4.  **Memory consistency constraints**:
-    - If a memory operation occurs, it constrains that the memory operations
-      log commitment is correctly updated.
-    - If a memory write occurs, it constrains that the new memory Merkle root
-      is valid by checking the provided Merkle proof for the updated page.
-5.  **Recursive folding constraint**: The circuit conditionally performs one of the following:
-    - **Base case (`i=0`):** Checks that the step is `0` and that there is no folding proof.
-    - **Recursive case (`i>0`):** Constraints the verification of the folding
-      proof `π_{i-1}` by running the `LatticeFold` NIFS verifier logic.
+- step execution constraints (`F`), and
+- augmented IVC constraints (`F'`) that connect folded steps.
+
+## Current implementation status
+
+Implemented:
+
+- RISC-V VM execution with ELF loading and trace generation.
+- CCS arithmetization for supported instructions.
+- Poseidon2 constraints and commitments.
+- Off-circuit LatticeFold proving and accumulator updates.
+- IVC step commitment verification inside CCS.
+
+In progress / TODO:
+
+- Full in-CCS NIFS verifier constraints.
+- Memory consistency proofs (permutation + read-over-write + page-update proofs).
+- Additional rv32imac instruction coverage.
+- Final wrapping SNARK (SuperSpartan + Greyhound integration).
+- EVM integration and Ethereum block proving.
+
+## Build and run
+
+Toolchain:
+
+- Rust nightly: `nightly-2025-08-19`
+
+Run zkVM prover (debug checks enabled):
+
+```bash
+RUST_LOG=<LOG_LEVEL> cargo run --bin zkvm --features debug,parallel --release
+```
+
+Expected current behavior for the 100th Fibonacci guest:
+
+- About 16 execution traces.
+- About 32 seconds proving time.
+
+## Key code locations
+
+- `latticeum/crates/vm/src/riscvm/vm.rs`: VM execution loop.
+- `latticeum/crates/vm/src/riscvm/inst.rs`: instruction semantics.
+- `latticeum/crates/zkvm/src/ccs.rs`: witness layout and arithmetization.
+- `latticeum/crates/zkvm/src/constraints.rs`: CCS constraint construction.
+- `latticeum/crates/zkvm/src/zk_latticefold.rs`: folding/linearization witness extraction.
+- `latticeum/crates/zkvm/src/main.rs`: end-to-end proving and folding loop.
+- `latticeum/crates/zkvm/src/ivc.rs`: IVC step structures.
 
 ## Roadmap
 
-### VM execution
+1. Complete in-circuit folding verifier constraints.
+2. Add memory consistency constraints/proofs.
+3. Integrate wrapping SNARK for succinct final verification.
+4. Extend ISA support to the guest/EVM requirements.
+5. Move from Fibonacci example to full Ethereum block proving.
+6. Create benchmarks, similar to https://fenbushicapital.medium.com/benchmarking-zkvms-current-state-and-prospects-ba859b44f560
 
-#### 1. RISC-V emulator
+## References
 
-Implementation, or fork of a Rust RISC-V 32 bit ISA emulator. After first
-Zk EVM implementation, 64 bit ISA could be used, due to the LatticeFold+'s
-theoretical advantage in ragne proofs.
-
-##### Execution trace
-
-Modify the emulator so it also outputs a execution trace of one instruction.
-It should, for example, include instruction executed, register states,
-what memory was read or stored.
-
-| input              | output                           |
-| ------------------ | -------------------------------- |
-| RISC-V binary file | A collection of execution traces |
-
-#### 2. CCS
-
-There are three CCS parts:
-
-1. CCS structure `s` - defines the rules of entire RISC-V ISA, it defines the
-   relation, it is fixed, not changing.
-2. CCS instance `u` - public part, contains inputs, outputs, commitments to witness.
-   A vector of values, or some structure.
-3. CCS witness `w` - private part, contains the selector of the instruction, execution
-   trace values. It is a one vector.
-
-In this step, create the universal CCS structure `s` for the RISC-V ISA (and also
-it must contain the folding logic). Look at libraries like `bellperson`, `nova-snark`,
-or `halo2` for sythetizing such CCS structure.
-
-| input                                          | output                                             |
-| ---------------------------------------------- | -------------------------------------------------- |
-| RISC-V ISA Specification, Folding Scheme Logic | A file containing the serialized CCS structure `s` |
-
-##### Sources:
-
-- [CCS paper](./papers/CCS.pdf).
-- [Nethermind/latticefold](https://github.com/NethermindEth/latticefold/blob/main/latticefold/src/arith.rs#L51).
-
-#### 3. Arithmetize into CCS
-
-For each execution trace, it produces CCS instance (inputs, outputs, ...) and
-witness vector. This step can be parallelized, each execution trace can be arithmetized
-in parallel.
-
-| input                    | output                                                                      |
-| ------------------------ | --------------------------------------------------------------------------- |
-| A single execution trace | An instance-witness pair (`u_i`, `w_i`) for the universal CCS structure `s` |
-
-### Folding
-
-Take the stream of instance-witness pairs from [arithmetizer](#4-arithmetize-into-ccs)
-and fold them. In this step a implementation of LatticeFold+ is needed.
-This can also be parallelized in two ways,
-By parallelizing MSM in commitment scheme (intra-step parallelism) or,
-inter-step parallelism, one thread can fold `u_1` and `u_2`, other can fold
-`u_3` and `u_4`, then fold these two folds and so on... a tree like parallelism.
-
-| input                              | output                                                                                                       |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| A vector of instance-witness pairs | The last instance-witness pair (`u_n`, `w_n`) and the final accumulated instance-witness pair (`U_N`, `W_N`) |
-
-### Wrapping
-
-Given last instance `u_n`, last witness `w_n`, last running instance `U_n` and
-last running witness `W_n`, fold them last time to get `U'` and `W'`.
-To create a SNARK proving _I know a witness `W'` that satisfies the CCS instance `U'`._,
-implement a Spartan + Greyhound ZKP system.
-
-| input                                                                                                        | output                                            |
-| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| The last instance-witness pair (`u_n`, `w_n`) and the final accumulated instance-witness pair (`U_N`, `W_N`) | A final, succinct, zero-knowledge proof `π_final` |
-
-### RISC-V EVM
-
-Implementation like REVM depend on Rust's `std`, which depends on underlying OS.
-The ZkVM environment emulates "bare-metal" one, so it can only run programs
-with `no_std` assumption. In this step, either find a `no_std` EVM (maybe `zeth`
-from RISC-0), or implement it with `no_std` and ZK in mind.
-
-| input             | output                                                       |
-| ----------------- | ------------------------------------------------------------ |
-| EVM Specification | A `no_std` Rust code that can be compiled to a RISC-V binary |
-
-### ETH block proof
-
-Use the ZkEVM built in previous step to **prove Ethereum blocks**.
-
-| input                                    | output                                                                           |
-| ---------------------------------------- | -------------------------------------------------------------------------------- |
-| The RISC-V EVM binary, An Ethereum block | A final, succinct proof `π_eth_block` that the block's state transition is valid |
-
-## Links
-
-- this is golden, they go over everything, I could take inspiration for my ZkVM https://dev.risczero.com/proof-system/
-- Jolts book is filled with other goodies https://eprint.iacr.org/2023/1217.pdf, also its paper seems to be readable for me
-- cloudflare lattices https://blog.cloudflare.com/lattice-crypto-primer/
-- taiko intro to folding https://taiko.mirror.xyz/tk8LoE-rC2w0MJ4wCWwaJwbq8-Ih8DXnLUf7aJX1FbU
-- nethermind latticefold https://nethermind.notion.site/Latticefold-and-lattice-based-operations-performance-report-153360fc38d080ac930cdeeffed69559#c8a3b19140cf46dabd68966b04458293
+- LatticeFold and related implementations: https://github.com/NethermindEth/latticefold
+- CCS paper: `./papers/CCS.pdf`
+- RISC Zero proof-system docs: https://dev.risczero.com/proof-system/
+- Poseidon2 and modern folding/IVC literature (Nova, HyperNova, Jolt)
