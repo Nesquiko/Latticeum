@@ -1,11 +1,9 @@
-use std::fmt::write;
-
-use ark_ff::One;
 use ark_ff::{Field, PrimeField};
 use cyclotomic_rings::rings::GoldilocksRingNTT;
+use latticefold::commitment::Commitment;
 use latticefold::decomposition_parameters::DecompositionParams;
-use latticefold::nifs::decomposition::DecompositionProver;
 use latticefold::nifs::decomposition::LFDecompositionProver;
+use latticefold::nifs::decomposition::{DecompositionProof, DecompositionProver};
 use latticefold::nifs::folding::FoldingProver;
 use latticefold::nifs::folding::LFFoldingProver;
 use latticefold::nifs::linearization::LFLinearizationProver;
@@ -100,6 +98,7 @@ pub fn zk_latticefold_prove(
 
 pub struct FoldingProofWitnessVars {
     pub linearization_vars: LinearizationVars,
+    pub decomp_vars: DecompositionVars,
 }
 
 pub fn generate_verification_witness_vars(
@@ -114,7 +113,13 @@ pub fn generate_verification_witness_vars(
     let (linearized_cm_i, linearization_vars) =
         collect_linearization_vars(cm_i, &proof.linearization_proof, ccs, &mut transcript);
 
-    FoldingProofWitnessVars { linearization_vars }
+    let (decomposed_acc, decomp_vars) =
+        collect_decomposition_vars(acc, &proof.decomposition_proof_l, &mut transcript);
+
+    FoldingProofWitnessVars {
+        linearization_vars,
+        decomp_vars,
+    }
 }
 
 /// Modified version of the sanity_check from latticefold library, because it isn't
@@ -320,4 +325,84 @@ fn collect_linearization_sumcheck_vars(
         evaluation_point: eval_point.into_iter().map(|x| x.into()).collect(),
         expected_evaluation: claimed_sum,
     }
+}
+
+pub struct DecompositionVars {
+    /// Commitment to `f`, where `f` is the witness after B-base decomposition
+    /// of the original CCS witness (`w_ccs -> f` with params `B, L`).
+    pub cm: Commitment<GoldilocksRingNTT>,
+
+    /// Commitments to the `K` small-base limbs `f_i` from the second decomposition step
+    /// (`f -> {f_i}` with base `B_SMALL`), expected to satisfy:
+    /// `cm == sum_i (B_SMALL^i * y_s[i])`.
+    pub y_s: Vec<Commitment<GoldilocksRingNTT>>,
+
+    /// The evaluation of the linearized CCS commitment at `r`.
+    pub v: Vec<GoldilocksRingNTT>,
+
+    /// Evaluation claims about rows of $\hat{f}$-matrices of decomposed witnesses.
+    ///
+    /// After a run of the decomposition subprotocol prover this field contains `K` vectors of length 3
+    pub v_s: Vec<Vec<GoldilocksRingNTT>>,
+
+    /// The evaluation of the MLEs of {M_j z} at r.
+    pub u: Vec<GoldilocksRingNTT>,
+
+    /// Evaluation claims about decomposed witnesses for u.
+    pub u_s: Vec<Vec<GoldilocksRingNTT>>,
+
+    /// Statement part x_w from LCCCS.
+    pub x_w: Vec<GoldilocksRingNTT>,
+
+    /// Constant term h from LCCCS.
+    pub h: GoldilocksRingNTT,
+
+    /// Decomposed x vectors (each is x_w || h).
+    pub x_s: Vec<Vec<GoldilocksRingNTT>>,
+}
+
+fn collect_decomposition_vars(
+    cm_i: &LCCCS<GoldilocksRingNTT>,
+    decomp_proof: &DecompositionProof<GoldilocksRingNTT>,
+    transcript: &mut Poseidon2Transcript,
+) -> (Vec<LCCCS<GoldilocksRingNTT>>, DecompositionVars) {
+    let mut lcccs_s = Vec::<LCCCS<GoldilocksRingNTT>>::with_capacity(GoldiLocksDP::K);
+
+    for (((x, y), u), v) in decomp_proof
+        .x_s
+        .iter()
+        .zip(&decomp_proof.y_s)
+        .zip(&decomp_proof.u_s)
+        .zip(&decomp_proof.v_s)
+    {
+        transcript.absorb_slice(x);
+        transcript.absorb_slice(y.as_ref());
+        transcript.absorb_slice(u);
+        transcript.absorb_slice(v);
+
+        let h = x.last().cloned().expect("x_s is empty");
+        lcccs_s.push(LCCCS {
+            r: cm_i.r.clone(),
+            v: v.clone(),
+            cm: y.clone(),
+            u: u.clone(),
+            x_w: x[0..x.len() - 1].to_vec(),
+            h,
+        });
+    }
+
+    (
+        lcccs_s,
+        DecompositionVars {
+            cm: cm_i.cm.clone(),
+            y_s: decomp_proof.y_s.clone(),
+            v: cm_i.v.clone(),
+            v_s: decomp_proof.v_s.clone(),
+            u: cm_i.u.clone(),
+            u_s: decomp_proof.u_s.clone(),
+            x_w: cm_i.x_w.clone(),
+            h: cm_i.h,
+            x_s: decomp_proof.x_s.clone(),
+        },
+    )
 }

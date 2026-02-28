@@ -5,11 +5,14 @@ use std::ops::Range;
 use tracing::{Level, instrument};
 
 use configuration::N_REGS;
-use latticefold::decomposition_parameters::DecompositionParams;
+use latticefold::{
+    decomposition_parameters::DecompositionParams, nifs::decomposition::LFDecompositionVerifier,
+};
 use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 
 use crate::{
     crypto_consts::{FULL_ROUNDS, PARTIAL_ROUNDS},
+    fiat_shamir::Poseidon2Transcript,
     ivc::IVCStepInput,
     poseidon2::{
         GOLDILOCKS_S_BOX_DEGREE, POSEIDON2_OUT, WIDE_POSEIDON2_13_SPONGE_PASSES,
@@ -32,20 +35,30 @@ impl DecompositionParams for GoldiLocksDP {
     const K: usize = 15;
 }
 
+pub fn calc_b_s() -> Vec<GoldilocksRingNTT> {
+    type DecomVerifier = LFDecompositionVerifier<GoldilocksRingNTT, Poseidon2Transcript>;
+    DecomVerifier::calculate_b_s::<GoldiLocksDP>()
+}
+
 pub const CCS_LAYOUT: CCSLayout = CCSLayout::new();
 /// Length of Ajtai commitment vectors (rows in commitment matrix)
-pub const KAPPA: usize = 4;
+pub const KAPPA: usize = 32;
+/// Should equal GoldilocksRingPoly::dimension() / GoldilocksRingNTT::dimension() = 24 / 8 = 3
+/// but those functions aren't const, can't reuse them to get the number, hardcoded instead...
+pub const TAU: usize = 3;
+/// Length of x_w in LCCCS for this CCS layout.
+pub const DECOMP_X_W_LEN: usize = CCSLayout::X_ELEMS_SIZE;
 /// Number of columns in the Ajtai commitment matrix
 pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is log(m) where m is the number of rows in matrices padded to the next power of two,
 /// see the constraint.rs
-pub const CCS_S: usize = 13;
+pub const CCS_S: usize = 15;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is how many multisets there are.
-pub const CCS_C: usize = 28;
+pub const CCS_C: usize = 29;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// The max degree is of the poseidon2 s box degree 7, then
@@ -53,7 +66,7 @@ pub const CCS_C: usize = 28;
 ///     - +1 to capture degree x polynom, you must have x+1 coeffs
 pub const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
-const CCS_NUM_MATRICES: usize = 89;
+pub const CCS_NUM_MATRICES: usize = 90;
 /// +1 for the initialy claimed '0'
 pub const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
@@ -89,7 +102,7 @@ pub struct CCSLayout {
     ///  so FULL_ROUNDS/2 * 2 * WIDE_POSEIDON2_WIDTH = FULL_ROUNDS * WIDE_POSEIDON2_WIDTH
     pub ivc_h_i_external_terminal: [usize; FULL_ROUNDS * WIDE_POSEIDON2_WIDTH],
 
-    // These are for the GoldilocksRingNTT elements
+    // --- Linearization of the folding proof ---
     pub lin_beta_s_idx: [usize; CCS_S],
     pub lin_eval_polynomials_idx: [usize; CCS_S * LINEARIZATION_DEGREE],
     pub lin_claimed_sums: [usize; LINEARIZATION_CLAIMED_SUMS],
@@ -102,7 +115,19 @@ pub struct CCSLayout {
     pub lin_proof_u: [usize; CCS_NUM_MATRICES],
     pub lin_inner_idx: usize,
     pub lin_inner_products_per_multiset: [usize; CCS_C],
-    // --------------------------------------------
+    // ------------------------------------------
+
+    // --- Decomposition of the folding proof ---
+    pub decomp_cm_idx: [usize; KAPPA],
+    pub decomp_y_s_idx: [usize; GoldiLocksDP::K * KAPPA],
+    pub decomp_v_idx: [usize; TAU],
+    pub decomp_v_s_idx: [usize; GoldiLocksDP::K * TAU],
+    pub decomp_u_idx: [usize; CCS_NUM_MATRICES],
+    pub decomp_u_s_idx: [usize; GoldiLocksDP::K * CCS_NUM_MATRICES],
+    pub decomp_x_w_idx: [usize; DECOMP_X_W_LEN],
+    pub decomp_h_idx: usize,
+    pub decomp_x_s_idx: [usize; GoldiLocksDP::K * (DECOMP_X_W_LEN + 1)],
+    // ------------------------------------------
 
     // input state
     pub pc_in_idx: usize,
@@ -199,8 +224,22 @@ impl CCSLayout {
         let (lin_proof_u, mut w_cursor) = indices_with_new_cursor::<CCS_NUM_MATRICES>(w_cursor);
         let lin_inner_idx = w_cursor;
         w_cursor += 1;
-        let (lin_inner_products_per_multiset, mut w_cursor) =
+        let (lin_inner_products_per_multiset, w_cursor) =
             indices_with_new_cursor::<CCS_C>(w_cursor);
+
+        let (decomp_cm_idx, w_cursor) = indices_with_new_cursor::<KAPPA>(w_cursor);
+        let (decomp_y_s_idx, w_cursor) =
+            indices_with_new_cursor::<{ GoldiLocksDP::K * KAPPA }>(w_cursor);
+        let (decomp_v_idx, w_cursor) = indices_with_new_cursor::<TAU>(w_cursor);
+        let (decomp_v_s_idx, mut w_cursor) =
+            indices_with_new_cursor::<{ GoldiLocksDP::K * TAU }>(w_cursor);
+        let (decomp_u_idx, w_cursor) = indices_with_new_cursor::<CCS_NUM_MATRICES>(w_cursor);
+        let (decomp_u_s_idx, w_cursor) =
+            indices_with_new_cursor::<{ GoldiLocksDP::K * CCS_NUM_MATRICES }>(w_cursor);
+        let (decomp_x_w_idx, w_cursor) = indices_with_new_cursor::<DECOMP_X_W_LEN>(w_cursor);
+        let decomp_h_idx = w_cursor;
+        let (decomp_x_s_idx, mut w_cursor) =
+            indices_with_new_cursor::<{ GoldiLocksDP::K * (DECOMP_X_W_LEN + 1) }>(decomp_h_idx + 1);
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -278,6 +317,15 @@ impl CCSLayout {
             lin_proof_u,
             lin_inner_idx,
             lin_inner_products_per_multiset,
+            decomp_cm_idx,
+            decomp_y_s_idx,
+            decomp_v_idx,
+            decomp_v_s_idx,
+            decomp_u_idx,
+            decomp_u_s_idx,
+            decomp_x_w_idx,
+            decomp_h_idx,
+            decomp_x_s_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -316,7 +364,6 @@ impl CCSLayout {
     }
 }
 
-#[instrument(skip_all, level = Level::DEBUG)]
 pub fn set_ivc_h_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSLayout) {
     z[layout.ivc_h_i_step_idx] = input.ivc_step.as_canonical_u64() as usize;
     z[layout.ivc_h_i_step_inv_idx] = input
@@ -414,7 +461,6 @@ pub fn set_ivc_h_witness(z: &mut Vec<usize>, input: &IVCStepInput, layout: &CCSL
     }
 }
 
-#[instrument(skip_all, level = Level::DEBUG)]
 pub fn set_folding_proof_witness(
     z: &mut Vec<GoldilocksRingNTT>,
     folding_vars: &FoldingProofWitnessVars,
@@ -471,9 +517,63 @@ pub fn set_folding_proof_witness(
     for (i, &z_idx) in layout.lin_inner_products_per_multiset.iter().enumerate() {
         z[z_idx] = linearization_vars.inner_product_per_multiset[i];
     }
+
+    // ---------- Decomposition vars ----------
+    let decomp_vars = &folding_vars.decomp_vars;
+
+    for (i, &z_idx) in layout.decomp_cm_idx.iter().enumerate() {
+        z[z_idx] = decomp_vars.cm.as_ref()[i];
+    }
+
+    for (i, &z_idx) in layout.decomp_y_s_idx.iter().step_by(KAPPA).enumerate() {
+        for el_idx in 0..KAPPA {
+            z[z_idx + el_idx] = decomp_vars.y_s[i].as_ref()[el_idx];
+        }
+    }
+
+    for (i, &z_idx) in layout.decomp_v_idx.iter().enumerate() {
+        z[z_idx] = decomp_vars.v[i];
+    }
+
+    for (i, &z_idx) in layout.decomp_v_s_idx.iter().step_by(TAU).enumerate() {
+        for el_idx in 0..TAU {
+            z[z_idx + el_idx] = decomp_vars.v_s[i][el_idx];
+        }
+    }
+
+    for (i, &z_idx) in layout.decomp_u_idx.iter().enumerate() {
+        z[z_idx] = decomp_vars.u[i];
+    }
+
+    for (i, &z_idx) in layout
+        .decomp_u_s_idx
+        .iter()
+        .step_by(CCS_NUM_MATRICES)
+        .enumerate()
+    {
+        for el_idx in 0..CCS_NUM_MATRICES {
+            z[z_idx + el_idx] = decomp_vars.u_s[i][el_idx];
+        }
+    }
+
+    for (i, &z_idx) in layout.decomp_x_w_idx.iter().enumerate() {
+        z[z_idx] = decomp_vars.x_w[i];
+    }
+
+    z[layout.decomp_h_idx] = decomp_vars.h;
+
+    for (i, &z_idx) in layout
+        .decomp_x_s_idx
+        .iter()
+        .step_by(DECOMP_X_W_LEN + 1)
+        .enumerate()
+    {
+        for el_idx in 0..(DECOMP_X_W_LEN + 1) {
+            z[z_idx + el_idx] = decomp_vars.x_s[i][el_idx];
+        }
+    }
 }
 
-#[instrument(skip_all, level = Level::DEBUG)]
 pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CCSLayout) {
     z[layout.pc_in_idx] = trace
         .input

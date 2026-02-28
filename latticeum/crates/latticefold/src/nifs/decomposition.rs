@@ -11,7 +11,7 @@ use stark_rings_poly::polynomials::DenseMultilinearExtension;
 pub use self::structs::*;
 use self::utils::{decompose_B_vec_into_k_vec, decompose_big_vec_into_k_vec_and_compose_back};
 use crate::{
-    arith::{error::CSError, utils::mat_vec_mul, Witness, CCS, LCCCS},
+    arith::{CCS, LCCCS, Witness, error::CSError, utils::mat_vec_mul},
     ark_base::*,
     commitment::{AjtaiCommitmentScheme, Commitment, CommitmentError},
     decomposition_parameters::DecompositionParams,
@@ -285,7 +285,7 @@ impl<NTT: OverField, T: Transcript<NTT>> LFDecompositionVerifier<NTT, T> {
             .ok_or(DecompositionError::RecomposedError)
     }
 
-    fn calculate_b_s<P: DecompositionParams>() -> Vec<NTT> {
+    pub fn calculate_b_s<P: DecompositionParams>() -> Vec<NTT> {
         (0..P::K)
             .map(|i| NTT::from((P::B_SMALL as u128).pow(i as u32)))
             .collect()

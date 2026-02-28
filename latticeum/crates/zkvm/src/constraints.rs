@@ -1,5 +1,8 @@
 use crate::{
-    ccs::{CCS_C, CCS_S, CCSLayout, LINEARIZATION_DEGREE},
+    ccs::{
+        CCS_C, CCS_NUM_MATRICES, CCS_S, CCSLayout, DECOMP_X_W_LEN, GoldiLocksDP, KAPPA,
+        LINEARIZATION_DEGREE, TAU, calc_b_s,
+    },
     crypto_consts::{FULL_ROUNDS, M_I_INVERSE_TRANSPOSED, MDS_INVERSE_TRANSPOSED, PARTIAL_ROUNDS},
     poseidon2::{
         GOLDILOCKS_S_BOX_DEGREE, INTERNAL_CONSTS, POSEIDON2_OUT, WIDE_POSEIDON2_13_SPONGE_PASSES,
@@ -8,7 +11,7 @@ use crate::{
 };
 use ark_std::log2;
 use cyclotomic_rings::rings::GoldilocksRingNTT;
-use latticefold::arith::CCS;
+use latticefold::{arith::CCS, decomposition_parameters::DecompositionParams};
 use num_traits::identities::One;
 use p3_field::PrimeField64;
 use p3_goldilocks::Goldilocks;
@@ -63,8 +66,10 @@ impl<'a> CCSBuilder<'a> {
         builder.lui_constraint();
 
         // folding proof specific MUST BE LAST
+        // TODO decomposition cm == y_s sum_i b_i * y_s[i][j] - cm[j] = 0
         builder.folding_proof_linearization_sumcheck();
         builder.folding_proof_linearization_final_check();
+        builder.folding_proof_decomposition();
         builder.folding_proof_linearization_inner();
 
         builder.build()
@@ -749,6 +754,66 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(R::one().neg());
     }
 
+    fn folding_proof_decomposition(&mut self) {
+        let b_s: Vec<GoldilocksRingNTT> = calc_b_s();
+        assert_eq!(b_s.len(), self.layout.decomp_y_s_idx.len() / KAPPA);
+
+        let matrix_base_idx = self.matrices.len();
+        let mut m_decomp = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        // sum_i(b_s[i] * y_s[i][j]) - cm[j] == 0
+        for j in 0..KAPPA {
+            let coeff_idx = FP_DECOMP_CM_RECOMP[j];
+            for (i, b_i) in b_s.iter().enumerate() {
+                let y_idx = self.layout.decomp_y_s_idx[i * KAPPA + j];
+                m_decomp.coeffs[coeff_idx].push((*b_i, y_idx));
+            }
+            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_cm_idx[j]));
+        }
+
+        // sum_i(b_i * v_s[i][j]) - cm_i.v[j] == 0
+        for j in 0..TAU {
+            let coeff_idx = FP_DECOMP_V_RECOMP[j];
+            for i in 0..GoldiLocksDP::K {
+                let v_idx = self.layout.decomp_v_s_idx[i * TAU + j];
+                let b_i = b_s[i];
+                m_decomp.coeffs[coeff_idx].push((b_i, v_idx));
+            }
+            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_v_idx[j]));
+        }
+
+        // sum_i(b_i * u_s[i][j]) - cm_i.u[j] == 0
+        for j in 0..CCS_NUM_MATRICES {
+            let coeff_idx = FP_DECOMP_U_RECOMP[j];
+            for i in 0..GoldiLocksDP::K {
+                let u_idx = self.layout.decomp_u_s_idx[i * CCS_NUM_MATRICES + j];
+                m_decomp.coeffs[coeff_idx].push((b_s[i], u_idx));
+            }
+            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_u_idx[j]));
+        }
+
+        // sum_i(b_i * x_s[i][j]) - cm_i.x_w[j] == 0
+        for j in 0..DECOMP_X_W_LEN {
+            let coeff_idx = FP_DECOMP_XW_RECOMP[j];
+            for i in 0..GoldiLocksDP::K {
+                let x_idx = self.layout.decomp_x_s_idx[i * (DECOMP_X_W_LEN + 1) + j];
+                m_decomp.coeffs[coeff_idx].push((b_s[i], x_idx));
+            }
+            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_x_w_idx[j]));
+        }
+
+        // sum_i(b_i * x_s[i][|x_w|]) - cm_i.h == 0
+        for i in 0..GoldiLocksDP::K {
+            let h_idx = self.layout.decomp_x_s_idx[i * (DECOMP_X_W_LEN + 1) + DECOMP_X_W_LEN];
+            m_decomp.coeffs[FP_DECOMP_H_RECOMP].push((b_s[i], h_idx));
+        }
+        m_decomp.coeffs[FP_DECOMP_H_RECOMP].push((R::one().neg(), self.layout.decomp_h_idx));
+
+        self.matrices.push(m_decomp);
+        self.multisets.push(vec![matrix_base_idx]);
+        self.coeffs.push(R::one());
+    }
+
     /// MUST BE LAST added constraint
     /// constraints that linearization_inner == Σ_i c[i] * Π_{j in S[i]} u[j].
     /// The formula is:
@@ -1136,6 +1201,11 @@ const FP_LIN_E_SUB_RES: [usize; CCS_S + 1] = index_array(last(FP_LIN_E_FACTORS) 
 const FP_LIN_INNER_EVAL: usize = last(FP_LIN_E_SUB_RES) + 1;
 const FP_LIN_INNER_PRODS_PER_MULTISET: [usize; CCS_C] = index_array(FP_LIN_INNER_EVAL + 1);
 const FP_LIN_INNER_DECOMP: usize = last(FP_LIN_INNER_PRODS_PER_MULTISET) + 1;
+const FP_DECOMP_CM_RECOMP: [usize; KAPPA] = index_array(FP_LIN_INNER_DECOMP + 1);
+const FP_DECOMP_V_RECOMP: [usize; TAU] = index_array(last(FP_DECOMP_CM_RECOMP) + 1);
+const FP_DECOMP_U_RECOMP: [usize; CCS_NUM_MATRICES] = index_array(last(FP_DECOMP_V_RECOMP) + 1);
+const FP_DECOMP_XW_RECOMP: [usize; DECOMP_X_W_LEN] = index_array(last(FP_DECOMP_U_RECOMP) + 1);
+const FP_DECOMP_H_RECOMP: usize = last(FP_DECOMP_XW_RECOMP);
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")
