@@ -1,5 +1,5 @@
 use crate::{
-    ccs::{CCS_S, CCSLayout, LINEARIZATION_DEGREE},
+    ccs::{CCS_C, CCS_S, CCSLayout, LINEARIZATION_DEGREE},
     crypto_consts::{FULL_ROUNDS, M_I_INVERSE_TRANSPOSED, MDS_INVERSE_TRANSPOSED, PARTIAL_ROUNDS},
     poseidon2::{
         GOLDILOCKS_S_BOX_DEGREE, INTERNAL_CONSTS, POSEIDON2_OUT, WIDE_POSEIDON2_13_SPONGE_PASSES,
@@ -753,7 +753,92 @@ impl<'a> CCSBuilder<'a> {
     }
 
     /// MUST BE LAST added constraint
-    fn folding_proof_linearization_inner(&mut self) {}
+    /// constraints that linearization_inner == Σ_i c[i] * Π_{j in S[i]} u[j].
+    /// The formula is:
+    ///
+    /// ```
+    /// let mut sum = 0;
+    /// for i in 0..self.multisets.len() {
+    ///     let product = 1;
+    ///     for j in self.multisets[i].iter() {
+    ///         product *= u[j]
+    ///     }
+    ///     sum += product
+    /// }
+    /// ```
+    fn folding_proof_linearization_inner(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        // for each multiset do
+        // self.layout.lin_inner ∏_{j in S[i]} u[j]
+        // preallocate 7 matrices, because the longest multiset is 7, populate them later, when all
+        // multisets are defined. Each of these 7 matrices will be used to constraint one product
+        // from elements of `u` as defined in corresponding multiset.
+        // m[x] = product of elements u[z] where `z` is from multiset[y]
+        for _ in 0..(GOLDILOCKS_S_BOX_DEGREE + 2) {
+            // +1 for the matrix holding the self.layout.lin_inner_products_per_multiset
+            // +1 for the matrix holding the final inner - c[0]*prod[0] ... == 0
+            let m = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+            self.matrices.push(m);
+        }
+
+        // create the multiset that will be used to multiple matrices holding the
+        // u[j] elements
+        let multiset = (0..GOLDILOCKS_S_BOX_DEGREE)
+            .into_iter()
+            .map(|i| matrix_base_idx + i)
+            .collect();
+        self.multisets.push(multiset);
+        self.coeffs.push(Ring::one());
+
+        // push the matrix holding the lin_inner_products_per_multiset
+        self.multisets
+            .push(vec![matrix_base_idx + GOLDILOCKS_S_BOX_DEGREE]);
+        self.coeffs.push(Ring::one().neg());
+        // push the matrix holding the final inner - c[0]*prod[0] ... == 0 check
+        self.multisets
+            .push(vec![matrix_base_idx + GOLDILOCKS_S_BOX_DEGREE + 1]);
+        self.coeffs.push(Ring::one());
+
+        assert_eq!(self.multisets.len(), FP_LIN_INNER_PRODS_PER_MULTISET.len());
+
+        let matrix_multiset = &self.multisets[self.multisets.len() - 3];
+        // fill the matrices according to the multisets with elements from u[j],
+        // if the multiset doesn't have 7 elements, then fill the rest with 1s
+        for (i, s) in self.multisets.iter().enumerate() {
+            assert!(s.len() <= GOLDILOCKS_S_BOX_DEGREE);
+            let coeff_idx = FP_LIN_INNER_PRODS_PER_MULTISET[i];
+
+            for (j, &u_j_idx) in s.iter().enumerate() {
+                let m = self
+                    .matrices
+                    .get_mut(matrix_multiset[j])
+                    .expect("multiset has index not in self.matrices");
+                m.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_proof_u[u_j_idx]));
+            }
+            for j in s.iter().len()..GOLDILOCKS_S_BOX_DEGREE {
+                let m = self
+                    .matrices
+                    .get_mut(matrix_multiset[j])
+                    .expect("multiset has index not in self.matrices");
+                m.coeffs[coeff_idx].push((Ring::one(), self.layout.const_1_idx));
+            }
+
+            let m_prods_idx = self.matrices.len() - 2;
+            let m_prods = &mut self.matrices[m_prods_idx];
+            m_prods.coeffs[coeff_idx]
+                .push((Ring::one(), self.layout.lin_inner_products_per_multiset[i]));
+        }
+
+        // inner - c[0]*self.layout.lin_inner_products_per_multiset[0] - ... == 0
+        let m_inner_idx = self.matrices.len() - 1;
+        let m_inner = &mut self.matrices[m_inner_idx];
+        m_inner.coeffs[FP_LIN_INNER_DECOMP].push((Ring::one(), self.layout.lin_inner_idx));
+        for (i, c) in self.coeffs.iter().enumerate() {
+            m_inner.coeffs[FP_LIN_INNER_DECOMP]
+                .push((c.neg(), self.layout.lin_inner_products_per_multiset[i]));
+        }
+    }
 
     // e * inner == expected_eval
     fn folding_proof_linearization_final_check(&mut self) {
@@ -1054,6 +1139,8 @@ const FP_LIN_E_XI_YI: [usize; CCS_S] = index_array(FP_LIN_FINAL_CLAIMED_SUM + 1)
 const FP_LIN_E_FACTORS: [usize; CCS_S] = index_array(last(FP_LIN_E_XI_YI) + 1);
 const FP_LIN_E_SUB_RES: [usize; CCS_S + 1] = index_array(last(FP_LIN_E_FACTORS) + 1);
 const FP_LIN_INNER_EVAL: usize = last(FP_LIN_E_SUB_RES) + 1;
+const FP_LIN_INNER_PRODS_PER_MULTISET: [usize; CCS_C] = index_array(FP_LIN_INNER_EVAL + 1);
+const FP_LIN_INNER_DECOMP: usize = last(FP_LIN_INNER_PRODS_PER_MULTISET) + 1;
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")

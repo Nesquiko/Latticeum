@@ -1,3 +1,6 @@
+use std::fmt::write;
+
+use ark_ff::One;
 use ark_ff::{Field, PrimeField};
 use cyclotomic_rings::rings::GoldilocksRingNTT;
 use latticefold::decomposition_parameters::DecompositionParams;
@@ -20,6 +23,7 @@ use latticefold::{
     transcript::Transcript,
 };
 use num_traits::Zero;
+use stark_rings::Ring;
 use stark_rings::cyclotomic_ring::models::goldilocks::Fq3;
 
 use crate::poseidon2::GOLDILOCKS_S_BOX_DEGREE;
@@ -163,6 +167,7 @@ pub struct LinearizationVars {
     pub expected_evaluation: GoldilocksRingNTT,
     pub linearization_proof_u: Vec<GoldilocksRingNTT>,
     pub inner: GoldilocksRingNTT,
+    pub inner_product_per_multiset: Vec<GoldilocksRingNTT>,
     pub e_helper_vars: EqEvalHelperVars<GoldilocksRingNTT>,
 }
 
@@ -195,18 +200,21 @@ fn collect_linearization_vars(
     }
     let (_, e_helper_vars) = zk_eq_eval(&lin_sumcheck_vars.evaluation_point, &beta_s);
 
-    let inner = ccs
-        .c
-        .iter()
-        .enumerate()
-        .map(|(i, &c)| {
-            let term = ccs.S[i]
+    assert_eq!(ccs.S.len(), ccs.c.len());
+    let (inner, products_per_multiset) = ccs.c.iter().enumerate().fold(
+        (GoldilocksRingNTT::ZERO, Vec::with_capacity(ccs.S.len())),
+        |(inner, mut products), (i, &c)| {
+            let multiset = &ccs.S[i];
+            assert!(multiset.iter().all(|&j| j < lin_proof.u.len()));
+
+            let multiset_product = multiset
                 .iter()
                 .map(|&j| lin_proof.u[j])
                 .product::<GoldilocksRingNTT>();
-            c * term
-        })
-        .sum::<GoldilocksRingNTT>();
+            products.push(multiset_product);
+            (inner + c * multiset_product, products)
+        },
+    );
 
     transcript.absorb_slice(&lin_proof.v);
     transcript.absorb_slice(&lin_proof.u);
@@ -226,6 +234,7 @@ fn collect_linearization_vars(
         expected_evaluation: lin_sumcheck_vars.expected_evaluation,
         linearization_proof_u: lin_proof.u.clone(),
         inner,
+        inner_product_per_multiset: products_per_multiset,
         e_helper_vars,
     };
 

@@ -42,13 +42,18 @@ pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 /// This is log(m) where m is the number of rows in matrices padded to the next power of two,
 /// see the constraint.rs
 pub const CCS_S: usize = 13;
+
+/// Change this manually, since building of CCS is dynamic and this needs to be const.
+/// This is how many multisets there are.
+pub const CCS_C: usize = 28;
+
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// The max degree is of the poseidon2 s box degree 7, then
 ///     - +1 because of linearization
 ///     - +1 to capture degree x polynom, you must have x+1 coeffs
 pub const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
-const CCS_NUM_MATRICES: usize = 80;
+const CCS_NUM_MATRICES: usize = 89;
 /// +1 for the initialy claimed '0'
 pub const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
@@ -96,6 +101,7 @@ pub struct CCSLayout {
     pub lin_e_sub_res: [usize; CCS_S + 1], // +1 for initial 1 sub-result
     pub lin_proof_u: [usize; CCS_NUM_MATRICES],
     pub lin_inner_idx: usize,
+    pub lin_inner_products_per_multiset: [usize; CCS_C],
     // --------------------------------------------
 
     // input state
@@ -193,6 +199,8 @@ impl CCSLayout {
         let (lin_proof_u, mut w_cursor) = indices_with_new_cursor::<CCS_NUM_MATRICES>(w_cursor);
         let lin_inner_idx = w_cursor;
         w_cursor += 1;
+        let (lin_inner_products_per_multiset, mut w_cursor) =
+            indices_with_new_cursor::<CCS_C>(w_cursor);
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -269,6 +277,7 @@ impl CCSLayout {
             lin_e_sub_res,
             lin_proof_u,
             lin_inner_idx,
+            lin_inner_products_per_multiset,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -458,6 +467,10 @@ pub fn set_folding_proof_witness(
     }
 
     z[layout.lin_inner_idx] = linearization_vars.inner;
+
+    for (i, &z_idx) in layout.lin_inner_products_per_multiset.iter().enumerate() {
+        z[z_idx] = linearization_vars.inner_product_per_multiset[i];
+    }
 }
 
 #[instrument(skip_all, level = Level::DEBUG)]

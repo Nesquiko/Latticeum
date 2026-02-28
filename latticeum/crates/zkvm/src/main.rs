@@ -152,6 +152,10 @@ fn main() {
             assert_eq!(ccs.s + 1, CCS_LAYOUT.lin_claimed_sums.len());
             assert_eq!(ccs.s, CCS_LAYOUT.lin_eval_point.len());
             assert_eq!(ccs.t, CCS_LAYOUT.lin_proof_u.len());
+            assert_eq!(
+                ccs.c.len(),
+                CCS_LAYOUT.lin_inner_products_per_multiset.len()
+            );
 
             #[cfg(feature = "debug")]
             check_relation_debug(&ccs, &z, &ivc_input);
