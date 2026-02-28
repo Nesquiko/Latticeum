@@ -15,7 +15,7 @@ use p3_goldilocks::Goldilocks;
 use stark_rings_linalg::SparseMatrix;
 use std::ops::Neg;
 
-pub type Ring = GoldilocksRingNTT;
+pub type R = GoldilocksRingNTT;
 
 #[derive(Debug)]
 pub struct CCSBuilder<'a> {
@@ -24,11 +24,11 @@ pub struct CCSBuilder<'a> {
     /// layout of the witness vector, also used to derive `n` = number of variables
     layout: &'a CCSLayout,
     /// vector of selector matrices (otherwise known as `M`)
-    matrices: Vec<SparseMatrix<Ring>>,
+    matrices: Vec<SparseMatrix<R>>,
     /// vector of multisets which signal which matrices to use in constraint (otherwise known as `S`)
     multisets: Vec<Vec<usize>>,
     /// vector of coefficients to be used in constraint (otherwise known as `c`)
-    coeffs: Vec<Ring>,
+    coeffs: Vec<R>,
 }
 
 impl<'a> CCSBuilder<'a> {
@@ -42,7 +42,7 @@ impl<'a> CCSBuilder<'a> {
         }
     }
 
-    pub fn create_riscv_ccs<const W: usize>(layout: &'a CCSLayout) -> CCS<Ring> {
+    pub fn create_riscv_ccs<const W: usize>(layout: &'a CCSLayout) -> CCS<R> {
         let mut builder = Self::new::<W>(layout);
 
         // ivc specific
@@ -76,13 +76,13 @@ impl<'a> CCSBuilder<'a> {
 
         // + step * step * step_inv
         let mut m_step_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_step_a.coeffs[IVC_STEP_CONSTR].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+        m_step_a.coeffs[IVC_STEP_CONSTR].push((R::one(), self.layout.ivc_h_i_step_idx));
 
         let mut m_step_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_step_b.coeffs[IVC_STEP_CONSTR].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+        m_step_b.coeffs[IVC_STEP_CONSTR].push((R::one(), self.layout.ivc_h_i_step_idx));
 
         let mut m_step_inv = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_step_inv.coeffs[IVC_STEP_CONSTR].push((Ring::one(), self.layout.ivc_h_i_step_inv_idx));
+        m_step_inv.coeffs[IVC_STEP_CONSTR].push((R::one(), self.layout.ivc_h_i_step_inv_idx));
 
         self.matrices.push(m_step_a);
         self.matrices.push(m_step_b);
@@ -92,15 +92,15 @@ impl<'a> CCSBuilder<'a> {
             matrix_base_idx + 1,
             matrix_base_idx + 2,
         ]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
 
         // - step
         let mut m_step_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_step_linear.coeffs[IVC_STEP_CONSTR].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+        m_step_linear.coeffs[IVC_STEP_CONSTR].push((R::one(), self.layout.ivc_h_i_step_idx));
 
         self.matrices.push(m_step_linear);
         self.multisets.push(vec![matrix_base_idx + 3]);
-        self.coeffs.push(Ring::one().neg());
+        self.coeffs.push(R::one().neg());
     }
 
     fn ivc_step_after_initial_mds(&mut self) {
@@ -178,12 +178,12 @@ impl<'a> CCSBuilder<'a> {
                 coeffs_in_row[doubled_group_start + j] *= 2;
             }
 
-            let coeffs_in_row: [Ring; WIDE_POSEIDON2_WIDTH] = coeffs_in_row
-                .map(|c| Ring::from(c))
+            let coeffs_in_row: [R; WIDE_POSEIDON2_WIDTH] = coeffs_in_row
+                .map(|c| R::from(c))
                 .try_into()
                 .expect("failed to convert to ring elements");
 
-            m_after_mds.coeffs[coeff_idx].push((Ring::one(), after_mds_result_idx));
+            m_after_mds.coeffs[coeff_idx].push((R::one(), after_mds_result_idx));
 
             if i < WIDE_POSEIDON2_WIDTH {
                 for k in 0..pass1_state_indices.len() {
@@ -201,7 +201,7 @@ impl<'a> CCSBuilder<'a> {
         self.matrices.push(m_after_mds);
 
         self.multisets.push(vec![matrix_base_idx]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     fn ivc_step_external_initial_rounds(&mut self) {
@@ -230,7 +230,7 @@ impl<'a> CCSBuilder<'a> {
                     let constant = external_initial_consts[0][i];
 
                     m_add_round_consts.coeffs[coeff_idx].push((
-                        Ring::one(),
+                        R::one(),
                         after_init_mds_idx[i + pass * WIDE_POSEIDON2_WIDTH],
                     ));
                     m_add_round_consts.coeffs[coeff_idx]
@@ -252,7 +252,7 @@ impl<'a> CCSBuilder<'a> {
                         let constant = external_initial_consts[round][i];
 
                         m_add_round_consts.coeffs[coeff_idx].push((
-                            Ring::one(),
+                            R::one(),
                             after_external_init_rounds_idx
                                 [sponge_pass_offset + previous_round_idx_offset + i],
                         ));
@@ -270,7 +270,7 @@ impl<'a> CCSBuilder<'a> {
         let power7_multiset: Vec<usize> =
             (idx_power7_base..idx_power7_base + GOLDILOCKS_S_BOX_DEGREE).collect();
         self.multisets.push(power7_multiset);
-        self.coeffs.push(Ring::one().neg());
+        self.coeffs.push(R::one().neg());
 
         // Create 1 matrix for MDS^-1 * external_initial
         let idx_inverse_mds = self.matrices.len();
@@ -304,7 +304,7 @@ impl<'a> CCSBuilder<'a> {
             let mut m_one = empty_sparse_matrix(self.m, self.layout.z_vector_size());
             for i in 0..(sponge_passes * number_of_rounds * WIDE_POSEIDON2_WIDTH) {
                 let coeff_idx = IVC_H_EXT_INIT_ROUNDS_CONSTR[i];
-                m_one.coeffs[coeff_idx].push((Ring::one(), self.layout.const_1_idx));
+                m_one.coeffs[coeff_idx].push((R::one(), self.layout.const_1_idx));
             }
             self.matrices.push(m_one);
         }
@@ -313,7 +313,7 @@ impl<'a> CCSBuilder<'a> {
         let inverse_mds_multiset: Vec<usize> =
             (idx_inverse_mds..idx_inverse_mds + GOLDILOCKS_S_BOX_DEGREE).collect();
         self.multisets.push(inverse_mds_multiset);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     fn ivc_step_internal_rounds(&mut self) {
@@ -363,14 +363,14 @@ impl<'a> CCSBuilder<'a> {
                     if round == 0 {
                         // the input is after external initial, not the previous internal round's output
                         // last_external_internal_round_sponge_pass_X[0] + constant
-                        m_state_0.coeffs[coeff_idx].push((Ring::one(), after_ext_init_idx[0]));
+                        m_state_0.coeffs[coeff_idx].push((R::one(), after_ext_init_idx[0]));
                         m_state_0.coeffs[coeff_idx]
                             .push((from_goldilocks(constant), self.layout.const_1_idx));
                     } else {
                         let previous_round_idx_offset =
                             sponge_pass_offset + (round - 1) * WIDE_POSEIDON2_WIDTH;
                         m_state_0.coeffs[coeff_idx]
-                            .push((Ring::one(), after_internal_idx[previous_round_idx_offset]));
+                            .push((R::one(), after_internal_idx[previous_round_idx_offset]));
                         m_state_0.coeffs[coeff_idx]
                             .push((from_goldilocks(constant), self.layout.const_1_idx));
                     }
@@ -383,7 +383,7 @@ impl<'a> CCSBuilder<'a> {
             (idx_state_0..idx_state_0 + GOLDILOCKS_S_BOX_DEGREE).collect();
         // Multiset for -(s_in[0] + constant)^7
         self.multisets.push(power7_multiset);
-        self.coeffs.push(Ring::one().neg());
+        self.coeffs.push(R::one().neg());
 
         let idx_inverse_m_i = self.matrices.len();
         let mut m_inverse_m_i = empty_sparse_matrix(self.m, self.layout.z_vector_size());
@@ -414,14 +414,12 @@ impl<'a> CCSBuilder<'a> {
                     // other states have just M_I^-1 * s_out - s_in
                     if i != 0 {
                         if round == 0 {
-                            m_inverse_m_i.coeffs[coeff_idx].push((
-                                Ring::one().neg(),
-                                after_ext_init_idx[round_idx_offset + i],
-                            ));
+                            m_inverse_m_i.coeffs[coeff_idx]
+                                .push((R::one().neg(), after_ext_init_idx[round_idx_offset + i]));
                         } else {
                             let previous_round_idx_offset = (round - 1) * WIDE_POSEIDON2_WIDTH;
                             m_inverse_m_i.coeffs[coeff_idx].push((
-                                Ring::one().neg(),
+                                R::one().neg(),
                                 after_internal_idx
                                     [sponge_pass_offset + previous_round_idx_offset + i],
                             ));
@@ -439,7 +437,7 @@ impl<'a> CCSBuilder<'a> {
             for i in 0..(sponge_passes * number_of_rounds * WIDE_POSEIDON2_WIDTH) {
                 let coeff_idx = IVC_H_INTERNAL_ROUNDS_CONSTS[i];
 
-                m_one.coeffs[coeff_idx].push((Ring::one(), self.layout.const_1_idx));
+                m_one.coeffs[coeff_idx].push((R::one(), self.layout.const_1_idx));
             }
             self.matrices.push(m_one);
         }
@@ -448,7 +446,7 @@ impl<'a> CCSBuilder<'a> {
         let inverse_m_i_multiset: Vec<usize> =
             (idx_inverse_m_i..idx_inverse_m_i + GOLDILOCKS_S_BOX_DEGREE).collect();
         self.multisets.push(inverse_m_i_multiset);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     fn ivc_step_external_terminal_rounds(&mut self) {
@@ -501,7 +499,7 @@ impl<'a> CCSBuilder<'a> {
                     let coeff_idx = IVC_H_EXT_TERM_ROUNDS_CONSTR[sponge_pass_offset + i];
                     let constant = external_terminal_consts[0][i];
 
-                    m_add_round_consts.coeffs[coeff_idx].push((Ring::one(), after_internal_idx[i]));
+                    m_add_round_consts.coeffs[coeff_idx].push((R::one(), after_internal_idx[i]));
                     m_add_round_consts.coeffs[coeff_idx]
                         .push((from_goldilocks(constant), self.layout.const_1_idx));
                 }
@@ -521,7 +519,7 @@ impl<'a> CCSBuilder<'a> {
                         let constant = external_terminal_consts[round][i];
 
                         m_add_round_consts.coeffs[coeff_idx].push((
-                            Ring::one(),
+                            R::one(),
                             after_external_term_rounds_idx
                                 [sponge_pass_offset + previous_round_idx_offset + i],
                         ));
@@ -539,7 +537,7 @@ impl<'a> CCSBuilder<'a> {
         let power7_multiset: Vec<usize> =
             (idx_power7_base..idx_power7_base + GOLDILOCKS_S_BOX_DEGREE).collect();
         self.multisets.push(power7_multiset);
-        self.coeffs.push(Ring::one().neg());
+        self.coeffs.push(R::one().neg());
 
         // Create 1 matrix for MDS^-1 * external_initial
         let idx_inverse_mds = self.matrices.len();
@@ -572,7 +570,7 @@ impl<'a> CCSBuilder<'a> {
             let mut m_one = empty_sparse_matrix(self.m, self.layout.z_vector_size());
             for i in 0..(sponge_passes * number_of_rounds * WIDE_POSEIDON2_WIDTH) {
                 let coeff_idx = IVC_H_EXT_TERM_ROUNDS_CONSTR[i];
-                m_one.coeffs[coeff_idx].push((Ring::one(), self.layout.const_1_idx));
+                m_one.coeffs[coeff_idx].push((R::one(), self.layout.const_1_idx));
             }
             self.matrices.push(m_one);
         }
@@ -581,7 +579,7 @@ impl<'a> CCSBuilder<'a> {
         let inverse_mds_multiset: Vec<usize> =
             (idx_inverse_mds..idx_inverse_mds + GOLDILOCKS_S_BOX_DEGREE).collect();
         self.multisets.push(inverse_mds_multiset);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     fn ivc_step_result_hash(&mut self) {
@@ -595,14 +593,14 @@ impl<'a> CCSBuilder<'a> {
         let mut m_hash = empty_sparse_matrix(self.m, self.layout.z_vector_size());
         for i in 0..POSEIDON2_OUT {
             let coeff_idx = IVC_H_HASH_CONSTR[i];
-            m_hash.coeffs[coeff_idx].push((Ring::one(), self.layout.ivc_h_i_idx[i]));
-            m_hash.coeffs[coeff_idx].push((Ring::one().neg(), after_external_term_idx[i]));
+            m_hash.coeffs[coeff_idx].push((R::one(), self.layout.ivc_h_i_idx[i]));
+            m_hash.coeffs[coeff_idx].push((R::one().neg(), after_external_term_idx[i]));
         }
 
         let m_hash_idx = self.matrices.len();
         self.matrices.push(m_hash);
         self.multisets.push(vec![m_hash_idx]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     fn folding_proof_linearization_sumcheck(&mut self) {
@@ -611,39 +609,39 @@ impl<'a> CCSBuilder<'a> {
         let mut m_gated = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
         // lin_claimed_sums[0] == 0
-        m_a.coeffs[FP_LIN_INITIAL_CLAIM_ZERO].push((Ring::one(), self.layout.lin_claimed_sums[0]));
+        m_a.coeffs[FP_LIN_INITIAL_CLAIM_ZERO].push((R::one(), self.layout.lin_claimed_sums[0]));
 
         for i in 0..CCS_S {
             let coeff_idx = FP_LIN_CLAIMED_SUM_EQUALS[i];
             let polyn_evals_start = i * LINEARIZATION_DEGREE;
             // eval[i][0] + eval[i][1] - layout.lin_claimed_sums[i] == 0
             m_a.coeffs[coeff_idx].push((
-                Ring::one(),
+                R::one(),
                 self.layout.lin_eval_polynomials_idx[polyn_evals_start],
             ));
             m_a.coeffs[coeff_idx].push((
-                Ring::one(),
+                R::one(),
                 self.layout.lin_eval_polynomials_idx[polyn_evals_start + 1],
             ));
-            m_a.coeffs[coeff_idx].push((Ring::one().neg(), self.layout.lin_claimed_sums[i]));
+            m_a.coeffs[coeff_idx].push((R::one().neg(), self.layout.lin_claimed_sums[i]));
         }
 
         for i in 0..CCS_S {
             let coeff_idx = FP_LIN_CLAIMED_SUM_SUMBTERMS[i];
-            m_a.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_claimed_sums[i + 1])); // +1 skips the first claimed sum which is 0
+            m_a.coeffs[coeff_idx].push((R::one(), self.layout.lin_claimed_sums[i + 1])); // +1 skips the first claimed sum which is 0
             for j in 0..LINEARIZATION_DEGREE {
                 let subterm_idx = i * LINEARIZATION_DEGREE + j;
                 // layout.lin_claimed_sums[i] - layout.lin_claimed_sums_subterms[i + 0] - ... - layout.lin_claimed_sums_subterms[i + j] == 0
                 m_a.coeffs[coeff_idx].push((
-                    Ring::one().neg(),
+                    R::one().neg(),
                     self.layout.lin_claimed_sums_subterms[subterm_idx],
                 ));
             }
         }
         // layout.lin_expected_eval - layout.lin_claimed_sums[CCS_S] == 0
-        m_a.coeffs[FP_LIN_FINAL_CLAIMED_SUM].push((Ring::one(), self.layout.lin_expected_eval));
+        m_a.coeffs[FP_LIN_FINAL_CLAIMED_SUM].push((R::one(), self.layout.lin_expected_eval));
         m_a.coeffs[FP_LIN_FINAL_CLAIMED_SUM]
-            .push((Ring::one().neg(), self.layout.lin_claimed_sums[CCS_S]));
+            .push((R::one().neg(), self.layout.lin_claimed_sums[CCS_S]));
 
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
         let mut m_c = empty_sparse_matrix(self.m, self.layout.z_vector_size());
@@ -660,9 +658,9 @@ impl<'a> CCSBuilder<'a> {
             // (layout.lin_beta_s_idx[i] * layout.lin_eval_point[i]) - xi_yi[i] == 0
             {
                 let coeff_idx = FP_LIN_E_XI_YI[i];
-                m_b.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_beta_s_idx[i]));
-                m_c.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_eval_point[i]));
-                m_d.coeffs[coeff_idx].push((Ring::one().neg(), self.layout.lin_e_xi_yi[i]));
+                m_b.coeffs[coeff_idx].push((R::one(), self.layout.lin_beta_s_idx[i]));
+                m_c.coeffs[coeff_idx].push((R::one(), self.layout.lin_eval_point[i]));
+                m_d.coeffs[coeff_idx].push((R::one().neg(), self.layout.lin_e_xi_yi[i]));
             }
 
             // (step * step_inv) * (factor[i] - (2*xi_yi[i] - x[i] - y[i] + 1)) == 0
@@ -670,54 +668,53 @@ impl<'a> CCSBuilder<'a> {
             //  (self.layout.lin_e_factors[i] - 2*xi_yi[i] + self.layout.lin_beta_s_idx[i] + self.layout.lin_eval_point[i] - 1) == 0
             {
                 let coeff_idx = FP_LIN_E_FACTORS[i];
-                m_gated.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_e_factors[i]));
-                m_gated.coeffs[coeff_idx]
-                    .push((Ring::from(2u64).neg(), self.layout.lin_e_xi_yi[i]));
-                m_gated.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_beta_s_idx[i]));
-                m_gated.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_eval_point[i]));
-                m_gated.coeffs[coeff_idx].push((Ring::one().neg(), self.layout.const_1_idx));
+                m_gated.coeffs[coeff_idx].push((R::one(), self.layout.lin_e_factors[i]));
+                m_gated.coeffs[coeff_idx].push((R::from(2u64).neg(), self.layout.lin_e_xi_yi[i]));
+                m_gated.coeffs[coeff_idx].push((R::one(), self.layout.lin_beta_s_idx[i]));
+                m_gated.coeffs[coeff_idx].push((R::one(), self.layout.lin_eval_point[i]));
+                m_gated.coeffs[coeff_idx].push((R::one().neg(), self.layout.const_1_idx));
 
-                m_gate_step.coeffs[coeff_idx].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+                m_gate_step.coeffs[coeff_idx].push((R::one(), self.layout.ivc_h_i_step_idx));
                 m_gate_step_inv.coeffs[coeff_idx]
-                    .push((Ring::one(), self.layout.ivc_h_i_step_inv_idx));
+                    .push((R::one(), self.layout.ivc_h_i_step_inv_idx));
             }
 
             {
                 // (step * step_inv) * (sub_res[i+1] - sub_res[i] * factor[i]) == 0
                 // => step*step_inv*sub_res[i+1] - step*step_inv*sub_res[i]*factor[i] == 0
                 let coeff_idx = FP_LIN_E_SUB_RES[i + 1]; // +1 to skip the res[0] == 1, which is below
-                m_gate_step.coeffs[coeff_idx].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+                m_gate_step.coeffs[coeff_idx].push((R::one(), self.layout.ivc_h_i_step_idx));
                 m_gate_step_inv.coeffs[coeff_idx]
-                    .push((Ring::one(), self.layout.ivc_h_i_step_inv_idx));
+                    .push((R::one(), self.layout.ivc_h_i_step_inv_idx));
 
-                m_e.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_e_sub_res[i + 1]));
+                m_e.coeffs[coeff_idx].push((R::one(), self.layout.lin_e_sub_res[i + 1]));
 
-                m_f.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_e_sub_res[i]));
-                m_g.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_e_factors[i]));
+                m_f.coeffs[coeff_idx].push((R::one(), self.layout.lin_e_sub_res[i]));
+                m_g.coeffs[coeff_idx].push((R::one(), self.layout.lin_e_factors[i]));
             }
         }
 
         // self.layout.lin_e_sub_res[0] - 1 == 0
-        m_gated.coeffs[FP_LIN_E_SUB_RES[0]].push((Ring::one(), self.layout.lin_e_sub_res[0]));
-        m_gated.coeffs[FP_LIN_E_SUB_RES[0]].push((Ring::one().neg(), self.layout.const_1_idx));
-        m_gate_step.coeffs[FP_LIN_E_SUB_RES[0]].push((Ring::one(), self.layout.ivc_h_i_step_idx));
+        m_gated.coeffs[FP_LIN_E_SUB_RES[0]].push((R::one(), self.layout.lin_e_sub_res[0]));
+        m_gated.coeffs[FP_LIN_E_SUB_RES[0]].push((R::one().neg(), self.layout.const_1_idx));
+        m_gate_step.coeffs[FP_LIN_E_SUB_RES[0]].push((R::one(), self.layout.ivc_h_i_step_idx));
         m_gate_step_inv.coeffs[FP_LIN_E_SUB_RES[0]]
-            .push((Ring::one(), self.layout.ivc_h_i_step_inv_idx));
+            .push((R::one(), self.layout.ivc_h_i_step_inv_idx));
 
         self.matrices.push(m_a);
         self.multisets.push(vec![matrix_base_idx]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
 
         self.matrices.push(m_b);
         self.matrices.push(m_c);
 
         self.multisets
             .push(vec![matrix_base_idx + 1, matrix_base_idx + 2]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
 
         self.matrices.push(m_d);
         self.multisets.push(vec![matrix_base_idx + 3]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
 
         self.matrices.push(m_gated);
         self.matrices.push(m_gate_step.clone());
@@ -727,7 +724,7 @@ impl<'a> CCSBuilder<'a> {
             matrix_base_idx + 6,
             matrix_base_idx + 4,
         ]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
 
         self.matrices.push(m_gate_step.clone());
         self.matrices.push(m_gate_step_inv.clone());
@@ -737,7 +734,7 @@ impl<'a> CCSBuilder<'a> {
             matrix_base_idx + 8,
             matrix_base_idx + 9,
         ]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
 
         self.matrices.push(m_gate_step);
         self.matrices.push(m_gate_step_inv);
@@ -749,7 +746,7 @@ impl<'a> CCSBuilder<'a> {
             matrix_base_idx + 12,
             matrix_base_idx + 13,
         ]);
-        self.coeffs.push(Ring::one().neg());
+        self.coeffs.push(R::one().neg());
     }
 
     /// MUST BE LAST added constraint
@@ -789,16 +786,16 @@ impl<'a> CCSBuilder<'a> {
             .map(|i| matrix_base_idx + i)
             .collect();
         self.multisets.push(multiset);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
 
         // push the matrix holding the lin_inner_products_per_multiset
         self.multisets
             .push(vec![matrix_base_idx + GOLDILOCKS_S_BOX_DEGREE]);
-        self.coeffs.push(Ring::one().neg());
+        self.coeffs.push(R::one().neg());
         // push the matrix holding the final inner - c[0]*prod[0] ... == 0 check
         self.multisets
             .push(vec![matrix_base_idx + GOLDILOCKS_S_BOX_DEGREE + 1]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
 
         assert_eq!(self.multisets.len(), FP_LIN_INNER_PRODS_PER_MULTISET.len());
 
@@ -814,26 +811,26 @@ impl<'a> CCSBuilder<'a> {
                     .matrices
                     .get_mut(matrix_multiset[j])
                     .expect("multiset has index not in self.matrices");
-                m.coeffs[coeff_idx].push((Ring::one(), self.layout.lin_proof_u[u_j_idx]));
+                m.coeffs[coeff_idx].push((R::one(), self.layout.lin_proof_u[u_j_idx]));
             }
             for j in s.iter().len()..GOLDILOCKS_S_BOX_DEGREE {
                 let m = self
                     .matrices
                     .get_mut(matrix_multiset[j])
                     .expect("multiset has index not in self.matrices");
-                m.coeffs[coeff_idx].push((Ring::one(), self.layout.const_1_idx));
+                m.coeffs[coeff_idx].push((R::one(), self.layout.const_1_idx));
             }
 
             let m_prods_idx = self.matrices.len() - 2;
             let m_prods = &mut self.matrices[m_prods_idx];
             m_prods.coeffs[coeff_idx]
-                .push((Ring::one(), self.layout.lin_inner_products_per_multiset[i]));
+                .push((R::one(), self.layout.lin_inner_products_per_multiset[i]));
         }
 
         // inner - c[0]*self.layout.lin_inner_products_per_multiset[0] - ... == 0
         let m_inner_idx = self.matrices.len() - 1;
         let m_inner = &mut self.matrices[m_inner_idx];
-        m_inner.coeffs[FP_LIN_INNER_DECOMP].push((Ring::one(), self.layout.lin_inner_idx));
+        m_inner.coeffs[FP_LIN_INNER_DECOMP].push((R::one(), self.layout.lin_inner_idx));
         for (i, c) in self.coeffs.iter().enumerate() {
             m_inner.coeffs[FP_LIN_INNER_DECOMP]
                 .push((c.neg(), self.layout.lin_inner_products_per_multiset[i]));
@@ -849,20 +846,19 @@ impl<'a> CCSBuilder<'a> {
         let mut m_expected = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
         // e * inner - expected_eval == 0
-        m_e.coeffs[FP_LIN_INNER_EVAL].push((Ring::one(), self.layout.lin_e_sub_res[CCS_S]));
-        m_inner.coeffs[FP_LIN_INNER_EVAL].push((Ring::one(), self.layout.lin_inner_idx));
-        m_expected.coeffs[FP_LIN_INNER_EVAL]
-            .push((Ring::one().neg(), self.layout.lin_expected_eval));
+        m_e.coeffs[FP_LIN_INNER_EVAL].push((R::one(), self.layout.lin_e_sub_res[CCS_S]));
+        m_inner.coeffs[FP_LIN_INNER_EVAL].push((R::one(), self.layout.lin_inner_idx));
+        m_expected.coeffs[FP_LIN_INNER_EVAL].push((R::one().neg(), self.layout.lin_expected_eval));
 
         self.matrices.push(m_e);
         self.matrices.push(m_inner);
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
 
         self.matrices.push(m_expected);
         self.multisets.push(vec![matrix_base_idx + 2]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     /// Adds an ADD constraint that handles 32-bit overflow:
@@ -872,14 +868,14 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_ADD]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[ADD_CONSTR].push((Ring::one(), self.layout.is_add_idx));
+        m_a.coeffs[ADD_CONSTR].push((R::one(), self.layout.is_add_idx));
 
         // Matrix B: selects (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[VAL_RS1] - z[VAL_RS2])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[ADD_CONSTR].push((Ring::from(1u64 << 32), self.layout.has_overflown_idx)); // +2^32 * has_overflown
-        m_b.coeffs[ADD_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx)); // +val_rd_out
-        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.layout.val_rs1_idx)); // -val_rs1
-        m_b.coeffs[ADD_CONSTR].push((Ring::one().neg(), self.layout.val_rs2_idx)); // -val_rs2
+        m_b.coeffs[ADD_CONSTR].push((R::from(1u64 << 32), self.layout.has_overflown_idx)); // +2^32 * has_overflown
+        m_b.coeffs[ADD_CONSTR].push((R::one(), self.layout.val_rd_out_idx)); // +val_rd_out
+        m_b.coeffs[ADD_CONSTR].push((R::one().neg(), self.layout.val_rs1_idx)); // -val_rs1
+        m_b.coeffs[ADD_CONSTR].push((R::one().neg(), self.layout.val_rs2_idx)); // -val_rs2
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -887,7 +883,7 @@ impl<'a> CCSBuilder<'a> {
         // Add multiset: A * B
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     /// Adds a PC constraint for non-branching instructions:
@@ -897,15 +893,14 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects (1 - z[IS_BRANCHING])
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), self.layout.const_1_idx));
-        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.layout.is_branching_idx));
+        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((R::one(), self.layout.const_1_idx));
+        m_a.coeffs[PC_NON_BRANCH_CONSTR].push((R::one().neg(), self.layout.is_branching_idx));
 
         // Matrix B: selects (z[PC_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one(), self.layout.pc_out_idx));
-        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((Ring::one().neg(), self.layout.pc_in_idx));
-        m_b.coeffs[PC_NON_BRANCH_CONSTR]
-            .push((Ring::one().neg(), self.layout.instruction_size_idx));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((R::one(), self.layout.pc_out_idx));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((R::one().neg(), self.layout.pc_in_idx));
+        m_b.coeffs[PC_NON_BRANCH_CONSTR].push((R::one().neg(), self.layout.instruction_size_idx));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -913,7 +908,7 @@ impl<'a> CCSBuilder<'a> {
         // Add multiset: A * B
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     /// Adds a JAL constraint that ensures the return address is written correctly:
@@ -923,13 +918,13 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_JAL]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[JAL_CONSTR].push((Ring::one(), self.layout.is_jal_idx));
+        m_a.coeffs[JAL_CONSTR].push((R::one(), self.layout.is_jal_idx));
 
         // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[JAL_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx));
-        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.layout.pc_in_idx));
-        m_b.coeffs[JAL_CONSTR].push((Ring::one().neg(), self.layout.instruction_size_idx));
+        m_b.coeffs[JAL_CONSTR].push((R::one(), self.layout.val_rd_out_idx));
+        m_b.coeffs[JAL_CONSTR].push((R::one().neg(), self.layout.pc_in_idx));
+        m_b.coeffs[JAL_CONSTR].push((R::one().neg(), self.layout.instruction_size_idx));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -937,7 +932,7 @@ impl<'a> CCSBuilder<'a> {
         // Add multiset: A * B
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     /// Adds a JALR constraint that ensures the return address is written correctly:
@@ -947,13 +942,13 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_JALR]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[JALR_CONSTR].push((Ring::one(), self.layout.is_jalr_idx));
+        m_a.coeffs[JALR_CONSTR].push((R::one(), self.layout.is_jalr_idx));
 
         // Matrix B: selects (z[VAL_RD_OUT] - z[PC_IN] - z[INSTRUCTION_SIZE])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[JALR_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx));
-        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.layout.pc_in_idx));
-        m_b.coeffs[JALR_CONSTR].push((Ring::one().neg(), self.layout.instruction_size_idx));
+        m_b.coeffs[JALR_CONSTR].push((R::one(), self.layout.val_rd_out_idx));
+        m_b.coeffs[JALR_CONSTR].push((R::one().neg(), self.layout.pc_in_idx));
+        m_b.coeffs[JALR_CONSTR].push((R::one().neg(), self.layout.instruction_size_idx));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -961,7 +956,7 @@ impl<'a> CCSBuilder<'a> {
         // Add multiset: A * B
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     /// Adds a BNE constraint that ensures the branch condition is correct:
@@ -978,17 +973,17 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_BNE]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[BNE_CONSTR].push((Ring::one(), self.layout.is_bne_idx));
+        m_a.coeffs[BNE_CONSTR].push((R::one(), self.layout.is_bne_idx));
 
         // Matrix B: selects (1 - z[IS_BRANCHING])
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[BNE_CONSTR].push((Ring::one(), self.layout.const_1_idx));
-        m_b.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.layout.is_branching_idx));
+        m_b.coeffs[BNE_CONSTR].push((R::one(), self.layout.const_1_idx));
+        m_b.coeffs[BNE_CONSTR].push((R::one().neg(), self.layout.is_branching_idx));
 
         // Matrix C: selects (z[VAL_RS1] - z[VAL_RS2])
         let mut m_c = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_c.coeffs[BNE_CONSTR].push((Ring::one(), self.layout.val_rs1_idx));
-        m_c.coeffs[BNE_CONSTR].push((Ring::one().neg(), self.layout.val_rs2_idx));
+        m_c.coeffs[BNE_CONSTR].push((R::one(), self.layout.val_rs1_idx));
+        m_c.coeffs[BNE_CONSTR].push((R::one().neg(), self.layout.val_rs2_idx));
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -1000,7 +995,7 @@ impl<'a> CCSBuilder<'a> {
             matrix_base_idx + 1,
             matrix_base_idx + 2,
         ]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     /// Adds an AUIPC constraint that handles 32-bit overflow:
@@ -1013,14 +1008,14 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_AUIPC]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[AUIPC_CONSTR].push((Ring::one(), self.layout.is_auipc_idx));
+        m_a.coeffs[AUIPC_CONSTR].push((R::one(), self.layout.is_auipc_idx));
 
         // Matrix B: selects (z[HAS_OVERFLOWN] * 2^32 + z[VAL_RD_OUT] - z[PC_IN] - (z[IMM] * 2^12))
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 32), self.layout.has_overflown_idx)); // +2^32 * has_overflown
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx)); // +rd_out
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::one().neg(), self.layout.pc_in_idx)); // -pc_in
-        m_b.coeffs[AUIPC_CONSTR].push((Ring::from(1u64 << 12).neg(), self.layout.imm_idx)); // -(imm * 2^12)
+        m_b.coeffs[AUIPC_CONSTR].push((R::from(1u64 << 32), self.layout.has_overflown_idx)); // +2^32 * has_overflown
+        m_b.coeffs[AUIPC_CONSTR].push((R::one(), self.layout.val_rd_out_idx)); // +rd_out
+        m_b.coeffs[AUIPC_CONSTR].push((R::one().neg(), self.layout.pc_in_idx)); // -pc_in
+        m_b.coeffs[AUIPC_CONSTR].push((R::from(1u64 << 12).neg(), self.layout.imm_idx)); // -(imm * 2^12)
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -1028,7 +1023,7 @@ impl<'a> CCSBuilder<'a> {
         // Multiset: A * B
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
     /// Adds a LUI constraint that ensures the computation is correct:
@@ -1042,12 +1037,12 @@ impl<'a> CCSBuilder<'a> {
 
         // Matrix A: selects z[IS_LUI]
         let mut m_a = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_a.coeffs[LUI_CONSTR].push((Ring::one(), self.layout.is_lui_idx));
+        m_a.coeffs[LUI_CONSTR].push((R::one(), self.layout.is_lui_idx));
 
         // Matrix B: selects (z[VAL_RD_OUT] - (z[IMM] * 2^12))
         let mut m_b = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        m_b.coeffs[LUI_CONSTR].push((Ring::one(), self.layout.val_rd_out_idx)); // +rd_out
-        m_b.coeffs[LUI_CONSTR].push((Ring::from(1u64 << 12).neg(), self.layout.imm_idx)); // -(imm * 2^12)
+        m_b.coeffs[LUI_CONSTR].push((R::one(), self.layout.val_rd_out_idx)); // +rd_out
+        m_b.coeffs[LUI_CONSTR].push((R::from(1u64 << 12).neg(), self.layout.imm_idx)); // -(imm * 2^12)
 
         self.matrices.push(m_a);
         self.matrices.push(m_b);
@@ -1055,11 +1050,11 @@ impl<'a> CCSBuilder<'a> {
         // Multiset: A * B
         self.multisets
             .push(vec![matrix_base_idx, matrix_base_idx + 1]);
-        self.coeffs.push(Ring::one());
+        self.coeffs.push(R::one());
     }
 
-    pub fn build(self) -> CCS<Ring> {
-        let mut ccs = CCS::<Ring> {
+    pub fn build(self) -> CCS<R> {
+        let mut ccs = CCS::<R> {
             m: self.m,
             n: self.layout.z_vector_size(), // z-vector structure: [x_ccs(1), 1, w_ccs(layout.size)] = layout.size + 2 total
             l: CCSLayout::X_ELEMS_SIZE,     // Number of public inputs (memory commitment)
@@ -1099,8 +1094,8 @@ fn empty_sparse_matrix(m: usize, n: usize) -> SparseMatrix<GoldilocksRingNTT> {
     }
 }
 
-fn from_goldilocks(g: Goldilocks) -> Ring {
-    Ring::from(g.as_canonical_u64())
+fn from_goldilocks(g: Goldilocks) -> R {
+    R::from(g.as_canonical_u64())
 }
 
 // Indices of the constraints
