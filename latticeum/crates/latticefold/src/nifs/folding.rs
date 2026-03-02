@@ -15,7 +15,7 @@ use stark_rings_poly::mle::DenseMultilinearExtension;
 use self::utils::*;
 use super::error::FoldingError;
 use crate::{
-    arith::{error::CSError, Witness, CCS, LCCCS},
+    arith::{CCS, LCCCS, Witness, error::CSError},
     ark_base::*,
     commitment::Commitment,
     decomposition_parameters::DecompositionParams,
@@ -23,7 +23,7 @@ use crate::{
     utils::{
         mle_helpers::evaluate_mles,
         sumcheck::{
-            prover::ProverState, utils::eq_eval, MLSumcheck, SumCheckError::SumCheckFailed,
+            MLSumcheck, SumCheckError::SumCheckFailed, prover::ProverState, utils::eq_eval,
         },
     },
 };
@@ -31,7 +31,7 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
-mod utils;
+pub mod utils;
 pub use structs::*;
 
 mod structs;
@@ -308,7 +308,7 @@ impl<NTT: SuitableRing, T: TranscriptWithShortChallenges<NTT>> LFFoldingVerifier
         Ok(())
     }
 
-    fn calculate_claims(alpha_s: &[NTT], zeta_s: &[NTT], cm_i_s: &[LCCCS<NTT>]) -> (NTT, NTT) {
+    pub fn calculate_claims(alpha_s: &[NTT], zeta_s: &[NTT], cm_i_s: &[LCCCS<NTT>]) -> (NTT, NTT) {
         let vs = cm_i_s
             .iter()
             .map(|cm_i| cm_i.v.clone())

@@ -57,7 +57,7 @@ pub const CCS_S: usize = 15;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is how many multisets there are.
-pub const CCS_C: usize = 29;
+pub const CCS_C: usize = 36;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// The max degree is of the poseidon2 s box degree 7, then
@@ -65,7 +65,7 @@ pub const CCS_C: usize = 29;
 ///     - +1 to capture degree x polynom, you must have x+1 coeffs
 pub const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
-pub const CCS_NUM_MATRICES: usize = 90;
+pub const CCS_NUM_MATRICES: usize = 100;
 /// +1 for the initialy claimed '0'
 pub const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
@@ -135,6 +135,13 @@ pub struct CCSLayout {
     pub decomp_r_x_w_idx: [usize; DECOMP_X_W_LEN],
     pub decomp_r_h_idx: usize,
     pub decomp_r_x_s_idx: [usize; GoldiLocksDP::K * (DECOMP_X_W_LEN + 1)],
+
+    // --- Folding ---
+    pub fp_claim_g1_alpha_idx: [usize; 2 * GoldiLocksDP::K],
+    pub fp_claim_g1_h1_idx: [usize; 2 * GoldiLocksDP::K],
+    pub fp_claim_g1_h2_idx: [usize; 2 * GoldiLocksDP::K],
+    pub fp_claim_g1_terms_idx: [usize; 2 * GoldiLocksDP::K],
+    pub fp_claim_g1_idx: usize,
     // ------------------------------------------
 
     // input state
@@ -264,6 +271,17 @@ impl CCSLayout {
             { GoldiLocksDP::K * (DECOMP_X_W_LEN + 1) },
         >(decomp_r_h_idx + 1);
 
+        let (fp_claim_g1_alpha_idx, w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K }>(w_cursor);
+        let (fp_claim_g1_h1_idx, w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K }>(w_cursor);
+        let (fp_claim_g1_h2_idx, w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K }>(w_cursor);
+        let (fp_claim_g1_terms_idx, mut w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K }>(w_cursor);
+        let fp_claim_g1_idx = w_cursor;
+        w_cursor += 1;
+
         let pc_in_idx = w_cursor;
         w_cursor += 1;
 
@@ -358,6 +376,11 @@ impl CCSLayout {
             decomp_r_x_w_idx,
             decomp_r_h_idx,
             decomp_r_x_s_idx,
+            fp_claim_g1_alpha_idx,
+            fp_claim_g1_h1_idx,
+            fp_claim_g1_h2_idx,
+            fp_claim_g1_terms_idx,
+            fp_claim_g1_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -658,6 +681,27 @@ pub fn set_folding_proof_witness(
             z[z_idx + el_idx] = decomp_vars.x_s[i][el_idx];
         }
     }
+
+    // ---------- Folding claim_g1 vars ----------
+    let folding_claim_vars = &folding_vars.folding_vars;
+
+    for (i, &z_idx) in layout.fp_claim_g1_alpha_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.alpha_s[i];
+    }
+
+    for (i, &z_idx) in layout.fp_claim_g1_h1_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.claim_g1_h1[i];
+    }
+
+    for (i, &z_idx) in layout.fp_claim_g1_h2_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.claim_g1_h2[i];
+    }
+
+    for (i, &z_idx) in layout.fp_claim_g1_terms_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.claim_g1_terms[i];
+    }
+
+    z[layout.fp_claim_g1_idx] = folding_claim_vars.claim_g1;
 }
 
 pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CCSLayout) {

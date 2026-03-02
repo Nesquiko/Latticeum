@@ -5,7 +5,7 @@ use stark_rings_poly::mle::DenseMultilinearExtension;
 
 use crate::{
     ark_base::Vec,
-    nifs::{error::LinearizationError, CCS},
+    nifs::{CCS, error::LinearizationError},
     transcript::Transcript,
     utils::{mle_helpers::evaluate_mles, sumcheck::utils::build_eq_x_r},
 };
@@ -106,7 +106,7 @@ pub(crate) fn sumcheck_polynomial_comb_fn<NTT: SuitableRing>(vals: &[NTT], ccs: 
     result * vals[vals.len() - 1]
 }
 
-pub(crate) trait SqueezeBeta<NTT: SuitableRing> {
+pub trait SqueezeBeta<NTT: SuitableRing> {
     fn squeeze_beta_challenges(&mut self, n: usize) -> Vec<NTT>;
 }
 

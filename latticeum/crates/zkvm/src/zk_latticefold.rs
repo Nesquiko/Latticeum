@@ -1,31 +1,33 @@
+use crate::{
+    ccs::{GoldiLocksDP, TAU},
+    fiat_shamir::Poseidon2Transcript,
+    poseidon2::GOLDILOCKS_S_BOX_DEGREE,
+};
 use ark_ff::{Field, PrimeField};
 use cyclotomic_rings::rings::GoldilocksRingNTT;
-use latticefold::commitment::Commitment;
-use latticefold::decomposition_parameters::DecompositionParams;
-use latticefold::nifs::decomposition::LFDecompositionProver;
-use latticefold::nifs::decomposition::{DecompositionProof, DecompositionProver};
-use latticefold::nifs::folding::FoldingProver;
-use latticefold::nifs::folding::LFFoldingProver;
-use latticefold::nifs::linearization::LFLinearizationProver;
-use latticefold::nifs::linearization::LFLinearizationVerifier;
-use latticefold::nifs::linearization::LinearizationProof;
-use latticefold::nifs::linearization::LinearizationProver;
-use latticefold::utils::sumcheck::IPForMLSumcheck;
-use latticefold::utils::sumcheck::utils::EqEvalHelperVars;
-use latticefold::utils::sumcheck::utils::zk_eq_eval;
-use latticefold::utils::sumcheck::verifier::zk_interpolate_uni_poly;
 use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness, error::CSError},
-    commitment::AjtaiCommitmentScheme,
-    nifs::{LFProof, error::LatticefoldError},
+    commitment::{AjtaiCommitmentScheme, Commitment},
+    decomposition_parameters::DecompositionParams,
+    nifs::{
+        LFProof,
+        decomposition::{DecompositionProof, DecompositionProver, LFDecompositionProver},
+        error::LatticefoldError,
+        folding::{FoldingProof, FoldingProver, LFFoldingProver, utils::SqueezeAlphaBetaZetaMu},
+        linearization::{
+            LFLinearizationProver, LFLinearizationVerifier, LinearizationProof,
+            LinearizationProver, utils::SqueezeBeta,
+        },
+    },
     transcript::Transcript,
+    utils::sumcheck::{
+        IPForMLSumcheck,
+        utils::{EqEvalHelperVars, zk_eq_eval},
+        verifier::zk_interpolate_uni_poly,
+    },
 };
 use num_traits::Zero;
-use stark_rings::Ring;
-use stark_rings::cyclotomic_ring::models::goldilocks::Fq3;
-
-use crate::poseidon2::GOLDILOCKS_S_BOX_DEGREE;
-use crate::{ccs::GoldiLocksDP, fiat_shamir::Poseidon2Transcript};
+use stark_rings::{Ring, cyclotomic_ring::models::goldilocks::Fq3};
 
 /// Modified version of latticefold's NIFSProver::prove to better accomodate
 /// collection of variables needed to check folding proof inside CCS
@@ -100,6 +102,7 @@ pub struct FoldingProofWitnessVars {
     pub linearization_vars: LinearizationVars,
     pub decomp_vars_l: DecompositionVars,
     pub decomp_vars_r: DecompositionVars,
+    pub folding_vars: FoldingVars,
 }
 
 pub fn generate_verification_witness_vars(
@@ -122,10 +125,22 @@ pub fn generate_verification_witness_vars(
         &mut transcript,
     );
 
+    let lcccs_s = {
+        let mut decomposed_acc = decomposed_acc;
+        let mut decomposed_cm_i = decomposed_cm_i;
+
+        decomposed_acc.append(&mut decomposed_cm_i);
+
+        decomposed_acc
+    };
+
+    let folding_vars = collect_folding_vars(&lcccs_s, &proof.folding_proof, &mut transcript, ccs);
+
     FoldingProofWitnessVars {
         linearization_vars,
         decomp_vars_l,
         decomp_vars_r,
+        folding_vars,
     }
 }
 
@@ -412,4 +427,71 @@ fn collect_decomposition_vars(
             x_s: decomp_proof.x_s.clone(),
         },
     )
+}
+
+pub struct FoldingVars {
+    pub alpha_s: Vec<GoldilocksRingNTT>,
+    pub beta_s: Vec<GoldilocksRingNTT>,
+    pub zeta_s: Vec<GoldilocksRingNTT>,
+    pub mu_s: Vec<GoldilocksRingNTT>,
+
+    pub claim_g1_h1: Vec<GoldilocksRingNTT>,
+    pub claim_g1_h2: Vec<GoldilocksRingNTT>,
+    pub claim_g1_terms: Vec<GoldilocksRingNTT>,
+    pub claim_g1: GoldilocksRingNTT,
+}
+
+fn collect_folding_vars(
+    cm_i_s: &Vec<LCCCS<GoldilocksRingNTT>>,
+    _proof: &FoldingProof<GoldilocksRingNTT>,
+    transcript: &mut Poseidon2Transcript,
+    ccs: &CCS<GoldilocksRingNTT>,
+) -> FoldingVars {
+    let (alpha_s, beta_s, zeta_s, mu_s) =
+        transcript.squeeze_alpha_beta_zeta_mu::<GoldiLocksDP>(ccs.s);
+
+    let claim_terms_len = 2 * GoldiLocksDP::K;
+    assert_eq!(alpha_s.len(), claim_terms_len);
+    assert_eq!(cm_i_s.len(), claim_terms_len);
+
+    let mut claim_g1_h1 = Vec::with_capacity(claim_terms_len);
+    let mut claim_g1_h2 = Vec::with_capacity(claim_terms_len);
+    let mut claim_g1_terms = Vec::with_capacity(claim_terms_len);
+    let mut claim_g1 = GoldilocksRingNTT::ZERO;
+
+    for i in 0..claim_terms_len {
+        let v_i = &cm_i_s[i].v;
+        assert_eq!(v_i.len(), TAU);
+
+        let h1 = alpha_s[i] * v_i[2] + v_i[1];
+        let h2 = alpha_s[i] * h1 + v_i[0];
+        let claim_i = alpha_s[i] * h2;
+
+        claim_g1_h1.push(h1);
+        claim_g1_h2.push(h2);
+        claim_g1_terms.push(claim_i);
+        claim_g1 += claim_i;
+    }
+
+    #[cfg(feature = "debug")]
+    {
+        use latticefold::nifs::folding::LFFoldingVerifier;
+
+        let (claim_g1_ref, _) =
+            LFFoldingVerifier::<GoldilocksRingNTT, Poseidon2Transcript>::calculate_claims(
+                &alpha_s, &zeta_s, cm_i_s,
+            );
+        assert_eq!(claim_g1, claim_g1_ref);
+    }
+
+    FoldingVars {
+        alpha_s,
+        beta_s,
+        zeta_s,
+        mu_s,
+        claim_g1_h1,
+        claim_g1_h2,
+        claim_g1_terms,
+        claim_g1,
+    }
 }

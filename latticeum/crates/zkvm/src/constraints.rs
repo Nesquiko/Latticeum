@@ -69,6 +69,7 @@ impl<'a> CCSBuilder<'a> {
         builder.folding_proof_linearization_sumcheck();
         builder.folding_proof_linearization_final_check();
         builder.folding_proof_decomposition();
+        builder.folding_proof_claim_g1();
         builder.folding_proof_linearization_inner();
 
         builder.build()
@@ -861,6 +862,114 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(R::one());
     }
 
+    fn folding_proof_claim_g1(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+
+        let mut m_alpha_v2 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_h1_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        let mut m_alpha_h1 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_h2_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        let mut m_alpha_h2 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_claim_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        let mut m_v2_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_h1_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_h2_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        let mut m_claim_sum = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        for i in 0..(2 * GoldiLocksDP::K) {
+            let alpha_idx = self.layout.fp_claim_g1_alpha_idx[i];
+            let h1_idx = self.layout.fp_claim_g1_h1_idx[i];
+            let h2_idx = self.layout.fp_claim_g1_h2_idx[i];
+            let claim_i_idx = self.layout.fp_claim_g1_terms_idx[i];
+
+            let (v0_idx, v1_idx, v2_idx) = if i < GoldiLocksDP::K {
+                (
+                    self.layout.decomp_v_s_idx[i * TAU],
+                    self.layout.decomp_v_s_idx[i * TAU + 1],
+                    self.layout.decomp_v_s_idx[i * TAU + 2],
+                )
+            } else {
+                let r_i = i - GoldiLocksDP::K;
+                (
+                    self.layout.decomp_r_v_s_idx[r_i * TAU],
+                    self.layout.decomp_r_v_s_idx[r_i * TAU + 1],
+                    self.layout.decomp_r_v_s_idx[r_i * TAU + 2],
+                )
+            };
+
+            // decomposed the alpha[i]^(j+1) * v[i][j]
+            // with Horner and got
+            // alpha[i] * (v[i][0] + alpha[i] * (v[i][1] + alpha[i]*v[i][2]))
+            // h1 = alpha[i] * v[i][2] + v[i][1]
+            // h2 = alpha[i] * h1 + v[i][0]
+            // claim_i = alpha * h2
+            // claim_g1 = sum(claim_i)
+
+            // alpha_i * v_i2 - h1_i + v_i1 == 0
+            m_alpha_v2.coeffs[FP_FOLD_G1_H1[i]].push((R::one(), alpha_idx));
+            m_v2_input.coeffs[FP_FOLD_G1_H1[i]].push((R::one(), v2_idx));
+            m_h1_linear.coeffs[FP_FOLD_G1_H1[i]].push((R::one().neg(), h1_idx));
+            m_h1_linear.coeffs[FP_FOLD_G1_H1[i]].push((R::one(), v1_idx));
+
+            // alpha_i * h1_i - h2_i + v_i0 == 0
+            m_alpha_h1.coeffs[FP_FOLD_G1_H2[i]].push((R::one(), alpha_idx));
+            m_h1_input.coeffs[FP_FOLD_G1_H2[i]].push((R::one(), h1_idx));
+            m_h2_linear.coeffs[FP_FOLD_G1_H2[i]].push((R::one().neg(), h2_idx));
+            m_h2_linear.coeffs[FP_FOLD_G1_H2[i]].push((R::one(), v0_idx));
+
+            // alpha_i * h2_i - claim_i == 0
+            m_alpha_h2.coeffs[FP_FOLD_G1_TERM[i]].push((R::one(), alpha_idx));
+            m_h2_input.coeffs[FP_FOLD_G1_TERM[i]].push((R::one(), h2_idx));
+            m_claim_linear.coeffs[FP_FOLD_G1_TERM[i]].push((R::one().neg(), claim_i_idx));
+
+            // sum_i(claim_i) - claim_g1 == 0
+            m_claim_sum.coeffs[FP_FOLD_G1_SUM].push((R::one(), claim_i_idx));
+        }
+        m_claim_sum.coeffs[FP_FOLD_G1_SUM].push((R::one().neg(), self.layout.fp_claim_g1_idx));
+
+        self.matrices.push(m_alpha_v2);
+        self.matrices.push(m_v2_input);
+        self.matrices.push(m_h1_linear);
+
+        self.matrices.push(m_alpha_h1);
+        self.matrices.push(m_h1_input);
+        self.matrices.push(m_h2_linear);
+
+        self.matrices.push(m_alpha_h2);
+        self.matrices.push(m_h2_input);
+        self.matrices.push(m_claim_linear);
+
+        self.matrices.push(m_claim_sum);
+
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(R::one());
+
+        self.multisets.push(vec![matrix_base_idx + 2]);
+        self.coeffs.push(R::one());
+
+        self.multisets
+            .push(vec![matrix_base_idx + 3, matrix_base_idx + 4]);
+        self.coeffs.push(R::one());
+
+        self.multisets.push(vec![matrix_base_idx + 5]);
+        self.coeffs.push(R::one());
+
+        self.multisets
+            .push(vec![matrix_base_idx + 6, matrix_base_idx + 7]);
+        self.coeffs.push(R::one());
+
+        self.multisets.push(vec![matrix_base_idx + 8]);
+        self.coeffs.push(R::one());
+
+        self.multisets.push(vec![matrix_base_idx + 9]);
+        self.coeffs.push(R::one());
+    }
+
     /// MUST BE LAST added constraint
     /// constraints that linearization_inner == Σ_i c[i] * Π_{j in S[i]} u[j].
     /// The formula is:
@@ -1258,6 +1367,10 @@ const FP_DECOMP_R_V_RECOMP: [usize; TAU] = index_array(last(FP_DECOMP_R_CM_RECOM
 const FP_DECOMP_R_U_RECOMP: [usize; CCS_NUM_MATRICES] = index_array(last(FP_DECOMP_R_V_RECOMP) + 1);
 const FP_DECOMP_R_XW_RECOMP: [usize; DECOMP_X_W_LEN] = index_array(last(FP_DECOMP_R_U_RECOMP) + 1);
 const FP_DECOMP_R_H_RECOMP: usize = last(FP_DECOMP_R_XW_RECOMP) + 1;
+const FP_FOLD_G1_H1: [usize; 2 * GoldiLocksDP::K] = index_array(FP_DECOMP_R_H_RECOMP + 1);
+const FP_FOLD_G1_H2: [usize; 2 * GoldiLocksDP::K] = index_array(last(FP_FOLD_G1_H1) + 1);
+const FP_FOLD_G1_TERM: [usize; 2 * GoldiLocksDP::K] = index_array(last(FP_FOLD_G1_H2) + 1);
+const FP_FOLD_G1_SUM: usize = last(FP_FOLD_G1_TERM) + 1;
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")

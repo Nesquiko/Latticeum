@@ -6,7 +6,7 @@ use ark_std::{
     iterable::Iterable,
 };
 use cyclotomic_rings::{rings::SuitableRing, rotation::rot_lin_combination};
-use stark_rings::{cyclotomic_ring::CRT, OverField, PolyRing, Ring};
+use stark_rings::{OverField, PolyRing, Ring, cyclotomic_ring::CRT};
 use stark_rings_poly::mle::DenseMultilinearExtension;
 
 use crate::{
@@ -26,7 +26,7 @@ use crate::{
 /// - `NTT`: A type that implements the `SuitableRing` trait, representing a ring that can be used in the
 ///   LatticeFold protocol.
 ///
-pub(crate) trait SqueezeAlphaBetaZetaMu<NTT: SuitableRing> {
+pub trait SqueezeAlphaBetaZetaMu<NTT: SuitableRing> {
     /// Extracts the cryptographic challenge vectors of provided length
     ///
     /// ### Arguments
