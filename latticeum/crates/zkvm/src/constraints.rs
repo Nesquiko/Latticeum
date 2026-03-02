@@ -66,7 +66,6 @@ impl<'a> CCSBuilder<'a> {
         builder.lui_constraint();
 
         // folding proof specific MUST BE LAST
-        // TODO decomposition cm == y_s sum_i b_i * y_s[i][j] - cm[j] = 0
         builder.folding_proof_linearization_sumcheck();
         builder.folding_proof_linearization_final_check();
         builder.folding_proof_decomposition();
@@ -809,6 +808,54 @@ impl<'a> CCSBuilder<'a> {
         }
         m_decomp.coeffs[FP_DECOMP_H_RECOMP].push((R::one().neg(), self.layout.decomp_h_idx));
 
+        // sum_i(b_s[i] * y_s_r[i][j]) - cm_r[j] == 0
+        for j in 0..KAPPA {
+            let coeff_idx = FP_DECOMP_R_CM_RECOMP[j];
+            for (i, b_i) in b_s.iter().enumerate() {
+                let y_idx = self.layout.decomp_r_y_s_idx[i * KAPPA + j];
+                m_decomp.coeffs[coeff_idx].push((*b_i, y_idx));
+            }
+            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_r_cm_idx[j]));
+        }
+
+        // sum_i(b_i * v_s_r[i][j]) - cm_i.v[j] == 0
+        for j in 0..TAU {
+            let coeff_idx = FP_DECOMP_R_V_RECOMP[j];
+            for i in 0..GoldiLocksDP::K {
+                let v_idx = self.layout.decomp_r_v_s_idx[i * TAU + j];
+                let b_i = b_s[i];
+                m_decomp.coeffs[coeff_idx].push((b_i, v_idx));
+            }
+            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_r_v_idx[j]));
+        }
+
+        // sum_i(b_i * u_s_r[i][j]) - cm_i.u[j] == 0
+        for j in 0..CCS_NUM_MATRICES {
+            let coeff_idx = FP_DECOMP_R_U_RECOMP[j];
+            for i in 0..GoldiLocksDP::K {
+                let u_idx = self.layout.decomp_r_u_s_idx[i * CCS_NUM_MATRICES + j];
+                m_decomp.coeffs[coeff_idx].push((b_s[i], u_idx));
+            }
+            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_r_u_idx[j]));
+        }
+
+        // sum_i(b_i * x_s_r[i][j]) - cm_i.x_w[j] == 0
+        for j in 0..DECOMP_X_W_LEN {
+            let coeff_idx = FP_DECOMP_R_XW_RECOMP[j];
+            for i in 0..GoldiLocksDP::K {
+                let x_idx = self.layout.decomp_r_x_s_idx[i * (DECOMP_X_W_LEN + 1) + j];
+                m_decomp.coeffs[coeff_idx].push((b_s[i], x_idx));
+            }
+            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_r_x_w_idx[j]));
+        }
+
+        // sum_i(b_i * x_s_r[i][|x_w|]) - cm_i.h == 0
+        for i in 0..GoldiLocksDP::K {
+            let h_idx = self.layout.decomp_r_x_s_idx[i * (DECOMP_X_W_LEN + 1) + DECOMP_X_W_LEN];
+            m_decomp.coeffs[FP_DECOMP_R_H_RECOMP].push((b_s[i], h_idx));
+        }
+        m_decomp.coeffs[FP_DECOMP_R_H_RECOMP].push((R::one().neg(), self.layout.decomp_r_h_idx));
+
         self.matrices.push(m_decomp);
         self.multisets.push(vec![matrix_base_idx]);
         self.coeffs.push(R::one());
@@ -1205,7 +1252,12 @@ const FP_DECOMP_CM_RECOMP: [usize; KAPPA] = index_array(FP_LIN_INNER_DECOMP + 1)
 const FP_DECOMP_V_RECOMP: [usize; TAU] = index_array(last(FP_DECOMP_CM_RECOMP) + 1);
 const FP_DECOMP_U_RECOMP: [usize; CCS_NUM_MATRICES] = index_array(last(FP_DECOMP_V_RECOMP) + 1);
 const FP_DECOMP_XW_RECOMP: [usize; DECOMP_X_W_LEN] = index_array(last(FP_DECOMP_U_RECOMP) + 1);
-const FP_DECOMP_H_RECOMP: usize = last(FP_DECOMP_XW_RECOMP);
+const FP_DECOMP_H_RECOMP: usize = last(FP_DECOMP_XW_RECOMP) + 1;
+const FP_DECOMP_R_CM_RECOMP: [usize; KAPPA] = index_array(FP_DECOMP_H_RECOMP + 1);
+const FP_DECOMP_R_V_RECOMP: [usize; TAU] = index_array(last(FP_DECOMP_R_CM_RECOMP) + 1);
+const FP_DECOMP_R_U_RECOMP: [usize; CCS_NUM_MATRICES] = index_array(last(FP_DECOMP_R_V_RECOMP) + 1);
+const FP_DECOMP_R_XW_RECOMP: [usize; DECOMP_X_W_LEN] = index_array(last(FP_DECOMP_R_U_RECOMP) + 1);
+const FP_DECOMP_R_H_RECOMP: usize = last(FP_DECOMP_R_XW_RECOMP) + 1;
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")

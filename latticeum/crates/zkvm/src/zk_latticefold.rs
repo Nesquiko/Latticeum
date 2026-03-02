@@ -98,7 +98,8 @@ pub fn zk_latticefold_prove(
 
 pub struct FoldingProofWitnessVars {
     pub linearization_vars: LinearizationVars,
-    pub decomp_vars: DecompositionVars,
+    pub decomp_vars_l: DecompositionVars,
+    pub decomp_vars_r: DecompositionVars,
 }
 
 pub fn generate_verification_witness_vars(
@@ -113,12 +114,18 @@ pub fn generate_verification_witness_vars(
     let (linearized_cm_i, linearization_vars) =
         collect_linearization_vars(cm_i, &proof.linearization_proof, ccs, &mut transcript);
 
-    let (decomposed_acc, decomp_vars) =
+    let (decomposed_acc, decomp_vars_l) =
         collect_decomposition_vars(acc, &proof.decomposition_proof_l, &mut transcript);
+    let (decomposed_cm_i, decomp_vars_r) = collect_decomposition_vars(
+        &linearized_cm_i,
+        &proof.decomposition_proof_r,
+        &mut transcript,
+    );
 
     FoldingProofWitnessVars {
         linearization_vars,
-        decomp_vars,
+        decomp_vars_l,
+        decomp_vars_r,
     }
 }
 

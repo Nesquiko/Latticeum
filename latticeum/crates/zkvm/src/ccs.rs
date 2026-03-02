@@ -2,7 +2,6 @@ use cyclotomic_rings::rings::GoldilocksRingNTT;
 use p3_field::{Field, PrimeCharacteristicRing, PrimeField64};
 use p3_goldilocks::Goldilocks;
 use std::ops::Range;
-use tracing::{Level, instrument};
 
 use configuration::N_REGS;
 use latticefold::{
@@ -127,6 +126,15 @@ pub struct CCSLayout {
     pub decomp_x_w_idx: [usize; DECOMP_X_W_LEN],
     pub decomp_h_idx: usize,
     pub decomp_x_s_idx: [usize; GoldiLocksDP::K * (DECOMP_X_W_LEN + 1)],
+    pub decomp_r_cm_idx: [usize; KAPPA],
+    pub decomp_r_y_s_idx: [usize; GoldiLocksDP::K * KAPPA],
+    pub decomp_r_v_idx: [usize; TAU],
+    pub decomp_r_v_s_idx: [usize; GoldiLocksDP::K * TAU],
+    pub decomp_r_u_idx: [usize; CCS_NUM_MATRICES],
+    pub decomp_r_u_s_idx: [usize; GoldiLocksDP::K * CCS_NUM_MATRICES],
+    pub decomp_r_x_w_idx: [usize; DECOMP_X_W_LEN],
+    pub decomp_r_h_idx: usize,
+    pub decomp_r_x_s_idx: [usize; GoldiLocksDP::K * (DECOMP_X_W_LEN + 1)],
     // ------------------------------------------
 
     // input state
@@ -241,6 +249,21 @@ impl CCSLayout {
         let (decomp_x_s_idx, mut w_cursor) =
             indices_with_new_cursor::<{ GoldiLocksDP::K * (DECOMP_X_W_LEN + 1) }>(decomp_h_idx + 1);
 
+        let (decomp_r_cm_idx, w_cursor) = indices_with_new_cursor::<KAPPA>(w_cursor);
+        let (decomp_r_y_s_idx, w_cursor) =
+            indices_with_new_cursor::<{ GoldiLocksDP::K * KAPPA }>(w_cursor);
+        let (decomp_r_v_idx, w_cursor) = indices_with_new_cursor::<TAU>(w_cursor);
+        let (decomp_r_v_s_idx, w_cursor) =
+            indices_with_new_cursor::<{ GoldiLocksDP::K * TAU }>(w_cursor);
+        let (decomp_r_u_idx, w_cursor) = indices_with_new_cursor::<CCS_NUM_MATRICES>(w_cursor);
+        let (decomp_r_u_s_idx, w_cursor) =
+            indices_with_new_cursor::<{ GoldiLocksDP::K * CCS_NUM_MATRICES }>(w_cursor);
+        let (decomp_r_x_w_idx, w_cursor) = indices_with_new_cursor::<DECOMP_X_W_LEN>(w_cursor);
+        let decomp_r_h_idx = w_cursor;
+        let (decomp_r_x_s_idx, mut w_cursor) = indices_with_new_cursor::<
+            { GoldiLocksDP::K * (DECOMP_X_W_LEN + 1) },
+        >(decomp_r_h_idx + 1);
+
         let pc_in_idx = w_cursor;
         w_cursor += 1;
 
@@ -326,6 +349,15 @@ impl CCSLayout {
             decomp_x_w_idx,
             decomp_h_idx,
             decomp_x_s_idx,
+            decomp_r_cm_idx,
+            decomp_r_y_s_idx,
+            decomp_r_v_idx,
+            decomp_r_v_s_idx,
+            decomp_r_u_idx,
+            decomp_r_u_s_idx,
+            decomp_r_x_w_idx,
+            decomp_r_h_idx,
+            decomp_r_x_s_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -519,7 +551,7 @@ pub fn set_folding_proof_witness(
     }
 
     // ---------- Decomposition vars ----------
-    let decomp_vars = &folding_vars.decomp_vars;
+    let decomp_vars = &folding_vars.decomp_vars_l;
 
     for (i, &z_idx) in layout.decomp_cm_idx.iter().enumerate() {
         z[z_idx] = decomp_vars.cm.as_ref()[i];
@@ -564,6 +596,60 @@ pub fn set_folding_proof_witness(
 
     for (i, &z_idx) in layout
         .decomp_x_s_idx
+        .iter()
+        .step_by(DECOMP_X_W_LEN + 1)
+        .enumerate()
+    {
+        for el_idx in 0..(DECOMP_X_W_LEN + 1) {
+            z[z_idx + el_idx] = decomp_vars.x_s[i][el_idx];
+        }
+    }
+
+    let decomp_vars = &folding_vars.decomp_vars_r;
+
+    for (i, &z_idx) in layout.decomp_r_cm_idx.iter().enumerate() {
+        z[z_idx] = decomp_vars.cm.as_ref()[i];
+    }
+
+    for (i, &z_idx) in layout.decomp_r_y_s_idx.iter().step_by(KAPPA).enumerate() {
+        for el_idx in 0..KAPPA {
+            z[z_idx + el_idx] = decomp_vars.y_s[i].as_ref()[el_idx];
+        }
+    }
+
+    for (i, &z_idx) in layout.decomp_r_v_idx.iter().enumerate() {
+        z[z_idx] = decomp_vars.v[i];
+    }
+
+    for (i, &z_idx) in layout.decomp_r_v_s_idx.iter().step_by(TAU).enumerate() {
+        for el_idx in 0..TAU {
+            z[z_idx + el_idx] = decomp_vars.v_s[i][el_idx];
+        }
+    }
+
+    for (i, &z_idx) in layout.decomp_r_u_idx.iter().enumerate() {
+        z[z_idx] = decomp_vars.u[i];
+    }
+
+    for (i, &z_idx) in layout
+        .decomp_r_u_s_idx
+        .iter()
+        .step_by(CCS_NUM_MATRICES)
+        .enumerate()
+    {
+        for el_idx in 0..CCS_NUM_MATRICES {
+            z[z_idx + el_idx] = decomp_vars.u_s[i][el_idx];
+        }
+    }
+
+    for (i, &z_idx) in layout.decomp_r_x_w_idx.iter().enumerate() {
+        z[z_idx] = decomp_vars.x_w[i];
+    }
+
+    z[layout.decomp_r_h_idx] = decomp_vars.h;
+
+    for (i, &z_idx) in layout
+        .decomp_r_x_s_idx
         .iter()
         .step_by(DECOMP_X_W_LEN + 1)
         .enumerate()
