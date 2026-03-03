@@ -16,7 +16,7 @@ use num_traits::identities::One;
 use p3_field::PrimeField64;
 use p3_goldilocks::Goldilocks;
 use stark_rings_linalg::SparseMatrix;
-use std::ops::Neg;
+use std::{ops::Neg, usize};
 
 pub type R = GoldilocksRingNTT;
 
@@ -32,6 +32,20 @@ pub struct CCSBuilder<'a> {
     multisets: Vec<Vec<usize>>,
     /// vector of coefficients to be used in constraint (otherwise known as `c`)
     coeffs: Vec<R>,
+}
+
+#[derive(Default)]
+struct ClaimG1MatrixIndices {
+    alpha_v2: usize,
+    h1_linear: usize,
+    alpha_h1: usize,
+    h2_linear: usize,
+    alpha_h2: usize,
+    claim_linear: usize,
+    v2_input: usize,
+    h1_input: usize,
+    h2_input: usize,
+    claim_sum: usize,
 }
 
 impl<'a> CCSBuilder<'a> {
@@ -69,7 +83,11 @@ impl<'a> CCSBuilder<'a> {
         builder.folding_proof_linearization_sumcheck();
         builder.folding_proof_linearization_final_check();
         builder.folding_proof_decomposition();
-        builder.folding_proof_claim_g1();
+
+        let claim_g1_indices = builder.preallocate_folding_proof_claim_g1();
+        builder.preallocate_folding_proof_linearization_inner();
+
+        builder.folding_proof_claim_g1(claim_g1_indices);
         builder.folding_proof_linearization_inner();
 
         builder.build()
@@ -862,24 +880,77 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(R::one());
     }
 
-    fn folding_proof_claim_g1(&mut self) {
+    fn preallocate_folding_proof_claim_g1(&mut self) -> ClaimG1MatrixIndices {
         let matrix_base_idx = self.matrices.len();
 
-        let mut m_alpha_v2 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        let mut m_h1_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_alpha_v2 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_h1_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
-        let mut m_alpha_h1 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        let mut m_h2_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_alpha_h1 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_h2_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
-        let mut m_alpha_h2 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        let mut m_claim_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_alpha_h2 = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_claim_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
-        let mut m_v2_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        let mut m_h1_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
-        let mut m_h2_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_v2_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_h1_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_h2_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
-        let mut m_claim_sum = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_claim_sum = empty_sparse_matrix(self.m, self.layout.z_vector_size());
 
+        self.matrices.push(m_alpha_v2);
+        self.matrices.push(m_v2_input);
+        self.matrices.push(m_h1_linear);
+
+        self.matrices.push(m_alpha_h1);
+        self.matrices.push(m_h1_input);
+        self.matrices.push(m_h2_linear);
+
+        self.matrices.push(m_alpha_h2);
+        self.matrices.push(m_h2_input);
+        self.matrices.push(m_claim_linear);
+
+        self.matrices.push(m_claim_sum);
+
+        let mut indexes = ClaimG1MatrixIndices::default();
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(R::one());
+        indexes.alpha_v2 = matrix_base_idx;
+        indexes.v2_input = matrix_base_idx + 1;
+
+        self.multisets.push(vec![matrix_base_idx + 2]);
+        self.coeffs.push(R::one());
+        indexes.h1_linear = matrix_base_idx + 2;
+
+        self.multisets
+            .push(vec![matrix_base_idx + 3, matrix_base_idx + 4]);
+        self.coeffs.push(R::one());
+        indexes.alpha_h1 = matrix_base_idx + 3;
+        indexes.h1_input = matrix_base_idx + 4;
+
+        self.multisets.push(vec![matrix_base_idx + 5]);
+        self.coeffs.push(R::one());
+        indexes.h2_linear = matrix_base_idx + 5;
+
+        self.multisets
+            .push(vec![matrix_base_idx + 6, matrix_base_idx + 7]);
+        self.coeffs.push(R::one());
+        indexes.alpha_h2 = matrix_base_idx + 6;
+        indexes.h2_input = matrix_base_idx + 7;
+
+        self.multisets.push(vec![matrix_base_idx + 8]);
+        self.coeffs.push(R::one());
+        indexes.claim_linear = matrix_base_idx + 8;
+
+        self.multisets.push(vec![matrix_base_idx + 9]);
+        self.coeffs.push(R::one());
+        indexes.claim_sum = matrix_base_idx + 9;
+
+        indexes
+    }
+
+    fn folding_proof_claim_g1(&mut self, indices: ClaimG1MatrixIndices) {
         for i in 0..(2 * GoldiLocksDP::K) {
             let alpha_idx = self.layout.fp_claim_g1_alpha_idx[i];
             let h1_idx = self.layout.fp_claim_g1_h1_idx[i];
@@ -910,81 +981,33 @@ impl<'a> CCSBuilder<'a> {
             // claim_g1 = sum(claim_i)
 
             // alpha_i * v_i2 - h1_i + v_i1 == 0
-            m_alpha_v2.coeffs[FP_FOLD_G1_H1[i]].push((R::one(), alpha_idx));
-            m_v2_input.coeffs[FP_FOLD_G1_H1[i]].push((R::one(), v2_idx));
-            m_h1_linear.coeffs[FP_FOLD_G1_H1[i]].push((R::one().neg(), h1_idx));
-            m_h1_linear.coeffs[FP_FOLD_G1_H1[i]].push((R::one(), v1_idx));
+            self.matrices[indices.alpha_v2].coeffs[FP_FOLD_G1_H1[i]].push((R::one(), alpha_idx));
+            self.matrices[indices.v2_input].coeffs[FP_FOLD_G1_H1[i]].push((R::one(), v2_idx));
+            self.matrices[indices.h1_linear].coeffs[FP_FOLD_G1_H1[i]]
+                .push((R::one().neg(), h1_idx));
+            self.matrices[indices.h1_linear].coeffs[FP_FOLD_G1_H1[i]].push((R::one(), v1_idx));
 
             // alpha_i * h1_i - h2_i + v_i0 == 0
-            m_alpha_h1.coeffs[FP_FOLD_G1_H2[i]].push((R::one(), alpha_idx));
-            m_h1_input.coeffs[FP_FOLD_G1_H2[i]].push((R::one(), h1_idx));
-            m_h2_linear.coeffs[FP_FOLD_G1_H2[i]].push((R::one().neg(), h2_idx));
-            m_h2_linear.coeffs[FP_FOLD_G1_H2[i]].push((R::one(), v0_idx));
+            self.matrices[indices.alpha_h1].coeffs[FP_FOLD_G1_H2[i]].push((R::one(), alpha_idx));
+            self.matrices[indices.h1_input].coeffs[FP_FOLD_G1_H2[i]].push((R::one(), h1_idx));
+            self.matrices[indices.h2_linear].coeffs[FP_FOLD_G1_H2[i]]
+                .push((R::one().neg(), h2_idx));
+            self.matrices[indices.h2_linear].coeffs[FP_FOLD_G1_H2[i]].push((R::one(), v0_idx));
 
             // alpha_i * h2_i - claim_i == 0
-            m_alpha_h2.coeffs[FP_FOLD_G1_TERM[i]].push((R::one(), alpha_idx));
-            m_h2_input.coeffs[FP_FOLD_G1_TERM[i]].push((R::one(), h2_idx));
-            m_claim_linear.coeffs[FP_FOLD_G1_TERM[i]].push((R::one().neg(), claim_i_idx));
+            self.matrices[indices.alpha_h2].coeffs[FP_FOLD_G1_TERM[i]].push((R::one(), alpha_idx));
+            self.matrices[indices.h2_input].coeffs[FP_FOLD_G1_TERM[i]].push((R::one(), h2_idx));
+            self.matrices[indices.claim_linear].coeffs[FP_FOLD_G1_TERM[i]]
+                .push((R::one().neg(), claim_i_idx));
 
             // sum_i(claim_i) - claim_g1 == 0
-            m_claim_sum.coeffs[FP_FOLD_G1_SUM].push((R::one(), claim_i_idx));
+            self.matrices[indices.claim_sum].coeffs[FP_FOLD_G1_SUM].push((R::one(), claim_i_idx));
         }
-        m_claim_sum.coeffs[FP_FOLD_G1_SUM].push((R::one().neg(), self.layout.fp_claim_g1_idx));
-
-        self.matrices.push(m_alpha_v2);
-        self.matrices.push(m_v2_input);
-        self.matrices.push(m_h1_linear);
-
-        self.matrices.push(m_alpha_h1);
-        self.matrices.push(m_h1_input);
-        self.matrices.push(m_h2_linear);
-
-        self.matrices.push(m_alpha_h2);
-        self.matrices.push(m_h2_input);
-        self.matrices.push(m_claim_linear);
-
-        self.matrices.push(m_claim_sum);
-
-        self.multisets
-            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
-        self.coeffs.push(R::one());
-
-        self.multisets.push(vec![matrix_base_idx + 2]);
-        self.coeffs.push(R::one());
-
-        self.multisets
-            .push(vec![matrix_base_idx + 3, matrix_base_idx + 4]);
-        self.coeffs.push(R::one());
-
-        self.multisets.push(vec![matrix_base_idx + 5]);
-        self.coeffs.push(R::one());
-
-        self.multisets
-            .push(vec![matrix_base_idx + 6, matrix_base_idx + 7]);
-        self.coeffs.push(R::one());
-
-        self.multisets.push(vec![matrix_base_idx + 8]);
-        self.coeffs.push(R::one());
-
-        self.multisets.push(vec![matrix_base_idx + 9]);
-        self.coeffs.push(R::one());
+        self.matrices[indices.claim_sum].coeffs[FP_FOLD_G1_SUM]
+            .push((R::one().neg(), self.layout.fp_claim_g1_idx));
     }
 
-    /// MUST BE LAST added constraint
-    /// constraints that linearization_inner == Σ_i c[i] * Π_{j in S[i]} u[j].
-    /// The formula is:
-    ///
-    /// ```
-    /// let mut sum = 0;
-    /// for i in 0..self.multisets.len() {
-    ///     let product = 1;
-    ///     for j in self.multisets[i].iter() {
-    ///         product *= u[j]
-    ///     }
-    ///     sum += product
-    /// }
-    /// ```
-    fn folding_proof_linearization_inner(&mut self) {
+    fn preallocate_folding_proof_linearization_inner(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
         // for each multiset do
@@ -1019,7 +1042,23 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(R::one());
 
         assert_eq!(self.multisets.len(), FP_LIN_INNER_PRODS_PER_MULTISET.len());
+    }
 
+    /// MUST BE LAST added constraint
+    /// constraints that linearization_inner == Σ_i c[i] * Π_{j in S[i]} u[j].
+    /// The formula is:
+    ///
+    /// ```
+    /// let mut sum = 0;
+    /// for i in 0..self.multisets.len() {
+    ///     let product = 1;
+    ///     for j in self.multisets[i].iter() {
+    ///         product *= u[j]
+    ///     }
+    ///     sum += product
+    /// }
+    /// ```
+    fn folding_proof_linearization_inner(&mut self) {
         let matrix_multiset = &self.multisets[self.multisets.len() - 3];
         // fill the matrices according to the multisets with elements from u[j],
         // if the multiset doesn't have 7 elements, then fill the rest with 1s
