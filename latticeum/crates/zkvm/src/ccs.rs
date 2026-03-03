@@ -1,14 +1,3 @@
-use cyclotomic_rings::rings::GoldilocksRingNTT;
-use p3_field::{Field, PrimeCharacteristicRing, PrimeField64};
-use p3_goldilocks::Goldilocks;
-use std::ops::Range;
-
-use configuration::N_REGS;
-use latticefold::{
-    decomposition_parameters::DecompositionParams, nifs::decomposition::LFDecompositionVerifier,
-};
-use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
-
 use crate::{
     crypto_consts::{FULL_ROUNDS, PARTIAL_ROUNDS},
     fiat_shamir::Poseidon2Transcript,
@@ -19,6 +8,15 @@ use crate::{
     },
     zk_latticefold::FoldingProofWitnessVars,
 };
+use configuration::N_REGS;
+use cyclotomic_rings::rings::GoldilocksRingNTT;
+use latticefold::{
+    decomposition_parameters::DecompositionParams, nifs::decomposition::LFDecompositionVerifier,
+};
+use p3_field::{Field, PrimeCharacteristicRing, PrimeField64};
+use p3_goldilocks::Goldilocks;
+use std::ops::Range;
+use vm::riscvm::{inst::ExecutionTrace, riscv_isa::Instruction};
 
 #[derive(Clone, Copy)]
 pub struct GoldiLocksDP;
@@ -53,11 +51,11 @@ pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is log(m) where m is the number of rows in matrices padded to the next power of two,
 /// see the constraint.rs
-pub const CCS_S: usize = 15;
+pub const CCS_S: usize = 16;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is how many multisets there are.
-pub const CCS_C: usize = 36;
+pub const CCS_C: usize = 41;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// The max degree is of the poseidon2 s box degree 7, then
@@ -65,7 +63,7 @@ pub const CCS_C: usize = 36;
 ///     - +1 to capture degree x polynom, you must have x+1 coeffs
 pub const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
-pub const CCS_NUM_MATRICES: usize = 100;
+pub const CCS_NUM_MATRICES: usize = 107;
 /// +1 for the initialy claimed '0'
 pub const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
@@ -142,6 +140,11 @@ pub struct CCSLayout {
     pub fp_claim_g1_h2_idx: [usize; 2 * GoldiLocksDP::K],
     pub fp_claim_g1_terms_idx: [usize; 2 * GoldiLocksDP::K],
     pub fp_claim_g1_idx: usize,
+
+    pub fp_claim_g3_zeta_idx: [usize; 2 * GoldiLocksDP::K],
+    pub fp_claim_g3_h_idx: [usize; 2 * GoldiLocksDP::K * (CCS_NUM_MATRICES - 1)],
+    pub fp_claim_g3_terms_idx: [usize; 2 * GoldiLocksDP::K],
+    pub fp_claim_g3_idx: usize,
     // ------------------------------------------
 
     // input state
@@ -282,6 +285,15 @@ impl CCSLayout {
         let fp_claim_g1_idx = w_cursor;
         w_cursor += 1;
 
+        let (fp_claim_g3_zeta_idx, w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K }>(w_cursor);
+        let (fp_claim_g3_h_idx, w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K * (CCS_NUM_MATRICES - 1) }>(w_cursor);
+        let (fp_claim_g3_terms_idx, mut w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K }>(w_cursor);
+        let fp_claim_g3_idx = w_cursor;
+        w_cursor += 1;
+
         let pc_in_idx = w_cursor;
         w_cursor += 1;
 
@@ -381,6 +393,10 @@ impl CCSLayout {
             fp_claim_g1_h2_idx,
             fp_claim_g1_terms_idx,
             fp_claim_g1_idx,
+            fp_claim_g3_zeta_idx,
+            fp_claim_g3_h_idx,
+            fp_claim_g3_terms_idx,
+            fp_claim_g3_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -702,6 +718,20 @@ pub fn set_folding_proof_witness(
     }
 
     z[layout.fp_claim_g1_idx] = folding_claim_vars.claim_g1;
+
+    for (i, &z_idx) in layout.fp_claim_g3_zeta_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.zeta_s[i];
+    }
+
+    for (i, &z_idx) in layout.fp_claim_g3_h_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.claim_g3_h[i];
+    }
+
+    for (i, &z_idx) in layout.fp_claim_g3_terms_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.claim_g3_terms[i];
+    }
+
+    z[layout.fp_claim_g3_idx] = folding_claim_vars.claim_g3;
 }
 
 pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CCSLayout) {

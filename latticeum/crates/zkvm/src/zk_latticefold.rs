@@ -1,5 +1,5 @@
 use crate::{
-    ccs::{GoldiLocksDP, TAU},
+    ccs::{CCS_NUM_MATRICES, GoldiLocksDP, TAU},
     fiat_shamir::Poseidon2Transcript,
     poseidon2::GOLDILOCKS_S_BOX_DEGREE,
 };
@@ -439,6 +439,10 @@ pub struct FoldingVars {
     pub claim_g1_h2: Vec<GoldilocksRingNTT>,
     pub claim_g1_terms: Vec<GoldilocksRingNTT>,
     pub claim_g1: GoldilocksRingNTT,
+
+    pub claim_g3_h: Vec<GoldilocksRingNTT>,
+    pub claim_g3_terms: Vec<GoldilocksRingNTT>,
+    pub claim_g3: GoldilocksRingNTT,
 }
 
 fn collect_folding_vars(
@@ -459,6 +463,10 @@ fn collect_folding_vars(
     let mut claim_g1_terms = Vec::with_capacity(claim_terms_len);
     let mut claim_g1 = GoldilocksRingNTT::ZERO;
 
+    let mut claim_g3_h = Vec::with_capacity(claim_terms_len * (CCS_NUM_MATRICES - 1));
+    let mut claim_g3_terms = Vec::with_capacity(claim_terms_len);
+    let mut claim_g3 = GoldilocksRingNTT::ZERO;
+
     for i in 0..claim_terms_len {
         let v_i = &cm_i_s[i].v;
         assert_eq!(v_i.len(), TAU);
@@ -471,17 +479,34 @@ fn collect_folding_vars(
         claim_g1_h2.push(h2);
         claim_g1_terms.push(claim_i);
         claim_g1 += claim_i;
+
+        let u_i = &cm_i_s[i].u;
+        assert_eq!(u_i.len(), CCS_NUM_MATRICES);
+
+        let zeta_i = zeta_s[i];
+        let mut h = zeta_i * u_i[CCS_NUM_MATRICES - 1] + u_i[CCS_NUM_MATRICES - 2];
+        claim_g3_h.push(h);
+
+        for j in (0..(CCS_NUM_MATRICES - 2)).rev() {
+            h = zeta_i * h + u_i[j];
+            claim_g3_h.push(h);
+        }
+
+        let claim_g3_i = zeta_i * h;
+        claim_g3_terms.push(claim_g3_i);
+        claim_g3 += claim_g3_i;
     }
 
     #[cfg(feature = "debug")]
     {
         use latticefold::nifs::folding::LFFoldingVerifier;
 
-        let (claim_g1_ref, _) =
-            LFFoldingVerifier::<GoldilocksRingNTT, Poseidon2Transcript>::calculate_claims(
-                &alpha_s, &zeta_s, cm_i_s,
-            );
+        let (claim_g1_ref, claim_g3_ref) = LFFoldingVerifier::<
+            GoldilocksRingNTT,
+            Poseidon2Transcript,
+        >::calculate_claims(&alpha_s, &zeta_s, cm_i_s);
         assert_eq!(claim_g1, claim_g1_ref);
+        assert_eq!(claim_g3, claim_g3_ref);
     }
 
     FoldingVars {
@@ -493,5 +518,8 @@ fn collect_folding_vars(
         claim_g1_h2,
         claim_g1_terms,
         claim_g1,
+        claim_g3_h,
+        claim_g3_terms,
+        claim_g3,
     }
 }

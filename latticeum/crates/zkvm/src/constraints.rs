@@ -48,6 +48,17 @@ struct ClaimG1MatrixIndices {
     claim_sum: usize,
 }
 
+#[derive(Default)]
+struct ClaimG3MatrixIndices {
+    zeta_step: usize,
+    step_input: usize,
+    step_linear: usize,
+    zeta_term: usize,
+    term_input: usize,
+    term_linear: usize,
+    claim_sum: usize,
+}
+
 impl<'a> CCSBuilder<'a> {
     fn new<const W: usize>(layout: &'a CCSLayout) -> Self {
         Self {
@@ -85,9 +96,11 @@ impl<'a> CCSBuilder<'a> {
         builder.folding_proof_decomposition();
 
         let claim_g1_indices = builder.preallocate_folding_proof_claim_g1();
+        let claim_g3_indices = builder.preallocate_folding_proof_claim_g3();
         builder.preallocate_folding_proof_linearization_inner();
 
         builder.folding_proof_claim_g1(claim_g1_indices);
+        builder.folding_proof_claim_g3(claim_g3_indices);
         builder.folding_proof_linearization_inner();
 
         builder.build()
@@ -1007,6 +1020,124 @@ impl<'a> CCSBuilder<'a> {
             .push((R::one().neg(), self.layout.fp_claim_g1_idx));
     }
 
+    fn preallocate_folding_proof_claim_g3(&mut self) -> ClaimG3MatrixIndices {
+        let matrix_base_idx = self.matrices.len();
+
+        let m_zeta_step = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_step_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_step_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        let m_zeta_term = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_term_input = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let m_term_linear = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        let m_claim_sum = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        self.matrices.push(m_zeta_step);
+        self.matrices.push(m_step_input);
+        self.matrices.push(m_step_linear);
+
+        self.matrices.push(m_zeta_term);
+        self.matrices.push(m_term_input);
+        self.matrices.push(m_term_linear);
+
+        self.matrices.push(m_claim_sum);
+
+        let mut indexes = ClaimG3MatrixIndices::default();
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(R::one());
+        indexes.zeta_step = matrix_base_idx;
+        indexes.step_input = matrix_base_idx + 1;
+
+        self.multisets.push(vec![matrix_base_idx + 2]);
+        self.coeffs.push(R::one());
+        indexes.step_linear = matrix_base_idx + 2;
+
+        self.multisets
+            .push(vec![matrix_base_idx + 3, matrix_base_idx + 4]);
+        self.coeffs.push(R::one());
+        indexes.zeta_term = matrix_base_idx + 3;
+        indexes.term_input = matrix_base_idx + 4;
+
+        self.multisets.push(vec![matrix_base_idx + 5]);
+        self.coeffs.push(R::one());
+        indexes.term_linear = matrix_base_idx + 5;
+
+        self.multisets.push(vec![matrix_base_idx + 6]);
+        self.coeffs.push(R::one());
+        indexes.claim_sum = matrix_base_idx + 6;
+
+        indexes
+    }
+
+    fn folding_proof_claim_g3(&mut self, indices: ClaimG3MatrixIndices) {
+        let t = self.layout.lin_proof_u.len();
+        assert_eq!(t, CCS_NUM_MATRICES);
+
+        for i in 0..(2 * GoldiLocksDP::K) {
+            let zeta_idx = self.layout.fp_claim_g3_zeta_idx[i];
+            let claim_i_idx = self.layout.fp_claim_g3_terms_idx[i];
+
+            // decomposed the zeta[i]^(j+1) * u[i][j]
+            // with Horner and got
+            // zeta[i] * (u[i][0] + zeta[i] * (u[i][1] + ... + zeta[i] * u[i][t-1]))
+            // h0 = zeta[i] * u[i][t-1] + u[i][t-2]
+            // h1 = zeta[i] * h0 + u[i][t-3]
+            // ...
+            // h_{t-2} = zeta[i] * h_{t-3} + u[i][0]
+            // claim_i = zeta[i] * h_{t-2}
+            // claim_g3 = sum(claim_i)
+
+            for s in 0..(CCS_NUM_MATRICES - 1) {
+                let row_idx = FP_FOLD_G3_STEP[i * (CCS_NUM_MATRICES - 1) + s];
+                let h_idx = self.layout.fp_claim_g3_h_idx[i * (CCS_NUM_MATRICES - 1) + s];
+
+                let u_tail_idx = if i < GoldiLocksDP::K {
+                    self.layout.decomp_u_s_idx[i * CCS_NUM_MATRICES + (t - 1)]
+                } else {
+                    let r_i = i - GoldiLocksDP::K;
+                    self.layout.decomp_r_u_s_idx[r_i * CCS_NUM_MATRICES + (t - 1)]
+                };
+
+                let h_prev_or_u_idx = if s == 0 {
+                    u_tail_idx
+                } else {
+                    self.layout.fp_claim_g3_h_idx[i * (CCS_NUM_MATRICES - 1) + (s - 1)]
+                };
+
+                let u_next_idx = if i < GoldiLocksDP::K {
+                    self.layout.decomp_u_s_idx[i * CCS_NUM_MATRICES + (t - 2 - s)]
+                } else {
+                    let r_i = i - GoldiLocksDP::K;
+                    self.layout.decomp_r_u_s_idx[r_i * CCS_NUM_MATRICES + (t - 2 - s)]
+                };
+
+                // zeta_i * prev - h_i_s + u_i[t-2-s] == 0
+                self.matrices[indices.zeta_step].coeffs[row_idx].push((R::one(), zeta_idx));
+                self.matrices[indices.step_input].coeffs[row_idx].push((R::one(), h_prev_or_u_idx));
+                self.matrices[indices.step_linear].coeffs[row_idx].push((R::one().neg(), h_idx));
+                self.matrices[indices.step_linear].coeffs[row_idx].push((R::one(), u_next_idx));
+            }
+
+            let term_row_idx = FP_FOLD_G3_TERM[i];
+            let h_last_idx =
+                self.layout.fp_claim_g3_h_idx[i * (CCS_NUM_MATRICES - 1) + (CCS_NUM_MATRICES - 2)];
+
+            // zeta_i * h_i_last - claim_i == 0
+            self.matrices[indices.zeta_term].coeffs[term_row_idx].push((R::one(), zeta_idx));
+            self.matrices[indices.term_input].coeffs[term_row_idx].push((R::one(), h_last_idx));
+            self.matrices[indices.term_linear].coeffs[term_row_idx]
+                .push((R::one().neg(), claim_i_idx));
+
+            // sum_i(claim_i) - claim_g3 == 0
+            self.matrices[indices.claim_sum].coeffs[FP_FOLD_G3_SUM].push((R::one(), claim_i_idx));
+        }
+
+        self.matrices[indices.claim_sum].coeffs[FP_FOLD_G3_SUM]
+            .push((R::one().neg(), self.layout.fp_claim_g3_idx));
+    }
+
     fn preallocate_folding_proof_linearization_inner(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
@@ -1410,6 +1541,10 @@ const FP_FOLD_G1_H1: [usize; 2 * GoldiLocksDP::K] = index_array(FP_DECOMP_R_H_RE
 const FP_FOLD_G1_H2: [usize; 2 * GoldiLocksDP::K] = index_array(last(FP_FOLD_G1_H1) + 1);
 const FP_FOLD_G1_TERM: [usize; 2 * GoldiLocksDP::K] = index_array(last(FP_FOLD_G1_H2) + 1);
 const FP_FOLD_G1_SUM: usize = last(FP_FOLD_G1_TERM) + 1;
+const FP_FOLD_G3_STEP: [usize; 2 * GoldiLocksDP::K * (CCS_NUM_MATRICES - 1)] =
+    index_array(FP_FOLD_G1_SUM + 1);
+const FP_FOLD_G3_TERM: [usize; 2 * GoldiLocksDP::K] = index_array(last(FP_FOLD_G3_STEP) + 1);
+const FP_FOLD_G3_SUM: usize = last(FP_FOLD_G3_TERM) + 1;
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")
