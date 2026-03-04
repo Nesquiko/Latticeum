@@ -12,8 +12,10 @@ members = [
 ]
 
 [workspace.package]
+authors = ["Nesquiko"]
 edition = "2024"
 license = "MIT"
+version = "0.1.0"
 
 [workspace.dependencies]
 vm = { path = "./crates/vm" }
@@ -33,9 +35,9 @@ rand = { version = "0.8.5", default-features = false }
 latticefold = { path = "crates/latticefold", default-features = false }
 cyclotomic-rings = { path = "crates/cyclotomic-rings", default-features = false }
 
-stark-rings = { git = "https://github.com/NethermindEth/stark-rings.git", branch = "main", default-features = false }
-stark-rings-linalg = { git = "https://github.com/NethermindEth/stark-rings.git", branch = "main", default-features = false }
-stark-rings-poly = { git = "https://github.com/NethermindEth/stark-rings.git", branch = "main", default-features = false }
+stark-rings = { path = "crates/stark-rings/crates/ring", default-features = false }
+stark-rings-linalg = { path = "crates/stark-rings/crates/linear_algebra", default-features = false }
+stark-rings-poly = { path = "crates/stark-rings/crates/poly", default-features = false }
 
 num-bigint = { version = "0.4.5", default-features = false }
 rayon = "1.10.0"
@@ -57,8 +59,17 @@ p3-challenger = { git = "https://github.com/Plonky3/Plonky3.git" }
 
 ark-std = { version = "0.4.0", default-features = false }
 ark-ff = "0.4.2"
+ark-poly = "0.4"
 ark-crypto-primitives = { version = "0.4.0", default-features = false, features = [ "sponge" ] }
 ark-serialize = { version = "0.4.2", features = ["derive"] }
+delegate = "0.13"
+derive_more = "0.99"
+displaydoc = { version = "0.2", default-features = false }
+hashbrown = "0.15"
+num-integer = { version = "0.1", default-features = false }
+serde_with = { version = "3.7", default-features = false }
+syn = "2.0.87"
+zeroize = "1.7"
 
 [profile.profiling]
 inherits = "release"
