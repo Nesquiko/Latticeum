@@ -1449,6 +1449,7 @@ dependencies = [
  "ark-ff",
  "ark-serialize",
  "ark-std",
+ "criterion",
  "displaydoc",
  "hashbrown 0.15.4",
  "rand 0.8.5",
