@@ -435,6 +435,12 @@ pub struct FoldingVars {
     pub zeta_s: Vec<GoldilocksRingNTT>,
     pub mu_s: Vec<GoldilocksRingNTT>,
 
+    pub sumcheck_polynomials: Vec<Vec<GoldilocksRingNTT>>,
+    pub sumcheck_claimed_sums: Vec<GoldilocksRingNTT>,
+    pub sumcheck_claimed_sums_subterms: Vec<GoldilocksRingNTT>,
+    pub sumcheck_evaluation_point: Vec<GoldilocksRingNTT>,
+    pub sumcheck_expected_evaluation: GoldilocksRingNTT,
+
     pub claim_g1_h1: Vec<GoldilocksRingNTT>,
     pub claim_g1_h2: Vec<GoldilocksRingNTT>,
     pub claim_g1_terms: Vec<GoldilocksRingNTT>,
@@ -447,7 +453,7 @@ pub struct FoldingVars {
 
 fn collect_folding_vars(
     cm_i_s: &Vec<LCCCS<GoldilocksRingNTT>>,
-    _proof: &FoldingProof<GoldilocksRingNTT>,
+    proof: &FoldingProof<GoldilocksRingNTT>,
     transcript: &mut Poseidon2Transcript,
     ccs: &CCS<GoldilocksRingNTT>,
 ) -> FoldingVars {
@@ -509,6 +515,8 @@ fn collect_folding_vars(
         assert_eq!(claim_g3, claim_g3_ref);
     }
 
+    let sumcheck_vars = collect_folding_sumcheck_vars(proof, transcript, ccs, claim_g1 + claim_g3);
+
     FoldingVars {
         alpha_s,
         beta_s,
@@ -521,5 +529,90 @@ fn collect_folding_vars(
         claim_g3_h,
         claim_g3_terms,
         claim_g3,
+        sumcheck_polynomials: sumcheck_vars.polynomials,
+        sumcheck_claimed_sums: sumcheck_vars.claimed_sums,
+        sumcheck_claimed_sums_subterms: sumcheck_vars.claimed_sums_subterms,
+        sumcheck_evaluation_point: sumcheck_vars.evaluation_point,
+        sumcheck_expected_evaluation: sumcheck_vars.expected_evaluation,
+    }
+}
+
+struct FoldingSumcheckVars {
+    polynomials: Vec<Vec<GoldilocksRingNTT>>,
+    claimed_sums: Vec<GoldilocksRingNTT>,
+    claimed_sums_subterms: Vec<GoldilocksRingNTT>,
+
+    evaluation_point: Vec<GoldilocksRingNTT>,
+    expected_evaluation: GoldilocksRingNTT,
+}
+
+fn collect_folding_sumcheck_vars(
+    proof: &FoldingProof<GoldilocksRingNTT>,
+    transcript: &mut Poseidon2Transcript,
+    ccs: &CCS<GoldilocksRingNTT>,
+    total_claim: GoldilocksRingNTT,
+) -> FoldingSumcheckVars {
+    let nvars = ccs.s;
+    let degree = 2 * GoldiLocksDP::B_SMALL;
+
+    transcript.absorb(&GoldilocksRingNTT::from(nvars as u128));
+    transcript.absorb(&GoldilocksRingNTT::from(degree as u128));
+
+    let mut verifier_state =
+        IPForMLSumcheck::<GoldilocksRingNTT, Poseidon2Transcript>::verifier_init(nvars, degree);
+
+    let mut claimed_sum = total_claim;
+    let mut eval_point = Vec::with_capacity(nvars);
+
+    let mut claimed_sums = Vec::with_capacity(nvars + 1);
+    let mut claimed_sums_subterms = Vec::with_capacity(nvars * degree);
+    claimed_sums.push(claimed_sum);
+
+    for i in 0..nvars {
+        let prover_msg = proof
+            .pointshift_sumcheck_proof
+            .0
+            .get(i)
+            .expect("proof is incomplete");
+        transcript.absorb_slice(&prover_msg.evaluations);
+
+        let verifier_msg =
+            IPForMLSumcheck::verify_round(prover_msg.clone(), &mut verifier_state, transcript);
+        eval_point.push(verifier_msg.randomness);
+
+        let interpolated =
+            zk_interpolate_uni_poly(&prover_msg.evaluations, verifier_msg.randomness);
+        claimed_sum = interpolated.0;
+        claimed_sums_subterms.extend(interpolated.1);
+        claimed_sums.push(claimed_sum);
+
+        transcript.absorb(&verifier_msg.randomness.into());
+    }
+
+    let polynomials_received = verifier_state.polynomials_received.clone();
+
+    #[cfg(feature = "debug")]
+    {
+        let subclaim =
+            IPForMLSumcheck::<GoldilocksRingNTT, Poseidon2Transcript>::check_and_generate_subclaim(
+                verifier_state,
+                total_claim,
+            );
+
+        match subclaim {
+            Err(err) => {
+                tracing::error!("check_and_generate_subclaim returned an error: {:?}", err);
+                panic!("there was an error in check_and_generate_subclaim");
+            }
+            Ok(_subc) => {}
+        };
+    }
+
+    FoldingSumcheckVars {
+        polynomials: polynomials_received,
+        claimed_sums,
+        claimed_sums_subterms,
+        evaluation_point: eval_point.into_iter().map(|x| x.into()).collect(),
+        expected_evaluation: claimed_sum,
     }
 }

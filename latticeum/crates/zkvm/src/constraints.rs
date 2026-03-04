@@ -16,7 +16,7 @@ use num_traits::identities::One;
 use p3_field::PrimeField64;
 use p3_goldilocks::Goldilocks;
 use stark_rings_linalg::SparseMatrix;
-use std::{ops::Neg, usize};
+use std::ops::Neg;
 
 pub type R = GoldilocksRingNTT;
 
@@ -97,6 +97,9 @@ impl<'a> CCSBuilder<'a> {
 
         let claim_g1_indices = builder.preallocate_folding_proof_claim_g1();
         let claim_g3_indices = builder.preallocate_folding_proof_claim_g3();
+        builder.folding_proof_folding_sumcheck();
+
+        // Must be last preallocation
         builder.preallocate_folding_proof_linearization_inner();
 
         builder.folding_proof_claim_g1(claim_g1_indices);
@@ -1138,6 +1141,58 @@ impl<'a> CCSBuilder<'a> {
             .push((R::one().neg(), self.layout.fp_claim_g3_idx));
     }
 
+    fn folding_proof_folding_sumcheck(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+        let mut m = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        // claimed_sum[0] - claim_g1 - claim_g3 == 0
+        m.coeffs[FP_FOLD_SUMCHECK_INITIAL_CLAIM]
+            .push((R::one(), self.layout.fp_sumcheck_claimed_sums_idx[0]));
+        m.coeffs[FP_FOLD_SUMCHECK_INITIAL_CLAIM]
+            .push((R::one().neg(), self.layout.fp_claim_g1_idx));
+        m.coeffs[FP_FOLD_SUMCHECK_INITIAL_CLAIM]
+            .push((R::one().neg(), self.layout.fp_claim_g3_idx));
+
+        for i in 0..CCS_S {
+            let evals_start = i * (2 * GoldiLocksDP::B_SMALL + 1);
+
+            // p_i(0) + p_i(1) - claimed_sum[i] == 0
+            m.coeffs[FP_FOLD_SUMCHECK_CLAIMED_SUM_EQUALS[i]].push((
+                R::one(),
+                self.layout.fp_sumcheck_polynomials_idx[evals_start],
+            ));
+            m.coeffs[FP_FOLD_SUMCHECK_CLAIMED_SUM_EQUALS[i]].push((
+                R::one(),
+                self.layout.fp_sumcheck_polynomials_idx[evals_start + 1],
+            ));
+            m.coeffs[FP_FOLD_SUMCHECK_CLAIMED_SUM_EQUALS[i]]
+                .push((R::one().neg(), self.layout.fp_sumcheck_claimed_sums_idx[i]));
+
+            // claimed_sum[i+1] - sum(interpolation_subterms_i) == 0
+            m.coeffs[FP_FOLD_SUMCHECK_CLAIMED_SUM_SUBTERMS[i]]
+                .push((R::one(), self.layout.fp_sumcheck_claimed_sums_idx[i + 1]));
+            for j in 0..(2 * GoldiLocksDP::B_SMALL + 1) {
+                let subterm_idx = i * (2 * GoldiLocksDP::B_SMALL + 1) + j;
+                m.coeffs[FP_FOLD_SUMCHECK_CLAIMED_SUM_SUBTERMS[i]].push((
+                    R::one().neg(),
+                    self.layout.fp_sumcheck_claimed_sums_subterms_idx[subterm_idx],
+                ));
+            }
+        }
+
+        // expected_evaluation - claimed_sum[last] == 0
+        m.coeffs[FP_FOLD_SUMCHECK_FINAL_CLAIMED_SUM]
+            .push((R::one(), self.layout.fp_sumcheck_expected_evaluation_idx));
+        m.coeffs[FP_FOLD_SUMCHECK_FINAL_CLAIMED_SUM].push((
+            R::one().neg(),
+            self.layout.fp_sumcheck_claimed_sums_idx[CCS_S],
+        ));
+
+        self.matrices.push(m);
+        self.multisets.push(vec![matrix_base_idx]);
+        self.coeffs.push(R::one());
+    }
+
     fn preallocate_folding_proof_linearization_inner(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
@@ -1545,6 +1600,12 @@ const FP_FOLD_G3_STEP: [usize; 2 * GoldiLocksDP::K * (CCS_NUM_MATRICES - 1)] =
     index_array(FP_FOLD_G1_SUM + 1);
 const FP_FOLD_G3_TERM: [usize; 2 * GoldiLocksDP::K] = index_array(last(FP_FOLD_G3_STEP) + 1);
 const FP_FOLD_G3_SUM: usize = last(FP_FOLD_G3_TERM) + 1;
+const FP_FOLD_SUMCHECK_INITIAL_CLAIM: usize = FP_FOLD_G3_SUM + 1;
+const FP_FOLD_SUMCHECK_CLAIMED_SUM_EQUALS: [usize; CCS_S] =
+    index_array(FP_FOLD_SUMCHECK_INITIAL_CLAIM + 1);
+const FP_FOLD_SUMCHECK_CLAIMED_SUM_SUBTERMS: [usize; CCS_S] =
+    index_array(last(FP_FOLD_SUMCHECK_CLAIMED_SUM_EQUALS) + 1);
+const FP_FOLD_SUMCHECK_FINAL_CLAIMED_SUM: usize = last(FP_FOLD_SUMCHECK_CLAIMED_SUM_SUBTERMS) + 1;
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")

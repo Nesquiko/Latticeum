@@ -55,7 +55,7 @@ pub const CCS_S: usize = 16;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is how many multisets there are.
-pub const CCS_C: usize = 41;
+pub const CCS_C: usize = 42;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// The max degree is of the poseidon2 s box degree 7, then
@@ -63,7 +63,7 @@ pub const CCS_C: usize = 41;
 ///     - +1 to capture degree x polynom, you must have x+1 coeffs
 pub const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
-pub const CCS_NUM_MATRICES: usize = 107;
+pub const CCS_NUM_MATRICES: usize = 108;
 /// +1 for the initialy claimed '0'
 pub const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
@@ -145,6 +145,12 @@ pub struct CCSLayout {
     pub fp_claim_g3_h_idx: [usize; 2 * GoldiLocksDP::K * (CCS_NUM_MATRICES - 1)],
     pub fp_claim_g3_terms_idx: [usize; 2 * GoldiLocksDP::K],
     pub fp_claim_g3_idx: usize,
+
+    pub fp_sumcheck_polynomials_idx: [usize; CCS_S * (2 * GoldiLocksDP::B_SMALL + 1)],
+    pub fp_sumcheck_claimed_sums_idx: [usize; CCS_S + 1],
+    pub fp_sumcheck_claimed_sums_subterms_idx: [usize; CCS_S * (2 * GoldiLocksDP::B_SMALL + 1)],
+    pub fp_sumcheck_evaluation_point_idx: [usize; CCS_S],
+    pub fp_sumcheck_expected_evaluation_idx: usize,
     // ------------------------------------------
 
     // input state
@@ -294,6 +300,17 @@ impl CCSLayout {
         let fp_claim_g3_idx = w_cursor;
         w_cursor += 1;
 
+        let (fp_sumcheck_polynomials_idx, w_cursor) =
+            indices_with_new_cursor::<{ CCS_S * (2 * GoldiLocksDP::B_SMALL + 1) }>(w_cursor);
+        let (fp_sumcheck_claimed_sums_idx, w_cursor) =
+            indices_with_new_cursor::<{ CCS_S + 1 }>(w_cursor);
+        let (fp_sumcheck_claimed_sums_subterms_idx, w_cursor) =
+            indices_with_new_cursor::<{ CCS_S * (2 * GoldiLocksDP::B_SMALL + 1) }>(w_cursor);
+        let (fp_sumcheck_evaluation_point_idx, mut w_cursor) =
+            indices_with_new_cursor::<CCS_S>(w_cursor);
+        let fp_sumcheck_expected_evaluation_idx = w_cursor;
+        w_cursor += 1;
+
         let pc_in_idx = w_cursor;
         w_cursor += 1;
 
@@ -397,6 +414,11 @@ impl CCSLayout {
             fp_claim_g3_h_idx,
             fp_claim_g3_terms_idx,
             fp_claim_g3_idx,
+            fp_sumcheck_polynomials_idx,
+            fp_sumcheck_claimed_sums_idx,
+            fp_sumcheck_claimed_sums_subterms_idx,
+            fp_sumcheck_evaluation_point_idx,
+            fp_sumcheck_expected_evaluation_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -732,6 +754,35 @@ pub fn set_folding_proof_witness(
     }
 
     z[layout.fp_claim_g3_idx] = folding_claim_vars.claim_g3;
+
+    for (i, &z_idx) in layout
+        .fp_sumcheck_polynomials_idx
+        .iter()
+        .step_by(2 * GoldiLocksDP::B_SMALL + 1)
+        .enumerate()
+    {
+        for el_idx in 0..(2 * GoldiLocksDP::B_SMALL + 1) {
+            z[z_idx + el_idx] = folding_claim_vars.sumcheck_polynomials[i][el_idx];
+        }
+    }
+
+    for (i, &z_idx) in layout.fp_sumcheck_claimed_sums_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.sumcheck_claimed_sums[i];
+    }
+
+    for (i, &z_idx) in layout
+        .fp_sumcheck_claimed_sums_subterms_idx
+        .iter()
+        .enumerate()
+    {
+        z[z_idx] = folding_claim_vars.sumcheck_claimed_sums_subterms[i];
+    }
+
+    for (i, &z_idx) in layout.fp_sumcheck_evaluation_point_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.sumcheck_evaluation_point[i];
+    }
+
+    z[layout.fp_sumcheck_expected_evaluation_idx] = folding_claim_vars.sumcheck_expected_evaluation;
 }
 
 pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CCSLayout) {
