@@ -5,3 +5,9 @@ edition = "2024"
 
 [dependencies]
 guest = { path = "../../crates/guest" }
+
+[[bin]]
+name = "fibonacci"
+path = "src/main.rs"
+test = false
+bench = false

@@ -5,3 +5,6 @@ run = "RUST_LOG=debug cargo run --bin zkvm --features debug,parallel --release"
 
 [tasks.fix_vars_bench]
 run = "cargo bench -p stark-rings-poly --bench fix_variables"
+
+[tasks.test]
+run = "cargo test --workspace -j 8"

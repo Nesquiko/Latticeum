@@ -268,7 +268,7 @@ fn nonresidue_to_nonresidue_to_7(c: &mut [Fq]) {
 
 #[cfg(test)]
 mod tests {
-    use ark_ff::{Field, MontFp, UniformRand};
+    use ark_ff::{AdditiveGroup, Field, MontFp, UniformRand};
     use ark_std::Zero;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;

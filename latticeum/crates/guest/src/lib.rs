@@ -1,8 +1,10 @@
 #![no_main]
 #![no_std]
 
+#[cfg(target_arch = "riscv32")]
 use configuration::STACK_TOP;
 
+#[cfg(target_arch = "riscv32")]
 core::arch::global_asm!(
     ".section .text._start",
     ".globl _start",
@@ -15,6 +17,12 @@ core::arch::global_asm!(
     "    call rust_main",
     stack_top = const STACK_TOP,
 );
+
+#[cfg(not(target_arch = "riscv32"))]
+#[allow(dead_code)]
+pub fn guest_target_guard() {
+    panic!("guest crate must be compiled for riscv32 target");
+}
 
 #[macro_export]
 macro_rules! guest_main {
@@ -30,6 +38,7 @@ macro_rules! guest_main {
     };
 }
 
+#[cfg(target_arch = "riscv32")]
 #[unsafe(no_mangle)]
 extern "C" fn rust_main() -> ! {
     {
@@ -48,6 +57,7 @@ pub fn write_result(word: u32) {
     }
 }
 
+#[cfg(target_arch = "riscv32")]
 #[panic_handler]
 fn panic_impl(_panic_info: &core::panic::PanicInfo) -> ! {
     loop {}

@@ -114,7 +114,7 @@ mod tests {
         // X^2 * X^15 = -X
         assert_eq!(
             PolyRing::coeffs(&(x2 * x15))[1],
-            -<RqPoly as PolyRing>::BaseRing::ONE
+            -<RqPoly as PolyRing>::BaseRing::one()
         );
     }
 

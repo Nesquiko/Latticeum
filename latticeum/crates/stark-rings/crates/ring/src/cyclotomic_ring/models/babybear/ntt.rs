@@ -592,7 +592,7 @@ mod tests {
     use crate::cyclotomic_ring::models::babybear::BabyBear3ExtConfig;
 
     use super::*;
-    use ark_ff::{Field, Fp3Config, MontFp, UniformRand};
+    use ark_ff::{AdditiveGroup, Field, Fp3Config, MontFp, UniformRand};
     use ark_poly::{
         univariate::{DenseOrSparsePolynomial, DensePolynomial, SparsePolynomial},
         DenseUVPolynomial,

@@ -145,7 +145,7 @@ mod tests {
 
         let capital_b: Vec<Fq3> = (0..GoldilocksRingPoly::dimension())
             .map(|i| {
-                Fq3::from_base_prime_field_elems(&[
+                Fq3::from_base_prime_field_elems([
                     b[0].coeffs()[i],
                     b[1].coeffs()[i],
                     b[2].coeffs()[i],
@@ -159,7 +159,7 @@ mod tests {
             rot_sum::<GoldilocksRingNTT>(a, &capital_b),
             (0..GoldilocksRingPoly::dimension())
                 .map(|i| {
-                    Fq3::from_base_prime_field_elems(&[
+                    Fq3::from_base_prime_field_elems([
                         (a * b[0]).coeffs()[i],
                         (a * b[1]).coeffs()[i],
                         (a * b[2]).coeffs()[i],

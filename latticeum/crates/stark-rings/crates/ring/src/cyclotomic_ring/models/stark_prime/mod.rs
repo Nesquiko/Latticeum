@@ -98,6 +98,7 @@ impl_crt_icrt_for_a_ring!(RqNTT, RqPoly, StarkRingConfig);
 
 #[cfg(test)]
 mod test {
+    use ark_ff::Field;
     use ark_poly::{
         univariate::{DenseOrSparsePolynomial, DensePolynomial, SparsePolynomial},
         DenseUVPolynomial,
