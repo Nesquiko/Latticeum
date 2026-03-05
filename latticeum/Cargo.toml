@@ -6,6 +6,9 @@ members = [
 	"crates/vm",
     "crates/cyclotomic-rings",
     "crates/latticefold",
+	"crates/stark-rings/crates/ring",
+	"crates/stark-rings/crates/linear_algebra",
+	"crates/stark-rings/crates/poly",
 	"crates/zkvm",
 
 	"guests/fibonacci",

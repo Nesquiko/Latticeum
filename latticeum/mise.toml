@@ -4,4 +4,4 @@
 run = "RUST_LOG=debug cargo run --bin zkvm --features debug,parallel --release"
 
 [tasks.fix_vars_bench]
-run = "cargo bench --manifest-path crates/stark-rings/Cargo.toml -p stark-rings-poly --bench fix_variables"
+run = "cargo bench -p stark-rings-poly --bench fix_variables"
