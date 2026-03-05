@@ -60,11 +60,12 @@ p3-commit = { git = "https://github.com/Plonky3/Plonky3.git" }
 p3-mds = { git = "https://github.com/Plonky3/Plonky3.git" }
 p3-challenger = { git = "https://github.com/Plonky3/Plonky3.git" }
 
-ark-std = { version = "0.4.0", default-features = false }
-ark-ff = "0.4.2"
-ark-poly = "0.4"
-ark-crypto-primitives = { version = "0.4.0", default-features = false, features = [ "sponge" ] }
-ark-serialize = { version = "0.4.2", features = ["derive"] }
+ark-std = { version = "0.5.0", default-features = false }
+ark-ff = "0.5.0"
+ark-poly = "0.5"
+ark-crypto-primitives = { version = "0.5.0", default-features = false, features = [ "sponge" ] }
+ark-serialize = { version = "0.5.0", features = ["derive"] }
+ 
 delegate = "0.13"
 derive_more = "0.99"
 displaydoc = { version = "0.2", default-features = false }

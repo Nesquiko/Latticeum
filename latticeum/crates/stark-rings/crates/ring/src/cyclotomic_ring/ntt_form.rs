@@ -1,4 +1,4 @@
-use ark_ff::{Field, Fp};
+use ark_ff::{AdditiveGroup, Field, Fp};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     fmt::{Debug, Display, Formatter},
@@ -101,7 +101,7 @@ impl<C: CyclotomicConfig<N>, const N: usize, const D: usize> Ring
     for CyclotomicPolyRingNTTGeneral<C, N, D>
 {
     const ONE: Self = Self([<C::BaseCRTField as Field>::ONE; D]);
-    const ZERO: Self = Self([<C::BaseCRTField as Field>::ZERO; D]);
+    const ZERO: Self = Self([<C::BaseCRTField as AdditiveGroup>::ZERO; D]);
 }
 
 impl<C: CyclotomicConfig<N>, const N: usize, const D: usize> FromRandomBytes<Self>

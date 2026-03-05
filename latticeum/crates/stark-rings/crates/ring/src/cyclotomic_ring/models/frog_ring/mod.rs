@@ -1,4 +1,4 @@
-use ark_ff::{Field, Fp2, Fp2Config, Fp4, Fp4Config, MontBackend, MontFp};
+use ark_ff::{AdditiveGroup, Field, Fp2, Fp2Config, Fp4, Fp4Config, MontBackend, MontFp};
 use ark_std::{mem::swap, ops::Mul, vec::*};
 
 use crate::{
@@ -53,7 +53,7 @@ impl Fp4Config for Frog4Config {
         MontFp!("15912092521325583640"),
         MontFp!("13238044465818905414"),
     ];
-    const NONRESIDUE: Fq2 = Fp2::new(<Fq as Field>::ZERO, <Fq as Field>::ONE);
+    const NONRESIDUE: Fq2 = Fp2::new(<Fq as AdditiveGroup>::ZERO, <Fq as Field>::ONE);
 }
 
 pub type Fq4 = Fp4<Frog4Config>;
@@ -81,7 +81,7 @@ impl CyclotomicConfig<1> for FrogRingConfig {
             *coeff_left -= coeff_right;
         }
 
-        coefficients.resize(ntt::D, <Fq as Field>::ZERO);
+        coefficients.resize(ntt::D, <Fq as AdditiveGroup>::ZERO);
     }
 
     #[inline(always)]

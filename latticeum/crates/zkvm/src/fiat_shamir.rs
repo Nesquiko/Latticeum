@@ -81,7 +81,7 @@ impl Transcript<GoldilocksRingNTT> for Poseidon2Transcript {
         let fq1 = Fq::from(c1.as_canonical_u64());
         let fq2 = Fq::from(c2.as_canonical_u64());
 
-        Fq3::from_base_prime_field_elems(&[fq0, fq1, fq2])
+        Fq3::from_base_prime_field_elems([fq0, fq1, fq2])
             .expect("Fq3 requires exactly 3 base field elements")
     }
 

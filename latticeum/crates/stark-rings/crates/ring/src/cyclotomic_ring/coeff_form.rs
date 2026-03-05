@@ -1,4 +1,4 @@
-use ark_ff::{Field, Fp, FpConfig};
+use ark_ff::{AdditiveGroup, Fp, FpConfig};
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
 };
@@ -54,7 +54,7 @@ impl<C: CyclotomicConfig<N>, const N: usize, const D: usize> CyclotomicPolyRingG
     fn poly_mul(&self, rhs: &Self) -> Self {
         let lhs_coeffs = self.coeffs();
         let rhs_coeffs = rhs.coeffs();
-        let mut coeffs = vec![<Fp::<C::BaseFieldConfig, N> as Field>::ZERO; 2 * D - 1];
+        let mut coeffs = vec![<Fp::<C::BaseFieldConfig, N> as AdditiveGroup>::ZERO; 2 * D - 1];
         for (i, &lhs_coeff) in lhs_coeffs.iter().enumerate() {
             if !lhs_coeff.is_zero() {
                 for (j, &rhs_coeff) in rhs_coeffs.iter().enumerate() {
@@ -69,7 +69,7 @@ impl<C: CyclotomicConfig<N>, const N: usize, const D: usize> CyclotomicPolyRingG
     fn poly_mul_unchecked(&self, rhs: &Self) -> Self {
         let lhs_coeffs = self.coeffs();
         let rhs_coeffs = rhs.coeffs();
-        let mut coeffs = vec![<Fp::<C::BaseFieldConfig, N> as Field>::ZERO; 2 * D - 1];
+        let mut coeffs = vec![<Fp::<C::BaseFieldConfig, N> as AdditiveGroup>::ZERO; 2 * D - 1];
         for (i, &lhs_coeff) in lhs_coeffs.iter().enumerate() {
             for (j, &rhs_coeff) in rhs_coeffs.iter().enumerate() {
                 coeffs[i + j] += lhs_coeff * rhs_coeff;
@@ -192,7 +192,7 @@ impl<C: CyclotomicConfig<N>, const N: usize, const D: usize> Ring
     for CyclotomicPolyRingGeneral<C, N, D>
 {
     const ONE: Self = Self(array_one());
-    const ZERO: Self = Self([<Fp<C::BaseFieldConfig, N> as Field>::ZERO; D]);
+    const ZERO: Self = Self([<Fp<C::BaseFieldConfig, N> as AdditiveGroup>::ZERO; D]);
 }
 
 impl<C: CyclotomicConfig<N>, const N: usize, const D: usize> FromRandomBytes<Self>

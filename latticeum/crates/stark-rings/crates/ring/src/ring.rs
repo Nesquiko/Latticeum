@@ -1,4 +1,6 @@
-use ark_ff::{BigInteger, BitIteratorBE, BitIteratorLE, Field, Fp, FpConfig, PrimeField};
+use ark_ff::{
+    AdditiveGroup, BigInteger, BitIteratorBE, BitIteratorLE, Field, Fp, FpConfig, PrimeField,
+};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     fmt::{Debug, Display},
@@ -184,7 +186,7 @@ impl<C: FpConfig<N>, const N: usize> Zq for Fp<C, N> {
         } else if bi <= Self::MODULUS_MINUS_ONE_DIV_TWO {
             <Self as Field>::ONE
         } else {
-            <Self as Field>::ZERO
+            <Self as AdditiveGroup>::ZERO
         }
     }
 }

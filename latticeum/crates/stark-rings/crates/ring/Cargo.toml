@@ -13,7 +13,7 @@ parallel = ["std", "rayon", "stark-rings-linalg/parallel"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ark-crypto-primitives = { version = "0.4", default-features = false, features = [
+ark-crypto-primitives = { workspace = true, default-features = false, features = [
     "sponge",
 ] }
 ark-ff = { workspace = true }

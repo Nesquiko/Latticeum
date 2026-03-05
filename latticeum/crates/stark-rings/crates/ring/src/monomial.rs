@@ -1,5 +1,6 @@
 use super::{CoeffRing, PolyRing, Zq};
-use crate::{ConversionError, Ring};
+use crate::ConversionError;
+use ark_ff::Zero;
 use ark_std::One;
 use thiserror::Error;
 
@@ -57,7 +58,7 @@ where
     R::BaseRing: Zq,
 {
     let centered = a.center().to_usize()?;
-    if a.sign() + R::BaseRing::ONE > R::BaseRing::ZERO {
+    if a.sign() + <R::BaseRing as One>::one() > <R::BaseRing as Zero>::zero() {
         Ok(unit_monomial(centered))
     } else {
         Ok(unit_monomial(R::dimension() - centered))

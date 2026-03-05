@@ -1,4 +1,4 @@
-use ark_ff::{Field, MontBackend};
+use ark_ff::{AdditiveGroup, MontBackend};
 use ark_std::{mem::swap, ops::Mul, vec::*};
 
 use crate::{
@@ -43,7 +43,7 @@ impl CyclotomicConfig<4> for StarkRingConfig {
             *coeff_left -= coeff_right;
         }
 
-        coefficients.resize(ntt::D, <Fq as Field>::ZERO);
+        coefficients.resize(ntt::D, <Fq as AdditiveGroup>::ZERO);
     }
 
     #[inline(always)]

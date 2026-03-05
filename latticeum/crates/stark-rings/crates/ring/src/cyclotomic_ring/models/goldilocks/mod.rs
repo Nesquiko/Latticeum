@@ -1,4 +1,4 @@
-use ark_ff::{Field, Fp3, Fp3Config, MontBackend, MontFp};
+use ark_ff::{AdditiveGroup, Field, Fp3, Fp3Config, MontBackend, MontFp};
 use ark_std::{mem::swap, ops::Mul, vec::*};
 
 use crate::{
@@ -43,8 +43,8 @@ impl Fp3Config for Goldilocks3Config {
     // 7 ^ t.
     const QUADRATIC_NONRESIDUE_TO_T: ark_ff::Fp3<Self> = Fp3::new(
         MontFp!("3607031617444012685"),
-        <Fq as Field>::ZERO,
-        <Fq as Field>::ZERO,
+        <Fq as AdditiveGroup>::ZERO,
+        <Fq as AdditiveGroup>::ZERO,
     );
     const TRACE_MINUS_ONE_DIV_TWO: &'static [u64] =
         &[9223372049739677694, 9223372049739677692, 2147483646];
@@ -77,11 +77,11 @@ impl CyclotomicConfig<1> for GoldilocksRingConfig {
             let a24_i = coefficients
                 .get(ntt::D + i)
                 .copied()
-                .unwrap_or(<Fq as Field>::ZERO);
+                .unwrap_or(<Fq as AdditiveGroup>::ZERO);
             let a24_12_i = coefficients
                 .get(ntt::D + ntt::D / 2 + i)
                 .copied()
-                .unwrap_or(<Fq as Field>::ZERO);
+                .unwrap_or(<Fq as AdditiveGroup>::ZERO);
             coefficients[i] -= a24_i;
             coefficients[i] -= a24_12_i;
         }
@@ -90,11 +90,11 @@ impl CyclotomicConfig<1> for GoldilocksRingConfig {
             let a_12_i = coefficients
                 .get(ntt::D / 2 + i)
                 .copied()
-                .unwrap_or(<Fq as Field>::ZERO);
+                .unwrap_or(<Fq as AdditiveGroup>::ZERO);
             coefficients[i] += a_12_i;
         }
 
-        coefficients.resize(ntt::D, <Fq as Field>::ZERO);
+        coefficients.resize(ntt::D, <Fq as AdditiveGroup>::ZERO);
     }
 
     #[inline(always)]

@@ -1,4 +1,4 @@
-use ark_ff::{Field, Fp3, Fp3Config, MontBackend, MontFp};
+use ark_ff::{AdditiveGroup, Field, Fp3, Fp3Config, MontBackend, MontFp};
 use ark_std::{mem::swap, ops::Mul, vec::*};
 
 pub mod fq9;
@@ -39,9 +39,9 @@ impl Fp3Config for BabyBear3ExtConfig {
     const FROBENIUS_COEFF_FP3_C2: &'static [Self::Fp] = &[];
     const NONRESIDUE: Self::Fp = MontFp!("503591070");
     const QUADRATIC_NONRESIDUE_TO_T: Fp3<Self> = Fp3::new(
-        <Fq as Field>::ZERO,
-        <Fq as Field>::ZERO,
-        <Fq as Field>::ZERO,
+        <Fq as AdditiveGroup>::ZERO,
+        <Fq as AdditiveGroup>::ZERO,
+        <Fq as AdditiveGroup>::ZERO,
     );
     // Parameter below are placeholders and not needed
     const TRACE_MINUS_ONE_DIV_TWO: &'static [u64] = &[];
@@ -56,9 +56,9 @@ impl Fp9Config for BabyBear9ExtConfig {
     const FROBENIUS_COEFF_FP9_C1: &'static [<Self::Fp3Config as Fp3Config>::Fp] = &[];
     const FROBENIUS_COEFF_FP9_C2: &'static [<Self::Fp3Config as Fp3Config>::Fp] = &[];
     const NONRESIDUE: Fp3<Self::Fp3Config> = Fp3::new(
-        <<BabyBear3ExtConfig as Fp3Config>::Fp as Field>::ZERO,
+        <<BabyBear3ExtConfig as Fp3Config>::Fp as AdditiveGroup>::ZERO,
         <<BabyBear3ExtConfig as Fp3Config>::Fp as Field>::ONE,
-        <<BabyBear3ExtConfig as Fp3Config>::Fp as Field>::ZERO,
+        <<BabyBear3ExtConfig as Fp3Config>::Fp as AdditiveGroup>::ZERO,
     );
     const SQRT_PRECOMP: Option<ark_ff::SqrtPrecomputation<fq9::Fp9<Self>>> = None;
 }
@@ -89,11 +89,11 @@ impl CyclotomicConfig<1> for BabyBearRingConfig {
             let a72_i = coefficients
                 .get(ntt::D + i)
                 .copied()
-                .unwrap_or(<Fq as Field>::ZERO);
+                .unwrap_or(<Fq as AdditiveGroup>::ZERO);
             let a72_36_i = coefficients
                 .get(ntt::D + ntt::D / 2 + i)
                 .copied()
-                .unwrap_or(<Fq as Field>::ZERO);
+                .unwrap_or(<Fq as AdditiveGroup>::ZERO);
             coefficients[i] -= a72_i;
             coefficients[i] -= a72_36_i;
         }
@@ -102,11 +102,11 @@ impl CyclotomicConfig<1> for BabyBearRingConfig {
             let a_12_i = coefficients
                 .get(ntt::D / 2 + i)
                 .copied()
-                .unwrap_or(<Fq as Field>::ZERO);
+                .unwrap_or(<Fq as AdditiveGroup>::ZERO);
             coefficients[i] += a_12_i;
         }
 
-        coefficients.resize(ntt::D, <Fq as Field>::ZERO);
+        coefficients.resize(ntt::D, <Fq as AdditiveGroup>::ZERO);
     }
 
     #[inline(always)]
