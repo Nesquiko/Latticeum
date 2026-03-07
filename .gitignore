@@ -3,3 +3,4 @@ _minted-main
 *.aux
 latticeum/target
 latticeum/.idea
+/latticeum/benches

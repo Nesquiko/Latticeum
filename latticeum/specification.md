@@ -418,9 +418,9 @@ vm.run(|args| {
 ### 🚧 In Development / TODO
 
 1. **In-Circuit NIFS Verifier**
-   - `NIFSVerifier` constraints in CCS
+   - `NIFSVerifier` constraints in CCS (linearization and decomposition recomposition checks are now constrained)
    - Verify folding proofs within augmented circuit
-   - Constraint the decomposition process
+   - Complete remaining decomposition and folding checks (full parity with off-circuit verifier)
 
 2. **Memory Consistency Checks**
    - Permutation proof (sort by address+time)
@@ -626,14 +626,15 @@ ccs.check_relation(z).unwrap_or_else(|e| {
 
 ### Key Implementation Files
 
-| Module            | File                      | Purpose                   |
-| ----------------- | ------------------------- | ------------------------- |
-| VM execution      | `vm/src/riscvm/vm.rs`     | Main execution loop       |
-| Instruction logic | `vm/src/riscvm/inst.rs`   | Instruction semantics     |
-| CCS layout        | `zkvm/src/ccs.rs`         | Witness index mapping     |
-| Constraints       | `zkvm/src/constraints.rs` | Constraint matrices       |
-| Main loop         | `zkvm/src/main.rs`        | IVC execution and folding |
-| IVC structs       | `zkvm/src/ivc.rs`         | Step I/O types            |
+| Module            | File                         | Purpose                          |
+| ----------------- | ---------------------------- | -------------------------------- |
+| VM execution      | `vm/src/riscvm/vm.rs`        | Main execution loop              |
+| Instruction logic | `vm/src/riscvm/inst.rs`      | Instruction semantics            |
+| CCS layout        | `zkvm/src/ccs.rs`            | Witness index mapping            |
+| Constraints       | `zkvm/src/constraints.rs`    | Constraint matrices              |
+| Folding vars      | `zkvm/src/zk_latticefold.rs` | Linearization witness extraction |
+| Main loop         | `zkvm/src/main.rs`           | IVC execution and folding        |
+| IVC structs       | `zkvm/src/ivc.rs`            | Step I/O types                   |
 
 ### Build System
 
