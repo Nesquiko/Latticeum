@@ -128,7 +128,6 @@ pub struct CCSLayout {
     pub decomp_r_y_s_idx: [usize; GoldiLocksDP::K * KAPPA],
     pub decomp_r_v_idx: [usize; TAU],
     pub decomp_r_v_s_idx: [usize; GoldiLocksDP::K * TAU],
-    pub decomp_r_u_idx: [usize; CCS_NUM_MATRICES],
     pub decomp_r_u_s_idx: [usize; GoldiLocksDP::K * CCS_NUM_MATRICES],
     pub decomp_r_x_w_idx: [usize; DECOMP_X_W_LEN],
     pub decomp_r_h_idx: usize,
@@ -271,7 +270,6 @@ impl CCSLayout {
         let (decomp_r_v_idx, w_cursor) = indices_with_new_cursor::<TAU>(w_cursor);
         let (decomp_r_v_s_idx, w_cursor) =
             indices_with_new_cursor::<{ GoldiLocksDP::K * TAU }>(w_cursor);
-        let (decomp_r_u_idx, w_cursor) = indices_with_new_cursor::<CCS_NUM_MATRICES>(w_cursor);
         let (decomp_r_u_s_idx, w_cursor) =
             indices_with_new_cursor::<{ GoldiLocksDP::K * CCS_NUM_MATRICES }>(w_cursor);
         let (decomp_r_x_w_idx, w_cursor) = indices_with_new_cursor::<DECOMP_X_W_LEN>(w_cursor);
@@ -400,7 +398,6 @@ impl CCSLayout {
             decomp_r_y_s_idx,
             decomp_r_v_idx,
             decomp_r_v_s_idx,
-            decomp_r_u_idx,
             decomp_r_u_s_idx,
             decomp_r_x_w_idx,
             decomp_r_h_idx,
@@ -686,10 +683,6 @@ pub fn set_folding_proof_witness(
         for el_idx in 0..TAU {
             z[z_idx + el_idx] = decomp_vars.v_s[i][el_idx];
         }
-    }
-
-    for (i, &z_idx) in layout.decomp_r_u_idx.iter().enumerate() {
-        z[z_idx] = decomp_vars.u[i];
     }
 
     for (i, &z_idx) in layout

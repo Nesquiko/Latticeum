@@ -864,14 +864,14 @@ impl<'a> CCSBuilder<'a> {
             m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_r_v_idx[j]));
         }
 
-        // sum_i(b_i * u_s_r[i][j]) - cm_i.u[j] == 0
+        // sum_i(b_i * u_s_r[i][j]) - linearized_cm_i.u[j] == 0
         for j in 0..CCS_NUM_MATRICES {
             let coeff_idx = FP_DECOMP_R_U_RECOMP[j];
             for i in 0..GoldiLocksDP::K {
                 let u_idx = self.layout.decomp_r_u_s_idx[i * CCS_NUM_MATRICES + j];
                 m_decomp.coeffs[coeff_idx].push((b_s[i], u_idx));
             }
-            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.decomp_r_u_idx[j]));
+            m_decomp.coeffs[coeff_idx].push((R::one().neg(), self.layout.lin_proof_u[j]));
         }
 
         // sum_i(b_i * x_s_r[i][j]) - cm_i.x_w[j] == 0
@@ -1212,7 +1212,6 @@ impl<'a> CCSBuilder<'a> {
         // create the multiset that will be used to multiple matrices holding the
         // u[j] elements
         let multiset = (0..GOLDILOCKS_S_BOX_DEGREE)
-            .into_iter()
             .map(|i| matrix_base_idx + i)
             .collect();
         self.multisets.push(multiset);
@@ -1259,7 +1258,7 @@ impl<'a> CCSBuilder<'a> {
                     .expect("multiset has index not in self.matrices");
                 m.coeffs[coeff_idx].push((R::one(), self.layout.lin_proof_u[u_j_idx]));
             }
-            for j in s.iter().len()..GOLDILOCKS_S_BOX_DEGREE {
+            for j in s.len()..GOLDILOCKS_S_BOX_DEGREE {
                 let m = self
                     .matrices
                     .get_mut(matrix_multiset[j])
