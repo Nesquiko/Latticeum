@@ -55,7 +55,7 @@ pub const CCS_S: usize = 16;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is how many multisets there are.
-pub const CCS_C: usize = 42;
+pub const CCS_C: usize = 43;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// The max degree is of the poseidon2 s box degree 7, then
@@ -63,7 +63,7 @@ pub const CCS_C: usize = 42;
 ///     - +1 to capture degree x polynom, you must have x+1 coeffs
 pub const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
-pub const CCS_NUM_MATRICES: usize = 108;
+pub const CCS_NUM_MATRICES: usize = 109;
 /// +1 for the initialy claimed '0'
 pub const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
@@ -150,6 +150,7 @@ pub struct CCSLayout {
     pub fp_sumcheck_claimed_sums_subterms_idx: [usize; CCS_S * (2 * GoldiLocksDP::B_SMALL + 1)],
     pub fp_sumcheck_evaluation_point_idx: [usize; CCS_S],
     pub fp_sumcheck_expected_evaluation_idx: usize,
+    pub fp_should_equal_s_idx: usize,
     // ------------------------------------------
 
     // input state
@@ -308,6 +309,8 @@ impl CCSLayout {
             indices_with_new_cursor::<CCS_S>(w_cursor);
         let fp_sumcheck_expected_evaluation_idx = w_cursor;
         w_cursor += 1;
+        let fp_should_equal_s_idx = w_cursor;
+        w_cursor += 1;
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -416,6 +419,7 @@ impl CCSLayout {
             fp_sumcheck_claimed_sums_subterms_idx,
             fp_sumcheck_evaluation_point_idx,
             fp_sumcheck_expected_evaluation_idx,
+            fp_should_equal_s_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -776,6 +780,7 @@ pub fn set_folding_proof_witness(
     }
 
     z[layout.fp_sumcheck_expected_evaluation_idx] = folding_claim_vars.sumcheck_expected_evaluation;
+    z[layout.fp_should_equal_s_idx] = folding_claim_vars.should_equal_s;
 }
 
 pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CCSLayout) {

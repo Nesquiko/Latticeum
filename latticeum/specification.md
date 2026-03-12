@@ -418,9 +418,12 @@ vm.run(|args| {
 ### 🚧 In Development / TODO
 
 1. **In-Circuit NIFS Verifier**
-   - `NIFSVerifier` constraints in CCS (linearization and decomposition recomposition checks are now constrained)
-   - Verify folding proofs within augmented circuit
-   - Complete remaining decomposition and folding checks (full parity with off-circuit verifier)
+    - `NIFSVerifier` constraints in CCS (linearization and decomposition recomposition checks are now constrained)
+    - Verify folding proofs within augmented circuit
+    - Folding sumcheck transcript consistency and `claim_g1`/`claim_g3` checks are constrained
+    - PoC shortcut: the folding verifier currently constrains only `should_equal_s == expected_evaluation` for the evaluation-claim step
+    - Complete remaining decomposition and folding checks (full parity with off-circuit verifier)
+    - For a sound evaluation-claim check, still constrain in-circuit: `theta_s = mle(f_hat)(r_0)`, `eta_s = mle(Mz)(r_0)`, `e_* = eq(beta, r_0)`, `e_i = eq(r_i, r_0)`, and the alpha/mu/zeta-weighted reconstruction performed by `compute_sumcheck_claim_expected_value`
 
 2. **Memory Consistency Checks**
    - Permutation proof (sort by address+time)

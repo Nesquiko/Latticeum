@@ -98,6 +98,7 @@ impl<'a> CCSBuilder<'a> {
         let claim_g1_indices = builder.preallocate_folding_proof_claim_g1();
         let claim_g3_indices = builder.preallocate_folding_proof_claim_g3();
         builder.folding_proof_folding_sumcheck();
+        builder.folding_proof_folding_evaluation_poc();
 
         // Must be last preallocation
         builder.preallocate_folding_proof_linearization_inner();
@@ -1193,6 +1194,21 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(R::one());
     }
 
+    fn folding_proof_folding_evaluation_poc(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+        let mut m = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        m.coeffs[FP_FOLD_EXPECTED_EVAL].push((R::one(), self.layout.fp_should_equal_s_idx));
+        m.coeffs[FP_FOLD_EXPECTED_EVAL].push((
+            R::one().neg(),
+            self.layout.fp_sumcheck_expected_evaluation_idx,
+        ));
+
+        self.matrices.push(m);
+        self.multisets.push(vec![matrix_base_idx]);
+        self.coeffs.push(R::one());
+    }
+
     fn preallocate_folding_proof_linearization_inner(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
@@ -1605,6 +1621,7 @@ const FP_FOLD_SUMCHECK_CLAIMED_SUM_EQUALS: [usize; CCS_S] =
 const FP_FOLD_SUMCHECK_CLAIMED_SUM_SUBTERMS: [usize; CCS_S] =
     index_array(last(FP_FOLD_SUMCHECK_CLAIMED_SUM_EQUALS) + 1);
 const FP_FOLD_SUMCHECK_FINAL_CLAIMED_SUM: usize = last(FP_FOLD_SUMCHECK_CLAIMED_SUM_SUBTERMS) + 1;
+const FP_FOLD_EXPECTED_EVAL: usize = FP_FOLD_SUMCHECK_FINAL_CLAIMED_SUM + 1;
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")

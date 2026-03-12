@@ -366,7 +366,7 @@ pub(crate) fn sumcheck_polynomial_comb_fn<NTT: SuitableRing, P: DecompositionPar
 /// - `NTT`  
 ///   Returns the expected value of the sumcheck claim.
 ///
-pub(super) fn compute_sumcheck_claim_expected_value<NTT: Ring, P: DecompositionParams>(
+pub fn compute_sumcheck_claim_expected_value<NTT: Ring, P: DecompositionParams>(
     alpha_s: &[NTT],
     mu_s: &[NTT],
     theta_s: &[Vec<NTT>],

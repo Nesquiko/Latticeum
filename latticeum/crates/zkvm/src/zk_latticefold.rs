@@ -13,7 +13,10 @@ use latticefold::{
         LFProof,
         decomposition::{DecompositionProof, DecompositionProver, LFDecompositionProver},
         error::LatticefoldError,
-        folding::{FoldingProof, FoldingProver, LFFoldingProver, utils::SqueezeAlphaBetaZetaMu},
+        folding::{
+            FoldingProof, FoldingProver, LFFoldingProver,
+            utils::{SqueezeAlphaBetaZetaMu, compute_sumcheck_claim_expected_value},
+        },
         linearization::{
             LFLinearizationProver, LFLinearizationVerifier, LinearizationProof,
             LinearizationProver, utils::SqueezeBeta,
@@ -440,6 +443,7 @@ pub struct FoldingVars {
     pub sumcheck_claimed_sums_subterms: Vec<GoldilocksRingNTT>,
     pub sumcheck_evaluation_point: Vec<GoldilocksRingNTT>,
     pub sumcheck_expected_evaluation: GoldilocksRingNTT,
+    pub should_equal_s: GoldilocksRingNTT,
 
     pub claim_g1_h1: Vec<GoldilocksRingNTT>,
     pub claim_g1_h2: Vec<GoldilocksRingNTT>,
@@ -517,6 +521,24 @@ fn collect_folding_vars(
 
     let sumcheck_vars = collect_folding_sumcheck_vars(proof, transcript, ccs, claim_g1 + claim_g3);
 
+    let ris = cm_i_s.iter().map(|cm_i| cm_i.r.clone()).collect::<Vec<_>>();
+    let (e_asterisk, _) = zk_eq_eval(&beta_s, &sumcheck_vars.evaluation_point);
+    let e_s: Vec<GoldilocksRingNTT> = ris
+        .iter()
+        .map(|r_i: &Vec<GoldilocksRingNTT>| zk_eq_eval(r_i, &sumcheck_vars.evaluation_point).0)
+        .collect();
+
+    let should_equal_s: GoldilocksRingNTT =
+        compute_sumcheck_claim_expected_value::<GoldilocksRingNTT, GoldiLocksDP>(
+            &alpha_s,
+            &mu_s,
+            &proof.theta_s,
+            e_asterisk,
+            &e_s,
+            &zeta_s,
+            &proof.eta_s,
+        );
+
     FoldingVars {
         alpha_s,
         beta_s,
@@ -534,6 +556,7 @@ fn collect_folding_vars(
         sumcheck_claimed_sums_subterms: sumcheck_vars.claimed_sums_subterms,
         sumcheck_evaluation_point: sumcheck_vars.evaluation_point,
         sumcheck_expected_evaluation: sumcheck_vars.expected_evaluation,
+        should_equal_s,
     }
 }
 
