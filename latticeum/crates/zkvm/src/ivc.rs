@@ -1,3 +1,11 @@
+use crate::{
+    ccs::{
+        CCSLayout, set_acc_out_witness, set_folding_proof_witness, set_ivc_h_witness,
+        set_trace_witness,
+    },
+    poseidon2::{GoldilocksComm, IntermediateStates},
+    zk_latticefold::FoldingProofWitnessVars,
+};
 use cyclotomic_rings::rings::GoldilocksRingNTT;
 use latticefold::{
     arith::{LCCCS, Witness, r1cs::to_F_vec},
@@ -7,12 +15,6 @@ use p3_field::PrimeField64;
 use p3_goldilocks::Goldilocks;
 use tracing::{Level, instrument};
 use vm::riscvm::inst::ExecutionTrace;
-
-use crate::{
-    ccs::{CCSLayout, set_folding_proof_witness, set_ivc_h_witness, set_trace_witness},
-    poseidon2::{GoldilocksComm, IntermediateStates},
-    zk_latticefold::FoldingProofWitnessVars,
-};
 
 /// Holds the complete public and private state at the end of a single IVC step.
 /// The data from this struct is used to construct the `IVCStepInput` for the *next* step.
@@ -112,6 +114,7 @@ pub fn arithmetize(input: &IVCStepInput, layout: &CCSLayout) -> Vec<GoldilocksRi
     set_trace_witness(&mut z_vec, input.trace, layout);
 
     let mut z_vec = to_F_vec(z_vec);
+    set_acc_out_witness(&mut z_vec, input.acc, layout);
 
     if let Some(folding_vars) = input.folding_proof_vars {
         set_folding_proof_witness(&mut z_vec, folding_vars, layout);

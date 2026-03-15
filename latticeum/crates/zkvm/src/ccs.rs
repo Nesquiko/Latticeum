@@ -11,7 +11,8 @@ use crate::{
 use configuration::N_REGS;
 use cyclotomic_rings::rings::GoldilocksRingNTT;
 use latticefold::{
-    decomposition_parameters::DecompositionParams, nifs::decomposition::LFDecompositionVerifier,
+    arith::LCCCS, decomposition_parameters::DecompositionParams,
+    nifs::decomposition::LFDecompositionVerifier,
 };
 use p3_field::{Field, PrimeCharacteristicRing, PrimeField64};
 use p3_goldilocks::Goldilocks;
@@ -55,7 +56,7 @@ pub const CCS_S: usize = 16;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is how many multisets there are.
-pub const CCS_C: usize = 43;
+pub const CCS_C: usize = 46;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// The max degree is of the poseidon2 s box degree 7, then
@@ -63,7 +64,7 @@ pub const CCS_C: usize = 43;
 ///     - +1 to capture degree x polynom, you must have x+1 coeffs
 pub const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
-pub const CCS_NUM_MATRICES: usize = 109;
+pub const CCS_NUM_MATRICES: usize = 113;
 /// +1 for the initialy claimed '0'
 pub const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
@@ -151,6 +152,14 @@ pub struct CCSLayout {
     pub fp_sumcheck_evaluation_point_idx: [usize; CCS_S],
     pub fp_sumcheck_expected_evaluation_idx: usize,
     pub fp_should_equal_s_idx: usize,
+    pub fp_rho_s_idx: [usize; 2 * GoldiLocksDP::K],
+    pub fp_final_cm_products_idx: [usize; 2 * GoldiLocksDP::K * KAPPA],
+    pub acc_out_r_idx: [usize; CCS_S],
+    pub acc_out_v_idx: [usize; TAU],
+    pub acc_out_cm_idx: [usize; KAPPA],
+    pub acc_out_u_idx: [usize; CCS_NUM_MATRICES],
+    pub acc_out_x_w_idx: [usize; DECOMP_X_W_LEN],
+    pub acc_out_h_idx: usize,
     // ------------------------------------------
 
     // input state
@@ -311,6 +320,16 @@ impl CCSLayout {
         w_cursor += 1;
         let fp_should_equal_s_idx = w_cursor;
         w_cursor += 1;
+        let (fp_rho_s_idx, w_cursor) = indices_with_new_cursor::<{ 2 * GoldiLocksDP::K }>(w_cursor);
+        let (fp_final_cm_products_idx, w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K * KAPPA }>(w_cursor);
+        let (acc_out_r_idx, w_cursor) = indices_with_new_cursor::<CCS_S>(w_cursor);
+        let (acc_out_v_idx, w_cursor) = indices_with_new_cursor::<TAU>(w_cursor);
+        let (acc_out_cm_idx, w_cursor) = indices_with_new_cursor::<KAPPA>(w_cursor);
+        let (acc_out_u_idx, w_cursor) = indices_with_new_cursor::<CCS_NUM_MATRICES>(w_cursor);
+        let (acc_out_x_w_idx, mut w_cursor) = indices_with_new_cursor::<DECOMP_X_W_LEN>(w_cursor);
+        let acc_out_h_idx = w_cursor;
+        w_cursor += 1;
 
         let pc_in_idx = w_cursor;
         w_cursor += 1;
@@ -420,6 +439,14 @@ impl CCSLayout {
             fp_sumcheck_evaluation_point_idx,
             fp_sumcheck_expected_evaluation_idx,
             fp_should_equal_s_idx,
+            fp_rho_s_idx,
+            fp_final_cm_products_idx,
+            acc_out_r_idx,
+            acc_out_v_idx,
+            acc_out_cm_idx,
+            acc_out_u_idx,
+            acc_out_x_w_idx,
+            acc_out_h_idx,
             pc_in_idx,
             regs_in_idx,
             instruction_size_idx,
@@ -781,6 +808,48 @@ pub fn set_folding_proof_witness(
 
     z[layout.fp_sumcheck_expected_evaluation_idx] = folding_claim_vars.sumcheck_expected_evaluation;
     z[layout.fp_should_equal_s_idx] = folding_claim_vars.should_equal_s;
+
+    for (i, &z_idx) in layout.fp_rho_s_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.rho_s[i];
+    }
+
+    for (i, &z_idx) in layout.fp_final_cm_products_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.final_cm_products[i];
+    }
+}
+
+pub fn set_acc_out_witness(
+    z: &mut Vec<GoldilocksRingNTT>,
+    acc: &LCCCS<GoldilocksRingNTT>,
+    layout: &CCSLayout,
+) {
+    assert_eq!(acc.r.len(), CCS_S);
+    assert_eq!(acc.v.len(), TAU);
+    assert_eq!(acc.cm.len(), KAPPA);
+    assert_eq!(acc.u.len(), CCS_NUM_MATRICES);
+    assert_eq!(acc.x_w.len(), DECOMP_X_W_LEN);
+
+    for (i, &z_idx) in layout.acc_out_r_idx.iter().enumerate() {
+        z[z_idx] = acc.r[i];
+    }
+
+    for (i, &z_idx) in layout.acc_out_v_idx.iter().enumerate() {
+        z[z_idx] = acc.v[i];
+    }
+
+    for (i, &z_idx) in layout.acc_out_cm_idx.iter().enumerate() {
+        z[z_idx] = acc.cm.as_ref()[i];
+    }
+
+    for (i, &z_idx) in layout.acc_out_u_idx.iter().enumerate() {
+        z[z_idx] = acc.u[i];
+    }
+
+    for (i, &z_idx) in layout.acc_out_x_w_idx.iter().enumerate() {
+        z[z_idx] = acc.x_w[i];
+    }
+
+    z[layout.acc_out_h_idx] = acc.h;
 }
 
 pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CCSLayout) {

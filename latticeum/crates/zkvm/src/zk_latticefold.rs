@@ -15,7 +15,7 @@ use latticefold::{
         error::LatticefoldError,
         folding::{
             FoldingProof, FoldingProver, LFFoldingProver,
-            utils::{SqueezeAlphaBetaZetaMu, compute_sumcheck_claim_expected_value},
+            utils::{SqueezeAlphaBetaZetaMu, compute_sumcheck_claim_expected_value, get_rhos},
         },
         linearization::{
             LFLinearizationProver, LFLinearizationVerifier, LinearizationProof,
@@ -444,6 +444,8 @@ pub struct FoldingVars {
     pub sumcheck_evaluation_point: Vec<GoldilocksRingNTT>,
     pub sumcheck_expected_evaluation: GoldilocksRingNTT,
     pub should_equal_s: GoldilocksRingNTT,
+    pub rho_s: Vec<GoldilocksRingNTT>,
+    pub final_cm_products: Vec<GoldilocksRingNTT>,
 
     pub claim_g1_h1: Vec<GoldilocksRingNTT>,
     pub claim_g1_h2: Vec<GoldilocksRingNTT>,
@@ -539,6 +541,23 @@ fn collect_folding_vars(
             &proof.eta_s,
         );
 
+    proof
+        .theta_s
+        .iter()
+        .for_each(|thetas| transcript.absorb_slice(thetas));
+    proof
+        .eta_s
+        .iter()
+        .for_each(|etas| transcript.absorb_slice(etas));
+
+    let (_rho_s_coeff, rho_s) =
+        get_rhos::<GoldilocksRingNTT, Poseidon2Transcript, GoldiLocksDP>(transcript);
+    let final_cm_products = cm_i_s
+        .iter()
+        .zip(rho_s.iter())
+        .flat_map(|(cm_i, rho_i)| cm_i.cm.as_ref().iter().map(move |cm_j| *cm_j * rho_i))
+        .collect();
+
     FoldingVars {
         alpha_s,
         beta_s,
@@ -557,6 +576,8 @@ fn collect_folding_vars(
         sumcheck_evaluation_point: sumcheck_vars.evaluation_point,
         sumcheck_expected_evaluation: sumcheck_vars.expected_evaluation,
         should_equal_s,
+        rho_s,
+        final_cm_products,
     }
 }
 

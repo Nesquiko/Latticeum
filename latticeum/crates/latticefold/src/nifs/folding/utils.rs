@@ -113,11 +113,7 @@ impl<NTT: SuitableRing, T: Transcript<NTT>> SqueezeAlphaBetaZetaMu<NTT> for T {
 ///   - The first element is a vector of challenges in coefficient form.
 ///   - The second element is the same vector of challenges in NTT form.
 ///
-pub(super) fn get_rhos<
-    R: SuitableRing,
-    T: TranscriptWithShortChallenges<R>,
-    P: DecompositionParams,
->(
+pub fn get_rhos<R: SuitableRing, T: TranscriptWithShortChallenges<R>, P: DecompositionParams>(
     transcript: &mut T,
 ) -> (Vec<R::CoefficientRepresentation>, Vec<R>) {
     transcript.absorb_field_element(&<R::BaseRing as Field>::from_base_prime_field(

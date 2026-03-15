@@ -99,6 +99,7 @@ impl<'a> CCSBuilder<'a> {
         let claim_g3_indices = builder.preallocate_folding_proof_claim_g3();
         builder.folding_proof_folding_sumcheck();
         builder.folding_proof_folding_evaluation_poc();
+        builder.folding_proof_final_cm();
 
         // Must be last preallocation
         builder.preallocate_folding_proof_linearization_inner();
@@ -1209,6 +1210,58 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(R::one());
     }
 
+    fn folding_proof_final_cm(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+        let mut m_child = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_rho = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_prod = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_sum = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        for j in 0..KAPPA {
+            for i in 0..GoldiLocksDP::K {
+                let product_row = FP_FOLD_FINAL_CM_PRODUCTS[i * KAPPA + j];
+                let product_idx = self.layout.fp_final_cm_products_idx[i * KAPPA + j];
+
+                m_child.coeffs[product_row]
+                    .push((R::one(), self.layout.decomp_y_s_idx[i * KAPPA + j]));
+                m_rho.coeffs[product_row].push((R::one(), self.layout.fp_rho_s_idx[i]));
+                m_prod.coeffs[product_row].push((R::one().neg(), product_idx));
+                m_sum.coeffs[FP_FOLD_FINAL_CM_EQ[j]].push((R::one(), product_idx));
+            }
+
+            for i in 0..GoldiLocksDP::K {
+                let product_offset = GoldiLocksDP::K * KAPPA;
+                let product_row = FP_FOLD_FINAL_CM_PRODUCTS[product_offset + i * KAPPA + j];
+                let product_idx =
+                    self.layout.fp_final_cm_products_idx[product_offset + i * KAPPA + j];
+
+                m_child.coeffs[product_row]
+                    .push((R::one(), self.layout.decomp_r_y_s_idx[i * KAPPA + j]));
+                m_rho.coeffs[product_row]
+                    .push((R::one(), self.layout.fp_rho_s_idx[GoldiLocksDP::K + i]));
+                m_prod.coeffs[product_row].push((R::one().neg(), product_idx));
+                m_sum.coeffs[FP_FOLD_FINAL_CM_EQ[j]].push((R::one(), product_idx));
+            }
+
+            m_sum.coeffs[FP_FOLD_FINAL_CM_EQ[j]]
+                .push((R::one().neg(), self.layout.acc_out_cm_idx[j]));
+        }
+
+        self.matrices.push(m_child);
+        self.matrices.push(m_rho);
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(R::one());
+
+        self.matrices.push(m_prod);
+        self.multisets.push(vec![matrix_base_idx + 2]);
+        self.coeffs.push(R::one());
+
+        self.matrices.push(m_sum);
+        self.multisets.push(vec![matrix_base_idx + 3]);
+        self.coeffs.push(R::one());
+    }
+
     fn preallocate_folding_proof_linearization_inner(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
@@ -1622,6 +1675,9 @@ const FP_FOLD_SUMCHECK_CLAIMED_SUM_SUBTERMS: [usize; CCS_S] =
     index_array(last(FP_FOLD_SUMCHECK_CLAIMED_SUM_EQUALS) + 1);
 const FP_FOLD_SUMCHECK_FINAL_CLAIMED_SUM: usize = last(FP_FOLD_SUMCHECK_CLAIMED_SUM_SUBTERMS) + 1;
 const FP_FOLD_EXPECTED_EVAL: usize = FP_FOLD_SUMCHECK_FINAL_CLAIMED_SUM + 1;
+const FP_FOLD_FINAL_CM_PRODUCTS: [usize; 2 * GoldiLocksDP::K * KAPPA] =
+    index_array(FP_FOLD_EXPECTED_EVAL + 1);
+const FP_FOLD_FINAL_CM_EQ: [usize; KAPPA] = index_array(last(FP_FOLD_FINAL_CM_PRODUCTS) + 1);
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")
