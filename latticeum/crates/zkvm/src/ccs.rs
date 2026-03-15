@@ -52,11 +52,11 @@ pub const N: usize = CCS_LAYOUT.w_size * GoldiLocksDP::L;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is log(m) where m is the number of rows in matrices padded to the next power of two,
 /// see the constraint.rs
-pub const CCS_S: usize = 16;
+pub const CCS_S: usize = 17;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// This is how many multisets there are.
-pub const CCS_C: usize = 46;
+pub const CCS_C: usize = 52;
 
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
 /// The max degree is of the poseidon2 s box degree 7, then
@@ -64,7 +64,7 @@ pub const CCS_C: usize = 46;
 ///     - +1 to capture degree x polynom, you must have x+1 coeffs
 pub const LINEARIZATION_DEGREE: usize = GOLDILOCKS_S_BOX_DEGREE + 1 + 1;
 /// Change this manually, since building of CCS is dynamic and this needs to be const.
-pub const CCS_NUM_MATRICES: usize = 113;
+pub const CCS_NUM_MATRICES: usize = 125;
 /// +1 for the initialy claimed '0'
 pub const LINEARIZATION_CLAIMED_SUMS: usize = CCS_S + 1;
 
@@ -153,7 +153,10 @@ pub struct CCSLayout {
     pub fp_sumcheck_expected_evaluation_idx: usize,
     pub fp_should_equal_s_idx: usize,
     pub fp_rho_s_idx: [usize; 2 * GoldiLocksDP::K],
+    pub fp_eta_s_idx: [usize; 2 * GoldiLocksDP::K * CCS_NUM_MATRICES],
     pub fp_final_cm_products_idx: [usize; 2 * GoldiLocksDP::K * KAPPA],
+    pub fp_final_u_products_idx: [usize; 2 * GoldiLocksDP::K * CCS_NUM_MATRICES],
+    pub fp_final_x_products_idx: [usize; 2 * GoldiLocksDP::K * (DECOMP_X_W_LEN + 1)],
     pub acc_out_r_idx: [usize; CCS_S],
     pub acc_out_v_idx: [usize; TAU],
     pub acc_out_cm_idx: [usize; KAPPA],
@@ -321,8 +324,14 @@ impl CCSLayout {
         let fp_should_equal_s_idx = w_cursor;
         w_cursor += 1;
         let (fp_rho_s_idx, w_cursor) = indices_with_new_cursor::<{ 2 * GoldiLocksDP::K }>(w_cursor);
+        let (fp_eta_s_idx, w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K * CCS_NUM_MATRICES }>(w_cursor);
         let (fp_final_cm_products_idx, w_cursor) =
             indices_with_new_cursor::<{ 2 * GoldiLocksDP::K * KAPPA }>(w_cursor);
+        let (fp_final_u_products_idx, w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K * CCS_NUM_MATRICES }>(w_cursor);
+        let (fp_final_x_products_idx, w_cursor) =
+            indices_with_new_cursor::<{ 2 * GoldiLocksDP::K * (DECOMP_X_W_LEN + 1) }>(w_cursor);
         let (acc_out_r_idx, w_cursor) = indices_with_new_cursor::<CCS_S>(w_cursor);
         let (acc_out_v_idx, w_cursor) = indices_with_new_cursor::<TAU>(w_cursor);
         let (acc_out_cm_idx, w_cursor) = indices_with_new_cursor::<KAPPA>(w_cursor);
@@ -440,7 +449,10 @@ impl CCSLayout {
             fp_sumcheck_expected_evaluation_idx,
             fp_should_equal_s_idx,
             fp_rho_s_idx,
+            fp_eta_s_idx,
             fp_final_cm_products_idx,
+            fp_final_u_products_idx,
+            fp_final_x_products_idx,
             acc_out_r_idx,
             acc_out_v_idx,
             acc_out_cm_idx,
@@ -813,8 +825,20 @@ pub fn set_folding_proof_witness(
         z[z_idx] = folding_claim_vars.rho_s[i];
     }
 
+    for (i, &z_idx) in layout.fp_eta_s_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.eta_s[i];
+    }
+
     for (i, &z_idx) in layout.fp_final_cm_products_idx.iter().enumerate() {
         z[z_idx] = folding_claim_vars.final_cm_products[i];
+    }
+
+    for (i, &z_idx) in layout.fp_final_u_products_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.final_u_products[i];
+    }
+
+    for (i, &z_idx) in layout.fp_final_x_products_idx.iter().enumerate() {
+        z[z_idx] = folding_claim_vars.final_x_products[i];
     }
 }
 

@@ -445,7 +445,10 @@ pub struct FoldingVars {
     pub sumcheck_expected_evaluation: GoldilocksRingNTT,
     pub should_equal_s: GoldilocksRingNTT,
     pub rho_s: Vec<GoldilocksRingNTT>,
+    pub eta_s: Vec<GoldilocksRingNTT>,
     pub final_cm_products: Vec<GoldilocksRingNTT>,
+    pub final_u_products: Vec<GoldilocksRingNTT>,
+    pub final_x_products: Vec<GoldilocksRingNTT>,
 
     pub claim_g1_h1: Vec<GoldilocksRingNTT>,
     pub claim_g1_h2: Vec<GoldilocksRingNTT>,
@@ -557,6 +560,22 @@ fn collect_folding_vars(
         .zip(rho_s.iter())
         .flat_map(|(cm_i, rho_i)| cm_i.cm.as_ref().iter().map(move |cm_j| *cm_j * rho_i))
         .collect();
+    let final_u_products = proof
+        .eta_s
+        .iter()
+        .zip(rho_s.iter())
+        .flat_map(|(etas_i, rho_i)| etas_i.iter().map(move |eta_j| *eta_j * rho_i))
+        .collect();
+    let final_x_products = cm_i_s
+        .iter()
+        .zip(rho_s.iter())
+        .flat_map(|(cm_i, rho_i)| {
+            cm_i.x_w
+                .iter()
+                .chain(std::iter::once(&cm_i.h))
+                .map(move |x_j| *x_j * rho_i)
+        })
+        .collect();
 
     FoldingVars {
         alpha_s,
@@ -577,7 +596,10 @@ fn collect_folding_vars(
         sumcheck_expected_evaluation: sumcheck_vars.expected_evaluation,
         should_equal_s,
         rho_s,
+        eta_s: proof.eta_s.iter().flatten().copied().collect(),
         final_cm_products,
+        final_u_products,
+        final_x_products,
     }
 }
 

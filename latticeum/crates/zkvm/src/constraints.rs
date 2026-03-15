@@ -100,9 +100,16 @@ impl<'a> CCSBuilder<'a> {
         builder.folding_proof_folding_sumcheck();
         builder.folding_proof_folding_evaluation_poc();
         builder.folding_proof_final_cm();
+        builder.folding_proof_final_u();
+        builder.folding_proof_final_x();
 
         // Must be last preallocation
         builder.preallocate_folding_proof_linearization_inner();
+        assert_eq!(
+            builder.matrices.len(),
+            CCS_NUM_MATRICES,
+            "CCS_NUM_MATRICES is stale"
+        );
 
         builder.folding_proof_claim_g1(claim_g1_indices);
         builder.folding_proof_claim_g3(claim_g3_indices);
@@ -1262,6 +1269,118 @@ impl<'a> CCSBuilder<'a> {
         self.coeffs.push(R::one());
     }
 
+    fn folding_proof_final_u(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+        let mut m_eta = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_rho = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_prod = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_step = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_step_inv = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_sum = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        for j in 0..CCS_NUM_MATRICES {
+            m_step.coeffs[FP_FOLD_FINAL_U_EQ[j]].push((R::one(), self.layout.ivc_h_i_step_idx));
+            m_step_inv.coeffs[FP_FOLD_FINAL_U_EQ[j]]
+                .push((R::one(), self.layout.ivc_h_i_step_inv_idx));
+            for i in 0..(2 * GoldiLocksDP::K) {
+                let product_row = FP_FOLD_FINAL_U_PRODUCTS[i * CCS_NUM_MATRICES + j];
+                let product_idx = self.layout.fp_final_u_products_idx[i * CCS_NUM_MATRICES + j];
+                let eta_idx = self.layout.fp_eta_s_idx[i * CCS_NUM_MATRICES + j];
+
+                m_eta.coeffs[product_row].push((R::one(), eta_idx));
+                m_rho.coeffs[product_row].push((R::one(), self.layout.fp_rho_s_idx[i]));
+                m_prod.coeffs[product_row].push((R::one().neg(), product_idx));
+                m_sum.coeffs[FP_FOLD_FINAL_U_EQ[j]].push((R::one(), product_idx));
+            }
+
+            m_sum.coeffs[FP_FOLD_FINAL_U_EQ[j]]
+                .push((R::one().neg(), self.layout.acc_out_u_idx[j]));
+        }
+
+        self.matrices.push(m_eta);
+        self.matrices.push(m_rho);
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(R::one());
+
+        self.matrices.push(m_prod);
+        self.multisets.push(vec![matrix_base_idx + 2]);
+        self.coeffs.push(R::one());
+
+        self.matrices.push(m_step);
+        self.matrices.push(m_step_inv);
+        self.matrices.push(m_sum);
+        self.multisets.push(vec![
+            matrix_base_idx + 3,
+            matrix_base_idx + 4,
+            matrix_base_idx + 5,
+        ]);
+        self.coeffs.push(R::one());
+    }
+
+    fn folding_proof_final_x(&mut self) {
+        let matrix_base_idx = self.matrices.len();
+        let mut m_x = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_rho = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_prod = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_step = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_step_inv = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+        let mut m_sum = empty_sparse_matrix(self.m, self.layout.z_vector_size());
+
+        for j in 0..(DECOMP_X_W_LEN + 1) {
+            let sum_row = if j < DECOMP_X_W_LEN {
+                FP_FOLD_FINAL_XW_EQ[j]
+            } else {
+                FP_FOLD_FINAL_H_EQ
+            };
+            m_step.coeffs[sum_row].push((R::one(), self.layout.ivc_h_i_step_idx));
+            m_step_inv.coeffs[sum_row].push((R::one(), self.layout.ivc_h_i_step_inv_idx));
+            for i in 0..(2 * GoldiLocksDP::K) {
+                let product_row = FP_FOLD_FINAL_X_PRODUCTS[i * (DECOMP_X_W_LEN + 1) + j];
+                let product_idx = self.layout.fp_final_x_products_idx[i * (DECOMP_X_W_LEN + 1) + j];
+                let x_idx = if i < GoldiLocksDP::K {
+                    self.layout.decomp_x_s_idx[i * (DECOMP_X_W_LEN + 1) + j]
+                } else {
+                    let r_i = i - GoldiLocksDP::K;
+                    self.layout.decomp_r_x_s_idx[r_i * (DECOMP_X_W_LEN + 1) + j]
+                };
+
+                m_x.coeffs[product_row].push((R::one(), x_idx));
+                m_rho.coeffs[product_row].push((R::one(), self.layout.fp_rho_s_idx[i]));
+                m_prod.coeffs[product_row].push((R::one().neg(), product_idx));
+
+                m_sum.coeffs[sum_row].push((R::one(), product_idx));
+            }
+
+            if j < DECOMP_X_W_LEN {
+                m_sum.coeffs[FP_FOLD_FINAL_XW_EQ[j]]
+                    .push((R::one().neg(), self.layout.acc_out_x_w_idx[j]));
+            } else {
+                m_sum.coeffs[FP_FOLD_FINAL_H_EQ].push((R::one().neg(), self.layout.acc_out_h_idx));
+            }
+        }
+
+        self.matrices.push(m_x);
+        self.matrices.push(m_rho);
+        self.multisets
+            .push(vec![matrix_base_idx, matrix_base_idx + 1]);
+        self.coeffs.push(R::one());
+
+        self.matrices.push(m_prod);
+        self.multisets.push(vec![matrix_base_idx + 2]);
+        self.coeffs.push(R::one());
+
+        self.matrices.push(m_step);
+        self.matrices.push(m_step_inv);
+        self.matrices.push(m_sum);
+        self.multisets.push(vec![
+            matrix_base_idx + 3,
+            matrix_base_idx + 4,
+            matrix_base_idx + 5,
+        ]);
+        self.coeffs.push(R::one());
+    }
+
     fn preallocate_folding_proof_linearization_inner(&mut self) {
         let matrix_base_idx = self.matrices.len();
 
@@ -1678,6 +1797,15 @@ const FP_FOLD_EXPECTED_EVAL: usize = FP_FOLD_SUMCHECK_FINAL_CLAIMED_SUM + 1;
 const FP_FOLD_FINAL_CM_PRODUCTS: [usize; 2 * GoldiLocksDP::K * KAPPA] =
     index_array(FP_FOLD_EXPECTED_EVAL + 1);
 const FP_FOLD_FINAL_CM_EQ: [usize; KAPPA] = index_array(last(FP_FOLD_FINAL_CM_PRODUCTS) + 1);
+const FP_FOLD_FINAL_U_PRODUCTS: [usize; 2 * GoldiLocksDP::K * CCS_NUM_MATRICES] =
+    index_array(last(FP_FOLD_FINAL_CM_EQ) + 1);
+const FP_FOLD_FINAL_U_EQ: [usize; CCS_NUM_MATRICES] =
+    index_array(last(FP_FOLD_FINAL_U_PRODUCTS) + 1);
+const FP_FOLD_FINAL_X_PRODUCTS: [usize; 2 * GoldiLocksDP::K * (DECOMP_X_W_LEN + 1)] =
+    index_array(last(FP_FOLD_FINAL_U_EQ) + 1);
+const FP_FOLD_FINAL_XW_EQ: [usize; DECOMP_X_W_LEN] =
+    index_array(last(FP_FOLD_FINAL_X_PRODUCTS) + 1);
+const FP_FOLD_FINAL_H_EQ: usize = last(FP_FOLD_FINAL_XW_EQ) + 1;
 
 const fn last<const WIDTH: usize>(arr: [usize; WIDTH]) -> usize {
     *arr.last().expect("there is no last element")
@@ -1695,6 +1823,8 @@ const fn index_array<const WIDTH: usize>(start: usize) -> [usize; WIDTH] {
 
 #[cfg(feature = "debug")]
 use crate::ivc::IVCStepInput;
+#[cfg(feature = "debug")]
+use stark_rings::Ring;
 #[cfg(feature = "debug")]
 use tracing::{Level, instrument};
 
@@ -1720,6 +1850,17 @@ pub fn check_relation_debug(
         | Instruction::JALR { .. }
         | Instruction::SW { .. } => {
             ccs.check_relation(z).unwrap_or_else(|e| {
+                if let latticefold::arith::error::CSError::NotSatisfied(row_idx) = &e {
+                    tracing::error!(row_idx = *row_idx, "ccs row failed");
+                    for (matrix_idx, matrix) in ccs.M.iter().enumerate() {
+                        if !matrix.coeffs[*row_idx].is_empty() {
+                            let row_eval = matrix.coeffs[*row_idx]
+                                .iter()
+                                .fold(R::ZERO, |acc, (coeff, col_idx)| acc + (*coeff * z[*col_idx]));
+                            tracing::error!(matrix_idx, row_eval = ?row_eval, coeffs = ?matrix.coeffs[*row_idx], "non-empty matrix row");
+                        }
+                    }
+                }
                 panic!("CCS relation failed for {:?}: {:?}", inst, e);
             });
         }
