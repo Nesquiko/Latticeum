@@ -7,6 +7,7 @@ mod ivc;
 mod poseidon2;
 mod zk_latticefold;
 
+use clap::Parser;
 use cyclotomic_rings::rings::{GoldilocksRingNTT, GoldilocksRingPoly};
 use latticefold::{
     arith::{CCCS, CCS, LCCCS, Witness},
@@ -41,7 +42,16 @@ use crate::{
 // type FiatShamirTranscript = PoseidonTranscript<GoldilocksRingNTT, GoldilocksChallengeSet>;
 type FiatShamirTranscript = fiat_shamir::Poseidon2Transcript;
 
+#[derive(Parser, Debug)]
+#[command()]
+struct Args {
+    #[arg(short, long)]
+    guest: String,
+}
+
 fn main() {
+    let args = Args::parse();
+
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("debug"))
         .add_directive("p3_merkle_tree=off".parse().expect("invalid directive"));
@@ -51,9 +61,9 @@ fn main() {
         .with_span_events(FmtSpan::CLOSE)
         .init();
 
-    let program_path =
-        "/home/nesquiko/fiit/dp/latticeum/target/riscv32imac-unknown-none-elf/release/fibonacci";
-    let program = PathBuf::from(program_path);
+    let program_path = args.guest;
+    // "/home/nesquiko/fiit/dp/latticeum/target/riscv32imac-unknown-none-elf/release/fibonacci";
+    let program = PathBuf::from(program_path.clone());
 
     tracing::info!("proving program '{}'", program_path);
 

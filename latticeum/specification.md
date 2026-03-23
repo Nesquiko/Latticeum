@@ -422,8 +422,10 @@ vm.run(|args| {
     - Verify folding proofs within augmented circuit
     - Folding sumcheck transcript consistency and `claim_g1`/`claim_g3` checks are constrained
     - PoC shortcut: the folding verifier currently constrains only `should_equal_s == expected_evaluation` for the evaluation-claim step
+    - PoC shortcut: `v_0` is not constrained in-circuit; the hard `v_0 = rot_lin_combination(rho, theta)` check is still trusted as witness
     - Complete remaining decomposition and folding checks (full parity with off-circuit verifier)
     - For a sound evaluation-claim check, still constrain in-circuit: `theta_s = mle(f_hat)(r_0)`, `eta_s = mle(Mz)(r_0)`, `e_* = eq(beta, r_0)`, `e_i = eq(r_i, r_0)`, and the alpha/mu/zeta-weighted reconstruction performed by `compute_sumcheck_claim_expected_value`
+    - For a sound final-output check, still constrain in-circuit: `rho` derivation from transcript, `cm_0 = Σ rho_i cm_i`, `u_0 = Σ rho_i eta_i`, `x_0 = Σ rho_i (x_w_i || h_i)`, and `v_0 = rot_lin_combination(rho, theta)`
 
 2. **Memory Consistency Checks**
    - Permutation proof (sort by address+time)

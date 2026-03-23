@@ -1,7 +1,14 @@
 [tools]
 
 [tasks.debug]
-run = "RUST_LOG=debug cargo run --bin zkvm --features debug,latticefold/parallel --release"
+run = "RUST_LOG=debug cargo run --bin zkvm --features debug,latticefold/parallel --release -- --guest ./target/riscv32imac-unknown-none-elf/release/fibonacci"
+
+[tasks.copy-debug-to-vm]
+run = [
+	'cargo build --bin zkvm --features debug,latticefold/parallel --release',
+	'rsync -avzP ./target/release/zkvm dp:/home/ubuntu/latticeum/',
+	'rsync -avzP ./target/riscv32imac-unknown-none-elf/release/fibonacci dp:/home/ubuntu/latticeum/'
+]
 
 [tasks.test]
 run = "cargo test --workspace -j 8"

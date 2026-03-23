@@ -49,6 +49,7 @@ proc-macro2 = "1.0.92"
 quote = "1.0.37"
 serde = { version = "1.0.216", features = ["derive"] }
 toml = "0.8.19"
+clap = { version = "4.6.0", features = ["derive"] }
 
 p3-poseidon2 = { git = "https://github.com/Plonky3/Plonky3.git" }
 p3-goldilocks = { git = "https://github.com/Plonky3/Plonky3.git" }
