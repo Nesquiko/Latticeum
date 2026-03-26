@@ -12,6 +12,7 @@ members = [
 	"crates/zkvm",
 
 	"guests/fibonacci",
+	"guests/evm",
 ]
 
 [workspace.package]
