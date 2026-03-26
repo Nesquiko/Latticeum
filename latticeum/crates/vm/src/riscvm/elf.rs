@@ -51,9 +51,9 @@ impl Elf {
         let entry_point = elf_file.ehdr.e_entry as usize;
         tracing::trace!("entry_point is {:#0x}", entry_point);
 
-        if (entry_point as usize) % WORD_SIZE != 0 {
+        if (entry_point as usize) % 2 != 0 {
             return Err(ElfLoadingError::ElfValidation(
-                "entry_point is not divisible by word size".to_owned(),
+                "entry_point is not divisible by instruction alignment".to_owned(),
             ));
         } else if entry_point == MAX_MEM as usize {
             return Err(ElfLoadingError::ElfValidation(
