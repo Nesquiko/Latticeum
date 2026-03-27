@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use configuration::{N_REGS, RESULT_ADDRESS};
+use configuration::{N_REGS, RESULT_ADDRESS, STACK_TOP};
 use thiserror::Error;
 
 use crate::riscvm::{
@@ -32,6 +32,39 @@ pub type Memory<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize> =
     Box<[[u32; WORDS_PER_PAGE]; PAGE_COUNT]>;
 
 pub type Registers = [u32; N_REGS];
+
+#[derive(Debug, Clone, Copy)]
+pub struct HeapState {
+    pub start: usize,
+    pub end: usize,
+    pub next: usize,
+}
+
+impl HeapState {
+    pub fn new(start: usize, end: usize) -> Self {
+        assert!(start <= end, "heap start must not exceed heap end");
+        Self {
+            start,
+            end,
+            next: start,
+        }
+    }
+
+    pub fn alloc_aligned(&mut self, size: usize, align: usize) -> Option<usize> {
+        if align == 0 || !align.is_power_of_two() {
+            return None;
+        }
+
+        let aligned = self.next.checked_add(align - 1)? & !(align - 1);
+        let new_next = aligned.checked_add(size)?;
+        if new_next > self.end {
+            return None;
+        }
+
+        self.next = new_next;
+        Some(aligned)
+    }
+}
 
 #[derive(Debug)]
 /// WORDS_PER_PAGE is the number words in one page
@@ -61,13 +94,32 @@ pub struct VM<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize, Program: VmP
     /// The main memory of the VM.
     pub memory: Memory<WORDS_PER_PAGE, PAGE_COUNT>,
 
+    /// Monotonic heap allocator state used by guest allocation syscalls.
+    pub heap: HeapState,
+
+    /// Reservation for LR/SC emulation.
+    pub reserved_word_addr: Option<usize>,
+
     program: Program,
 }
 
 pub(crate) const WORDS_PER_PAGE_256: usize = 256;
 pub(crate) const PAGE_COUNT_1024: usize = 1024;
+pub(crate) const PAGE_COUNT_4096: usize = 4096;
+pub(crate) const PAGE_COUNT_8192: usize = 8192;
+pub(crate) const HEAP_START_1MB: usize = 0x0002_0000;
+pub(crate) const HEAP_END_1MB: usize = 0x000f_0000;
+pub(crate) const STACK_GUARD_BYTES: usize = 0x0000_8000;
 
 pub fn new_vm_1mb() -> VM<WORDS_PER_PAGE_256, PAGE_COUNT_1024, Uninitialized> {
+    VM::<_, _, _>::new()
+}
+
+pub fn new_vm_4mb() -> VM<WORDS_PER_PAGE_256, PAGE_COUNT_4096, Uninitialized> {
+    VM::<_, _, _>::new()
+}
+
+pub fn new_vm_8mb() -> VM<WORDS_PER_PAGE_256, PAGE_COUNT_8192, Uninitialized> {
     VM::<_, _, _>::new()
 }
 
@@ -75,7 +127,11 @@ pub fn dummy_loaded_vm_1mb() -> VM<WORDS_PER_PAGE_256, PAGE_COUNT_1024, Loaded> 
     VM {
         regs: [0; 32],
         pc: 0,
-        memory: Box::new([[0; WORDS_PER_PAGE_256]; PAGE_COUNT_1024]),
+        memory: unsafe {
+            Box::<[[u32; WORDS_PER_PAGE_256]; PAGE_COUNT_1024]>::new_zeroed().assume_init()
+        },
+        heap: HeapState::new(HEAP_START_1MB, HEAP_END_1MB),
+        reserved_word_addr: None,
         program: Loaded {
             elf: Elf {
                 image: HashMap::new(),
@@ -120,16 +176,40 @@ impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>
         VM {
             regs: [0; 32],
             pc: 0,
-            memory: Box::new([[0; WORDS_PER_PAGE]; PAGE_COUNT]),
+            memory: unsafe {
+                Box::<[[u32; WORDS_PER_PAGE]; PAGE_COUNT]>::new_zeroed().assume_init()
+            },
+            heap: HeapState::new(HEAP_START_1MB, HEAP_END_1MB),
+            reserved_word_addr: None,
             program: Uninitialized {},
         }
     }
 
     pub fn load_elf(
-        self,
+        mut self,
         path: PathBuf,
     ) -> Result<VM<WORDS_PER_PAGE, PAGE_COUNT, Loaded>, ElfLoadingError> {
         let elf = Elf::load(path)?;
+
+        for (addr, word) in &elf.image {
+            self.write_mem(*addr, *word);
+        }
+
+        let image_end = elf
+            .image
+            .keys()
+            .copied()
+            .max()
+            .map(|addr| addr + WORD_SIZE)
+            .unwrap_or(0);
+        let heap_start = (image_end + 0xf) & !0xf;
+        let max_mem = WORD_SIZE * WORDS_PER_PAGE * PAGE_COUNT;
+        let heap_end = if (STACK_TOP as usize) <= max_mem {
+            (STACK_TOP as usize).saturating_sub(STACK_GUARD_BYTES)
+        } else {
+            max_mem
+        };
+        self.heap = HeapState::new(heap_start.min(heap_end), heap_end);
 
         let mut instructions = HashMap::new();
         let mut addr = elf.raw_code.start;
@@ -144,6 +224,8 @@ impl<const WORDS_PER_PAGE: usize, const PAGE_COUNT: usize>
             regs: self.regs,
             pc: elf.entry_point,
             memory: self.memory,
+            heap: self.heap,
+            reserved_word_addr: self.reserved_word_addr,
             program: Loaded { elf, instructions },
         };
         Ok(initialized)
@@ -347,12 +429,34 @@ mod tests {
     use crate::riscvm::{
         inst_decoder::DecodedInstruction,
         reg,
-        vm::{PAGE_COUNT_1024, WORD_SIZE, WORDS_PER_PAGE_256, new_vm_1mb, physical_addr},
+        vm::{
+            dummy_loaded_vm_1mb, new_vm_1mb, new_vm_8mb, physical_addr, HEAP_START_1MB,
+            PAGE_COUNT_1024, WORDS_PER_PAGE_256, WORD_SIZE,
+        },
     };
-    use configuration::RESULT_ADDRESS;
+    use configuration::{RESULT_ADDRESS, STACK_TOP};
     use riscv_isa::Instruction;
     use std::path::PathBuf;
     use test_log::test;
+
+    fn run_inst(
+        vm: &mut crate::riscvm::vm::VM<
+            WORDS_PER_PAGE_256,
+            PAGE_COUNT_1024,
+            crate::riscvm::vm::Loaded,
+        >,
+        inst: Instruction,
+        size: usize,
+    ) -> crate::riscvm::inst::ExecutionTrace {
+        vm.execute_step(
+            &DecodedInstruction {
+                raw_word: 0,
+                inst,
+                size,
+            },
+            0,
+        )
+    }
 
     #[test]
     fn physical_addr_32bit_vm() {
@@ -675,5 +779,717 @@ mod tests {
         let result_addr = RESULT_ADDRESS as usize;
         let expected_value = 0x34164a7b;
         assert_eq!(vm.read_mem(result_addr), expected_value);
+    }
+
+    #[test]
+    fn mulhu_matches_riscv_semantics() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.write_reg(5, 0xffff_fffe);
+        vm.write_reg(6, 0x8000_0003);
+
+        vm.inst_mulhu(crate::riscvm::inst::RTypeArgs {
+            rd: 7,
+            rs1: 5,
+            rs2: 6,
+        });
+
+        assert_eq!(
+            vm.read_reg(7),
+            (((0xffff_fffe_u64) * (0x8000_0003_u64)) >> 32) as u32
+        );
+    }
+
+    #[test]
+    fn divu_matches_riscv_semantics() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.write_reg(5, 17);
+        vm.write_reg(6, 5);
+        vm.inst_divu(crate::riscvm::inst::RTypeArgs {
+            rd: 7,
+            rs1: 5,
+            rs2: 6,
+        });
+        assert_eq!(vm.read_reg(7), 3);
+
+        vm.write_reg(6, 0);
+        vm.inst_divu(crate::riscvm::inst::RTypeArgs {
+            rd: 7,
+            rs1: 5,
+            rs2: 6,
+        });
+        assert_eq!(vm.read_reg(7), u32::MAX);
+    }
+
+    #[test]
+    fn remu_matches_riscv_semantics() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.write_reg(5, 17);
+        vm.write_reg(6, 5);
+        vm.inst_remu(crate::riscvm::inst::RTypeArgs {
+            rd: 7,
+            rs1: 5,
+            rs2: 6,
+        });
+        assert_eq!(vm.read_reg(7), 2);
+
+        vm.write_reg(6, 0);
+        vm.inst_remu(crate::riscvm::inst::RTypeArgs {
+            rd: 7,
+            rs1: 5,
+            rs2: 6,
+        });
+        assert_eq!(vm.read_reg(7), 17);
+    }
+
+    #[test]
+    fn mul_matches_riscv_semantics() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.write_reg(5, 0xffff_fffe);
+        vm.write_reg(6, 0x8000_0003);
+        vm.inst_mul(crate::riscvm::inst::RTypeArgs {
+            rd: 7,
+            rs1: 5,
+            rs2: 6,
+        });
+        assert_eq!(vm.read_reg(7), 0xffff_fffe_u32.wrapping_mul(0x8000_0003));
+    }
+
+    #[test]
+    fn xor_matches_riscv_semantics() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.write_reg(5, 0xdead_beef);
+        vm.write_reg(6, 0x1234_5678);
+        vm.inst_xor(crate::riscvm::inst::RTypeArgs {
+            rd: 7,
+            rs1: 5,
+            rs2: 6,
+        });
+        assert_eq!(vm.read_reg(7), 0xdead_beef ^ 0x1234_5678);
+    }
+
+    #[test]
+    fn or_matches_riscv_semantics() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.write_reg(5, 0xdead_beef);
+        vm.write_reg(6, 0x1234_5678);
+        vm.inst_or(crate::riscvm::inst::RTypeArgs {
+            rd: 7,
+            rs1: 5,
+            rs2: 6,
+        });
+        assert_eq!(vm.read_reg(7), 0xdead_beef | 0x1234_5678);
+    }
+
+    #[test]
+    fn and_matches_riscv_semantics() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.write_reg(5, 0xdead_beef);
+        vm.write_reg(6, 0x1234_5678);
+        vm.inst_and(crate::riscvm::inst::RTypeArgs {
+            rd: 7,
+            rs1: 5,
+            rs2: 6,
+        });
+        assert_eq!(vm.read_reg(7), 0xdead_beef & 0x1234_5678);
+    }
+
+    #[test]
+    fn control_flow_and_immediates_work() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.pc = 0x100;
+
+        run_inst(
+            &mut vm,
+            Instruction::LUI {
+                rd: 5,
+                imm: 0x12345,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(5), 0x12345 << 12);
+
+        vm.pc = 0x100;
+        run_inst(&mut vm, Instruction::AUIPC { rd: 6, imm: 0x2 }, 4);
+        assert_eq!(vm.read_reg(6), 0x100 + (0x2 << 12));
+
+        vm.pc = 0x100;
+        run_inst(&mut vm, Instruction::JAL { rd: 1, offset: 12 }, 4);
+        assert_eq!(vm.read_reg(1), 0x104);
+        assert_eq!(vm.pc, 0x10c);
+
+        vm.pc = 0x200;
+        vm.write_reg(5, 0x320);
+        run_inst(
+            &mut vm,
+            Instruction::JALR {
+                rd: 1,
+                rs1: 5,
+                offset: 5,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(1), 0x204);
+        assert_eq!(vm.pc, 0x324);
+
+        vm.pc = 0x300;
+        vm.write_reg(5, 9);
+        vm.write_reg(6, 8);
+        run_inst(
+            &mut vm,
+            Instruction::BNE {
+                rs1: 5,
+                rs2: 6,
+                offset: 8,
+            },
+            4,
+        );
+        assert_eq!(vm.pc, 0x308);
+
+        vm.pc = 0x300;
+        run_inst(
+            &mut vm,
+            Instruction::BEQ {
+                rs1: 5,
+                rs2: 5,
+                offset: 8,
+            },
+            4,
+        );
+        assert_eq!(vm.pc, 0x308);
+
+        vm.pc = 0x300;
+        vm.write_reg(5, 1);
+        vm.write_reg(6, 2);
+        run_inst(
+            &mut vm,
+            Instruction::BLTU {
+                rs1: 5,
+                rs2: 6,
+                offset: 8,
+            },
+            4,
+        );
+        assert_eq!(vm.pc, 0x308);
+
+        vm.pc = 0x300;
+        run_inst(
+            &mut vm,
+            Instruction::BGEU {
+                rs1: 6,
+                rs2: 5,
+                offset: 8,
+            },
+            4,
+        );
+        assert_eq!(vm.pc, 0x308);
+
+        vm.pc = 0x300;
+        vm.write_reg(5, (-2_i32) as u32);
+        vm.write_reg(6, 1);
+        run_inst(
+            &mut vm,
+            Instruction::BLT {
+                rs1: 5,
+                rs2: 6,
+                offset: 8,
+            },
+            4,
+        );
+        assert_eq!(vm.pc, 0x308);
+
+        vm.pc = 0x300;
+        vm.write_reg(5, 4);
+        vm.write_reg(6, (-1_i32) as u32);
+        run_inst(
+            &mut vm,
+            Instruction::BGE {
+                rs1: 5,
+                rs2: 6,
+                offset: 8,
+            },
+            4,
+        );
+        assert_eq!(vm.pc, 0x308);
+
+        vm.pc = 0x400;
+        vm.write_reg(5, 10);
+        run_inst(
+            &mut vm,
+            Instruction::ADDI {
+                rd: 7,
+                rs1: 5,
+                imm: -3,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 7);
+        run_inst(
+            &mut vm,
+            Instruction::SLTI {
+                rd: 7,
+                rs1: 5,
+                imm: 20,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 1);
+        run_inst(
+            &mut vm,
+            Instruction::SLTIU {
+                rd: 7,
+                rs1: 5,
+                imm: 9,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0);
+        run_inst(
+            &mut vm,
+            Instruction::XORI {
+                rd: 7,
+                rs1: 5,
+                imm: 0xff,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 10 ^ 0xff);
+        run_inst(
+            &mut vm,
+            Instruction::ANDI {
+                rd: 7,
+                rs1: 5,
+                imm: 0x6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 10 & 0x6);
+        run_inst(
+            &mut vm,
+            Instruction::ORI {
+                rd: 7,
+                rs1: 5,
+                imm: 0x6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 10 | 0x6);
+        run_inst(
+            &mut vm,
+            Instruction::SLLI {
+                rd: 7,
+                rs1: 5,
+                shamt: 3,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 80);
+        run_inst(
+            &mut vm,
+            Instruction::SRLI {
+                rd: 7,
+                rs1: 7,
+                shamt: 2,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 20);
+        vm.write_reg(5, (-16_i32) as u32);
+        run_inst(
+            &mut vm,
+            Instruction::SRAI {
+                rd: 7,
+                rs1: 5,
+                shamt: 2,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), (-4_i32) as u32);
+    }
+
+    #[test]
+    fn loads_and_stores_work() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.write_reg(5, 0x100);
+        vm.write_reg(6, 0xaabb_ccdd);
+
+        run_inst(
+            &mut vm,
+            Instruction::SW {
+                rs1: 5,
+                rs2: 6,
+                offset: 0,
+            },
+            4,
+        );
+        assert_eq!(vm.read_mem(0x100), 0xaabb_ccdd);
+        run_inst(
+            &mut vm,
+            Instruction::LW {
+                rd: 7,
+                rs1: 5,
+                offset: 0,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0xaabb_ccdd);
+
+        vm.write_reg(6, 0x1122_3344);
+        run_inst(
+            &mut vm,
+            Instruction::SB {
+                rs1: 5,
+                rs2: 6,
+                offset: 1,
+            },
+            4,
+        );
+        assert_eq!(vm.read_mem(0x100), 0xaabb_44dd);
+        run_inst(
+            &mut vm,
+            Instruction::LBU {
+                rd: 7,
+                rs1: 5,
+                offset: 1,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0x44);
+
+        vm.write_reg(6, 0x0000_eeff);
+        run_inst(
+            &mut vm,
+            Instruction::SH {
+                rs1: 5,
+                rs2: 6,
+                offset: 2,
+            },
+            4,
+        );
+        assert_eq!(vm.read_mem(0x100), 0xeeff_44dd);
+        run_inst(
+            &mut vm,
+            Instruction::LHU {
+                rd: 7,
+                rs1: 5,
+                offset: 2,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0xeeff);
+
+        vm.write_mem(0x104, 0x80ff_7f01);
+        run_inst(
+            &mut vm,
+            Instruction::LB {
+                rd: 7,
+                rs1: 5,
+                offset: 4,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 1);
+        run_inst(
+            &mut vm,
+            Instruction::LB {
+                rd: 7,
+                rs1: 5,
+                offset: 5,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0x7f);
+        run_inst(
+            &mut vm,
+            Instruction::LB {
+                rd: 7,
+                rs1: 5,
+                offset: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), (-1_i32) as u32);
+        run_inst(
+            &mut vm,
+            Instruction::LH {
+                rd: 7,
+                rs1: 5,
+                offset: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), (-32513_i32) as u32);
+    }
+
+    #[test]
+    fn register_arithmetic_and_system_ops_work() {
+        let mut vm = dummy_loaded_vm_1mb();
+        vm.write_reg(5, 0xdead_beef);
+        vm.write_reg(6, 0x1234_5678);
+
+        run_inst(
+            &mut vm,
+            Instruction::ADD {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0xdead_beef_u32.wrapping_add(0x1234_5678));
+        run_inst(
+            &mut vm,
+            Instruction::SUB {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0xdead_beef_u32.wrapping_sub(0x1234_5678));
+        run_inst(
+            &mut vm,
+            Instruction::SLL {
+                rd: 7,
+                rs1: 6,
+                rs2: 5,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0x1234_5678 << (0xdead_beef_u32 & 0x1f));
+        run_inst(
+            &mut vm,
+            Instruction::SLT {
+                rd: 7,
+                rs1: 6,
+                rs2: 5,
+            },
+            4,
+        );
+        assert_eq!(
+            vm.read_reg(7),
+            ((0x1234_5678_i32) < (-559038737_i32)) as u32
+        );
+        run_inst(
+            &mut vm,
+            Instruction::SLTU {
+                rd: 7,
+                rs1: 6,
+                rs2: 5,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), (0x1234_5678_u32 < 0xdead_beef_u32) as u32);
+        run_inst(
+            &mut vm,
+            Instruction::XOR {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0xdead_beef ^ 0x1234_5678);
+        run_inst(
+            &mut vm,
+            Instruction::SRL {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0xdead_beef >> (0x1234_5678 & 0x1f));
+        run_inst(
+            &mut vm,
+            Instruction::SRA {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(
+            vm.read_reg(7),
+            ((0xdead_beef_u32 as i32) >> (0x1234_5678 & 0x1f)) as u32
+        );
+        run_inst(
+            &mut vm,
+            Instruction::OR {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0xdead_beef | 0x1234_5678);
+        run_inst(
+            &mut vm,
+            Instruction::AND {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0xdead_beef & 0x1234_5678);
+        run_inst(
+            &mut vm,
+            Instruction::MUL {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0xdead_beef_u32.wrapping_mul(0x1234_5678));
+        run_inst(
+            &mut vm,
+            Instruction::MULHU {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(
+            vm.read_reg(7),
+            (((0xdead_beef_u64) * (0x1234_5678_u64)) >> 32) as u32
+        );
+
+        vm.write_reg(5, 17);
+        vm.write_reg(6, 5);
+        run_inst(
+            &mut vm,
+            Instruction::DIVU {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 3);
+        run_inst(
+            &mut vm,
+            Instruction::REMU {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 2);
+
+        vm.pc = 0x500;
+        run_inst(
+            &mut vm,
+            Instruction::FENCE {
+                pred: 0b10_u8.into(),
+                succ: 0b11_u8.into(),
+            },
+            4,
+        );
+        assert_eq!(vm.pc, 0x504);
+
+        vm.write_reg(5, 0x100);
+        vm.write_mem(0x100, 41);
+        run_inst(
+            &mut vm,
+            Instruction::LR_W {
+                rd: 7,
+                rs1: 5,
+                aq: 1,
+                rl: 0,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 41);
+        vm.write_reg(6, 99);
+        run_inst(
+            &mut vm,
+            Instruction::SC_W {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+                aq: 0,
+                rl: 1,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 0);
+        assert_eq!(vm.read_mem(0x100), 99);
+
+        vm.write_mem(0x100, 10);
+        vm.write_reg(6, 5);
+        run_inst(
+            &mut vm,
+            Instruction::AMOADD_W {
+                rd: 7,
+                rs1: 5,
+                rs2: 6,
+                aq: 0,
+                rl: 0,
+            },
+            4,
+        );
+        assert_eq!(vm.read_reg(7), 10);
+        assert_eq!(vm.read_mem(0x100), 15);
+
+        vm.write_reg(10, 32);
+        vm.write_reg(11, 8);
+        vm.write_reg(17, 1);
+        let before = vm.heap.next;
+        run_inst(&mut vm, Instruction::ECALL, 4);
+        assert_eq!(vm.read_reg(10) as usize, before);
+        assert_eq!(vm.heap.next, before + 32);
+    }
+
+    #[test]
+    fn evm_guest_runs() {
+        let vm = new_vm_8mb();
+
+        let program = PathBuf::from("../../target/riscv32imac-unknown-none-elf/release/evm");
+        let mut vm = match vm.load_elf(program) {
+            Ok(vm) => vm,
+            Err(e) => panic!("failed to load evm elf, {}", e),
+        };
+
+        vm.run(|_| {});
+
+        assert_eq!(vm.read_mem(RESULT_ADDRESS as usize), 56);
+    }
+
+    #[test]
+    fn evm_elf_data_segments_are_loaded_into_memory() {
+        let vm = new_vm_8mb();
+        let elf = crate::riscvm::elf::Elf::load(PathBuf::from(
+            "../../target/riscv32imac-unknown-none-elf/release/evm",
+        ))
+        .unwrap();
+
+        let program = PathBuf::from("../../target/riscv32imac-unknown-none-elf/release/evm");
+        let vm = match vm.load_elf(program) {
+            Ok(vm) => vm,
+            Err(e) => panic!("failed to load evm elf, {}", e),
+        };
+
+        let (&addr, &word) = elf
+            .image
+            .iter()
+            .find(|(addr, _)| **addr < elf.raw_code.start)
+            .expect("expected rodata word below text segment");
+        assert_eq!(vm.read_mem(addr), word);
+    }
+
+    #[test]
+    fn evm_elf_fits_below_static_stack_top() {
+        let elf = crate::riscvm::elf::Elf::load(PathBuf::from(
+            "../../target/riscv32imac-unknown-none-elf/release/evm",
+        ))
+        .unwrap();
+
+        let max_loaded_addr = elf.image.keys().copied().max().unwrap() + 4;
+
+        assert!(max_loaded_addr > HEAP_START_1MB);
+        assert!(max_loaded_addr < STACK_TOP as usize);
     }
 }
