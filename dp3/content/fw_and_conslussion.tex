@@ -1,0 +1,35 @@
+\chapter{Conclusion}\label{chap:conclusion}
+
+This thesis presented the design and initial implementation of a post-quantum
+ZkVM based on lattice-based cryptography. The proposed architecture integrates a
+RISC-V execution environment with the LatticeFold folding scheme, supported by
+CCS for arithmetization. The design provides
+a theoretical blueprint, addressing the challenges of post-quantum
+security and incrementally verifiable computation.
+
+The implementation validates core component integration. The RISC-V emulator
+successfully generates execution traces, CCS constraints for Poseidon2 hashes are
+synthesized and integrated with LatticeFold, and the IVC step commitment
+mechanism is functional. The performance baseline of approximately 42 seconds
+for a 16 cycles long Fibonacci computation provides a positive outlook.
+
+\section{Future Work}
+
+Several directions for future research and development emerge from this work:
+
+\begin{itemize}
+    \item \textbf{Formal verification:} Formal verification of the implementation
+		would provide strong guarantees of correctness.
+    
+    \item \textbf{LatticeFold+ integration:} Migrating the folding backend to
+		LatticeFold+ could yield significant performance improvements through its
+		more efficient algebraic range proofs and double commitment techniques.
+    
+    \item \textbf{GPU acceleration:} The LatticeFold prover operations, including
+		NTT transformations and matrix-vector multiplications can be sped up with
+		GPU acceleration, thus bringing proving times down.
+    
+	\item \textbf{Lookup incorporation:} Integrating lookup arguments could
+		optimize constraint generation for certain operations, potentially reducing
+		circuit size and improving performance for complex instructions.
+\end{itemize}

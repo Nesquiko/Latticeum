@@ -1,0 +1,29 @@
+\section{Technology stack}\label{sec:tech_stack}
+
+The prototype implementation of the lattice-based RISC-V ZkVM is developed
+using the Rust programming language (\texttt{nightly-2025-08-19}). Rust was
+selected due to its dominance in the cryptography and zero-knowledge ecosystem.
+
+The cryptographic foundations and virtual machine components rely on several
+crates:
+
+\begin{itemize}
+    \item \textbf{Plonky3\footnote{\url{https://github.com/Plonky3/Plonky3}}:} The \texttt{Plonky3} meta crate is utilized to
+		provide the core arithmetization primitives. The \texttt{p3-field} and
+		\texttt{p3-goldilocks} crates are used for Goldilocks field
+		arithmetic. \texttt{p3-poseidon2} for the construction of Poseidon2
+		hashes and \texttt{p3-merkle-tree} for memory and code commitments.
+    
+    \item \textbf{LatticeFold\footnote{\url{https://github.com/NethermindEth/latticefold}}:} The core folding mechanism is based on the
+		\texttt{latticefold} implementation provided by Nethermind. This
+		crate implements the Ajtai commitment scheme and the NIFS prover and
+		verifier logic. It is the primary component of the
+		IVC loop, enabling the recursive accumulation of execution steps.
+    
+    \item \textbf{Cyclotomic-rings\footnote{\url{https://github.com/NethermindEth/latticefold}}:} From the same source as LatticeFold crate,
+		the \texttt{cyclotomic-rings} crate is used to handle the specific
+		algebraic structures required for lattice-based cryptography over ring
+		$R_q = \mathbb{Z}_q[X]/(X^d+1)$. It provides the necessary NTT
+		implementations and ring arithmetic for polynomials over the
+		Goldilocks field.
+\end{itemize}

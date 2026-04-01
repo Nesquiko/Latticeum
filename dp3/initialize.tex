@@ -1,0 +1,162 @@
+% Layout
+\setstretch{1.5}
+
+% Bibliography
+\ifx\FIITlagEN\undefined
+  \defbibheading{references}[Zoznam použitej literatúry]{
+    \chapter*{#1}
+    \addcontentsline{toc}{chapter}{#1}
+    \markboth{#1}{#1}
+  }
+  \defbibheading{referencessec}[Zoznam použitej literatúry]{
+    \section*{#1}
+    \markboth{#1}{#1}
+  }
+\else
+  \defbibheading{references}[References]{
+    \chapter*{#1}
+    \addcontentsline{toc}{chapter}{#1}
+    \markboth{#1}{#1}
+  }
+  \defbibheading{referencessec}[References]{
+    \section*{#1}
+    \markboth{#1}{#1}
+  }
+\fi
+
+% Syntax highlighting
+\setminted[]{linenos,tabsize=2,breaklines}
+\colorlet{punct}{red!60!black}
+\definecolor{background}{HTML}{EEEEEE}
+\definecolor{delim}{RGB}{20,105,176}
+\colorlet{numb}{magenta!60!black}
+
+% Text highlighting
+\makeatletter
+\newenvironment{btHighlight}[1][]
+{\begingroup\tikzset{bt@Highlight@par/.style={#1}}\begin{lrbox}{\@tempboxa}}
+    {\end{lrbox}\bt@HL@box[bt@Highlight@par]{\@tempboxa}\endgroup}
+
+\newcommand\btHL[1][]{%
+  \begin{btHighlight}[#1]\bgroup\aftergroup\bt@HL@endenv%
+    }
+    \def\bt@HL@endenv{%
+  \end{btHighlight}%   
+  \egroup
+}
+\newcommand{\bt@HL@box}[2][]{%
+  \tikz[#1]{%
+    \pgfpathrectangle{\pgfpoint{1pt}{0pt}}{\pgfpoint{\wd #2}{\ht #2}}%
+    \pgfusepath{use as bounding box}%
+    \node[anchor=base west, fill=black!10,outer sep=0pt,inner xsep=1pt, inner ysep=-2pt, rounded corners=3pt, minimum height=\ht\strutbox+1pt,#1]{\raisebox{1pt}{\strut}\strut\usebox{#2}};
+  }%
+}
+\makeatother
+
+\newcommand{\createFigure}[2]{
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=\textwidth]{#1}
+        \caption{#2}
+        \vspace{0.5cm}
+    \end{figure}
+}
+
+\newenvironment{tikzFigure}{
+	\begin{figure}[htbp]
+		\vspace{0.5cm}
+        \centering
+	}
+	{
+		\vspace{0.5cm}
+	\end{figure}
+}
+
+\tikzset{
+    every picture/.style={font=\sffamily\footnotesize, >=Stealth},
+    % Process/Function Nodes (Blue)
+    processNode/.style={
+        rectangle, 
+        rounded corners=3pt, 
+        draw=blue!80!black, 
+        thick, 
+        fill=blue!5, 
+        minimum width=2.5cm, 
+        minimum height=1cm, 
+        align=center
+    },
+    % Data/State Nodes (Green)
+    dataNode/.style={
+        rectangle, 
+        draw=green!60!black, 
+        thick, 
+        fill=green!5, 
+        minimum height=0.8cm, 
+        minimum width=2cm,
+        align=center,
+    },
+    % The Wrapping SNARK (Distinct Style - Purple)
+    wrapperNode/.style={
+        rectangle, 
+        rounded corners=3pt, 
+        draw=purple!80!black, 
+        very thick, 
+        fill=purple!5, 
+        minimum width=4cm, 
+        minimum height=1.2cm, 
+        align=center
+    },
+    % dashed box
+    augmentedFrame/.style={
+        draw=black!60, 
+        dashed, 
+        thick, 
+        rounded corners=5pt, 
+        inner sep=12pt
+    },
+    % Connector lines
+    arrow/.style={
+        ->, 
+        thick, 
+        draw=black!70,
+        rounded corners=5pt
+    },
+    dashedArrow/.style={
+        ->, 
+        thick, 
+        dashed,
+        draw=black!70,
+        rounded corners=5pt
+    }
+		% settings for node distances
+		node distance=1cm and 1.5cm, % vertical and horizontal base distance
+		% Styles
+		processNode/.style={ % For F1, F2, Fn
+			rectangle, draw, fill=blue!20,
+			minimum size=1cm, % makes F nodes squarish and compact
+			align=center
+		},
+		dataNode/.style={ % For s0, sn, w1, w2, wn
+			rectangle, draw, fill=green!20,
+			minimum height=0.5cm, % consistent height
+			align=center,
+			inner xsep=2pt, % padding inside the node
+		},
+		multiLineDataNode/.style={ % specific for s0 and sn with line breaks
+			dataNode,
+			text width=2.5cm % allows text to wrap
+		},
+		instanceDataNode/.style={ % specific for instance nodes
+			dataNode,
+			minimum width=1cm
+		},
+		ellipsisNode/.style={
+			text centered,
+			font=\small
+		},
+		arrow/.style={
+			-Stealth,
+			semithick
+		},
+		labelFont/.style={font=\footnotesize}
+}

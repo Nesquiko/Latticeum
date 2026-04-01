@@ -1,0 +1,117 @@
+\section{Circuit synthesis}
+
+The constraints defining the validity of the VM execution and the IVC chain
+are synthesized into a CCS.
+
+\subsection{Layout Management}
+
+A central component of the synthesis is the \texttt{CCSLayout} structure. This
+structure dynamically maps semantic variables (such as \texttt{is\_add},
+\texttt{val\_rs1}, or specific Poseidon2 round constants) to column indices
+within the CCS witness vector $z$.
+
+This dynamic allocation allows for the easy addition of new constraints.
+When a new variable is registered in the layout (e.g., adding support for a
+new instruction), the layout automatically shifts all subsequent indices.
+The witness generation logic in arithmetization and the constraint
+definition logic in remain synchronized without manual recalculation of column
+offsets.
+
+\subsection{Poseidon2 constraint example}
+
+This section illustrates the construction of CCS constraints for Poseidon2
+hash. Poseidon2 permutation in Goldilocks field on 12 elements (rate is 12,
+with capacity 4, total width then being 16) consists of:
+
+\begin{enumerate}
+	\item Applying a maximum distance separable MDS matrix.
+	\item 4 external initial rounds a 7th degree S-box on all elements.
+	\item 22 internal rounds with a partial S-box applied only to the first element.
+	\item 4 external terminal rounds a 7th degree S-box on all elements.
+\end{enumerate}
+
+\paragraph{Initial MDS application.}
+
+The first operation applies the MDS matrix to the absorbed state. The input 12 elements
+and 4 zeroes must be in the witness. Here this input will be denoted as $s = (s_0, s_1, \ldots, s_{11}, 0, 0, 0, 0)$.
+Then the output of the MDS application is captured into the witness, denoted as $s_{after\_mds}$.
+The constraint enforces 
+
+\[
+	s_{after\_mds\_i} - s'_i = 0
+\]
+
+where $i \in (0, 1, \ldots, 15)$ and $s' = \texttt{MDS} \cdot s$.
+
+\paragraph{External initial rounds.}
+
+Next are external rounds where a round constant is added and S-box is applied
+is applied to all state elements. There are 4 external initial rounds, after each
+the state of 16 elements must be captured (denoted as
+$s_{\text{ext\_init\_r\_i}}; \quad r \in (0, 1, 2, 3); \quad i \in (0, 1, \ldots, 15)$).
+Then in circuit, for each round there is a constraint:
+
+\begin{equation}
+	\texttt{MDS}^{-1} \cdot s_{\text{ext\_init\_r\_i}} - (s_{\text{in\_r\_i}} + c_{\text{ext\_init\_r\_i}})^7 = 0
+\end{equation}
+
+where $c_{\text{ext\_init\_r\_i}}$ is the specific constant at index $i$ for round
+$r$, and the $s_{\text{in\_r\_i}}$ is the input to the round, in first one, it
+is the $s_{after\_mds}$, otherwise it is the output of previous round.
+
+\paragraph{Internal rounds.}
+
+Following the external initial rounds, the permutation executes 22 partial
+internal rounds where the S-box is applied only to the first state element.
+The state after each round is captured into witness, denoted as $s_{\text{inter\_r\_i}}; \quad r \in (0, 1, \ldots, 21); \quad i \in (0, 1, \ldots, 15)$.
+Each internal round computes for each first element:
+
+\begin{equation}
+	M_I^{-1} * s_{\text{inter\_r\_0}} - (s_{\text{in\_r\_0}} + c_{\text{inter\_0}})^7 = 0
+\end{equation}
+
+For other than first element ($i \in (1, 2, \ldots, 15)$ it does:
+
+\begin{equation}
+	M_I^{-1} * s_{\text{inter\_r\_i}} - s_{\text{in\_r\_i}} = 0
+\end{equation}
+
+The $s_{\text{in\_0}}$ is the output of the last external initial round, other
+$s_{\text{in\_i}}$ are outputs of the previous internal rounds.
+
+\paragraph{External terminal rounds.}
+
+The permutation concludes with 4 external terminal rounds, mirroring the
+external initial rounds but using terminal round constants and different inputs
+$s_{\text{ext\_term\_r\_i}}; \quad r \in (0, 1, 2, 3); \quad i \in (0, 1, \ldots, 15)$):
+
+\begin{equation}
+	\texttt{MDS}^{-1} \cdot s_{\text{ext\_term\_r\_i}} - (s_{\text{in\_r\_i}} + c_{\text{ext\_term\_r\_i}})^7 = 0
+\end{equation}
+
+
+where $c_{\text{ext\_term\_r\_i}}$ is the specific constant at index $i$ for round
+$r$, and the $s_{\text{in\_r\_i}}$ is the input to the round, in first one, it
+is the last internal round, otherwise it is the output of previous external terminal round.
+
+\paragraph{Output extraction.}
+
+After the final external terminal round, the output digest is extracted
+from first 4 elements of the state
+
+\begin{equation}
+    h = (s_0, s_1, s_2, s_3)
+\end{equation}
+
+And compared to the claimed result.
+
+\paragraph{Complexity analysis.}
+
+For a single Poseidon2 sponge pass, the constraint system captures 388 witness
+variables across the permutation computation. The system requires 44 sparse
+matrices to encode the linear transformations, round constants, and S-box
+operations. The number of matrices remains constant regardless of
+the number of sponge passes, though their dimensions scale with the permutation
+state size. The highest degree constraint is a 7th degree multiset constraint
+corresponding to the Goldilocks S-box, and this degree does not increase with
+additional sponge passes.

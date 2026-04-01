@@ -1,0 +1,37 @@
+\section{Cryptography}
+
+Cryptographic crates (and majority of all cryptographic libraries, not just for Rust)
+expose high level API. Developers provide inputs to this API and get back the
+desired hash, encrypted text, key, etc. In context of ZkVM, also the intermediate
+states are needed to populate the witness. Main hurdle during implementation
+was to reuse exposed parts of used cryptographic crates, in order to collect
+internal states of these primitives.
+
+\subsection{Poseidon2}
+
+The Poseidon2 hash function is used to commit to the IVC state. While the
+\texttt{Plonky3} library provides a implementation of Poseidon2, its standard
+interface treats the permutation as a black box, returning only the final digest.
+To correctly constrain the Poseidon2 execution within a CCS requires access to
+the intermediate states of the permutation. This is because Poseidon2 has
+a 7th degree S-box, which is dependent on previous rounds, and those on ones
+before them. Thus, the computation is broken down into smaller
+steps, where each step verifies a transition of a one computational segment.
+
+A custom implementation of the Poseidon2 permutation was
+constructed, structurally identical to the \texttt{Plonky3} implementation but
+modified to capture and return the state vector at desired boundaries:
+
+\begin{itemize}
+    \item The state after the initial MDS matrix application.
+    \item The state after each of the external initial full rounds.
+    \item The state after each of the internal partial rounds.
+    \item The state after each of the external terminal full rounds.
+\end{itemize}
+
+\subsection{LatticeFold Integration}
+
+The LatticeFold library is utilized to perform the non-interactive folding of
+the witness-instance pairs. The internal logic of the LatticeFold prover was
+not modified to expose intermediate states, because this step was not implemented
+as of writing this work.

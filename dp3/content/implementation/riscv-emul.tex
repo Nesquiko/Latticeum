@@ -1,0 +1,18 @@
+\section{RISC-V Emulator}
+
+A custom, lightweight RISC-V interpreter was developed to execute the program
+and generate the necessary cryptographic witnesses. The emulator supports the
+\texttt{rv32imac} instruction set architecture. Since it being only a PoC, not
+all instruction handlers are implemented, but sufficient amount of them to execute
+Rust binaries compiled for the \texttt{riscv32imac-unknown-none-elf} target.
+
+The core of the emulator is structured around an execution loop that fetches,
+decodes, and executes instructions. At each instruction step, the execution
+halts and the full machine state, including the program
+counter, registers, memory pages, and raw instruction bytes, is exposed to an
+interceptor.
+
+This way, the instruction semantics and the proof generation are decoupled. The
+emulator is responsible solely for correct state transitions and the
+generation of the execution trace, while the ZkVM utilizes this trace to
+generate witnesses.
