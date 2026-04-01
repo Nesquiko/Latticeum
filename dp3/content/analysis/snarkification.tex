@@ -56,8 +56,8 @@ real-time. Instead of each validator independently re-validating all
 components of a new consensus state, they would verify a single, compact
 SNARK. Based on this proof's validity, they can accept or
 reject the proposed state update.\footnote{The entity proposing the state
-update, such as a block proposer, would be responsible for generating and
-submitting this proof.}
+	update, such as a block proposer, would be responsible for generating and
+	submitting this proof.}
 
 \subsection{Snarkifying execution}\label{subsec:snarkifying_execution}
 
@@ -83,13 +83,12 @@ supporting scalability.
 Another approach is to 'enshrine' a ZkEVM directly into the Ethereum protocol (L1).
 This offers similar benefits in terms of L1 state transition verification, as
 the native EVM could delegate execution proving to this enshrined ZkEVM. In
-addition, an enshrined ZkEVM could support and simplify the creation of what
-are sometimes termed 'native rollups' \cite{NativeRollups}. These would be
-Layer 2 solutions that could leverage the L1's enshrined ZkEVM for verifying
-their own state transitions, which are themselves batches of EVM-compatible
-transactions. The correctness of these L2 transaction batches would thus be
-directly enforced by the L1 execution layer through ZK proof verification.
-This could lead to faster, settlement for these L2s on L1, which in turn could
-simplify composability between L1 and these native L2s, as well as among
-different native L2s.
+addition, an enshrined ZkEVM could support and simplify the creation of native
+rollups \cite{NativeRollups}. These would be Layer 2 solutions that could
+leverage the L1's enshrined ZkEVM for verifying their own state transitions,
+which are themselves batches of EVM-compatible transactions. The correctness
+of these L2 transaction batches would thus be directly enforced by the L1
+execution layer through ZK proof verification. This could lead to faster,
+settlement for these L2s on L1, which in turn could simplify composability
+between L1 and these native L2s, as well as among different native L2s.
 
