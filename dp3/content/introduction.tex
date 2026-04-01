@@ -3,14 +3,14 @@
 Ethereum, a decentralized blockchain platform launched in 2015, provides a
 Turing-complete execution environment for smart contracts and decentralized
 applications \cite{ethereumEthereumWhitepaper}. Its modular architecture
-comprises a proof-of-stake consensus layer (Gasper \cite{VitalikGasper}) and
+comprises a proof-of-stake consensus layer (utilizing Gasper \cite{VitalikGasper}) and
 an execution layer governed by the Ethereum Virtual Machine (EVM
 \cite{ethereumConsensusMechanisms}). A primary challenge for Ethereum is
 scalability, as the need for all nodes to validate and re-execute every
 transaction limits throughput and can centralize the network by increasing
 resource demands.
 
-"Snarkification," the integration of Zero-Knowledge Proofs (ZKPs) like SNARKs,
+"Snarkification", the integration of Zero-Knowledge Proofs (ZKPs) like SNARKs,
 offers a path to mitigate these scalability issues. Initiatives such as the
 'Lean consensus' \cite{LeanConsensus} aim to snarkify consensus, allowing
 validators to verify compact proofs instead of entire state components.
@@ -36,14 +36,27 @@ While many ZKP systems rely on assumptions vulnerable to quantum attacks,
 lattice-based cryptography provides a foundation for post-quantum secure ZK
 solutions, with security often based on hard problems like SVP or SIS \cite{Ajtai1998}.
 
+The majority of currently deployed ZkVMs and ZkEVMs employ hash-based STARKs \cite{SoKZkVMs},
+which achieve post-quantum security through unstructured cryptographic hash functions
+but incur costs in proof size and verification complexity. A smaller portion
+of the ecosystem continues to rely on quantum-vulnerable elliptic curve assumptions,
+such as those underlying ECDSA or KZG commitments. Lattice-based cryptography
+presents a compelling alternative. Rather than relying on unstructured hashes,
+these schemes ground their post-quantum security in structured algebraic hard
+problems like SVP or SIS \cite{Ajtai1998, LatticeTutorial, LatticesInZKP},
+potentially offering the efficiency and mathematical properties associated
+with algebraic constructions while maintaining resistance to quantum attacks.
+
 This thesis investigates the design and implementation of a RISC-V ZkVM using
 lattice-based cryptography. A key application is proving Ethereum block
-execution, contributing to the network's scalability and post-quantum
-security. This work explores the practical construction of such a system and
-aims to assess whether lattice-based cryptography can offer performance
-comparable to classical ZKP methods while ensuring quantum resistance.
+execution, contributing to the network's scalability and alternative way of
+achieving post-quantum security. This work explores the practical construction
+of such a system and aims to assess whether lattice-based cryptography can
+offer performance comparable to classical ZKP methods while ensuring quantum resistance.
 
 \section*{Document Structure}
+
+\textbf{\Huge TODO}
 
 This work is structured as follows. Chapter~\ref{chap:analysis} provides the
 necessary background and analysis of the current state of ZkVMs and
