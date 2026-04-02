@@ -44,41 +44,41 @@ commitment from its preimage $U_{i-1}$ supplied through the private witness.
 And also it must enforce constraints on the $z_{i-1\_\text{comm}}$'s preimage:
 
 \begin{enumerate}
-    \item \textbf{Code integrity:} The preimage contains the Merkle root of
-		the program's binary code. This root enables the verification of
-		instruction decoding via Merkle opening proofs. Since the program code
-		is static and immutable, this root must not change during execution.
-		To enforce this, the circuit accepts the expected code Merkle root as
-		a public input (supplied by the verifier). The circuit constrains that
-		the code root contained within the preimage of $z_{i-1\_\text{comm}}$
-		matches this global input, preventing the prover from executing
-		instructions from a different program.
+	\item \textbf{Code integrity:} The preimage contains the Merkle root of
+	      the program's binary code. This root enables the verification of
+	      instruction decoding via Merkle opening proofs. Since the program code
+	      is static and immutable, this root must not change during execution.
+	      To enforce this, the circuit accepts the expected code Merkle root as
+	      a public input (supplied by the verifier). The circuit constrains that
+	      the code root contained within the preimage of $z_{i-1\_\text{comm}}$
+	      matches this global input, preventing the prover from executing
+	      instructions from a different program.
 
-    \item \textbf{Program counter:} The program entry point and current
-		execution pointer are tracked. The circuit logic $F$ determines the
-		next $pc$ based on the current instruction (e.g., sequential execution
-		or branching). The circuit constrains that the $pc$ component in the
-		preimage of $z_{i\_\text{comm}}$ matches this calculated value.
+	\item \textbf{Program counter:} The program entry point and current
+	      execution pointer are tracked. The circuit logic $F$ determines the
+	      next $pc$ based on the current instruction (e.g., sequential execution
+	      or branching). The circuit constrains that the $pc$ component in the
+	      preimage of $z_{i\_\text{comm}}$ matches this calculated value.
 
-    \item \textbf{Memory pages:} The VM memory is represented by a Merkle
-		root. When a store instruction is executed, the circuit requires a
-		Merkle opening proof for the target page against the root in
-		$z_{i-1\_\text{comm}}$'s preimage.
+	\item \textbf{Memory pages:} The VM memory is represented by a Merkle
+	      root. When a store instruction is executed, the circuit requires a
+	      Merkle opening proof for the target page against the root in
+	      $z_{i-1\_\text{comm}}$'s preimage.
 
-    \item \textbf{Register state:} The state includes a Poseidon2 commitment
-		to the 32 general purpose registers. The values of these registers
-		before and after the instruction are provided as part of the private
-		witness for the step circuit $F$. The circuit recalculates the
-		commitment to the output register values and asserts equality with the
-		register component of the $z_{i\_\text{comm}}$'s preimage.
+	\item \textbf{Register state:} The state includes a Poseidon2 commitment
+	      to the 32 general purpose registers. The values of these registers
+	      before and after the instruction are provided as part of the private
+	      witness for the step circuit $F$. The circuit recalculates the
+	      commitment to the output register values and asserts equality with the
+	      register component of the $z_{i\_\text{comm}}$'s preimage.
 
-    \item \textbf{Memory operations log:} The log represents a history of all
-		memory operations. The commitment to this log must be updated
-		incrementally. If a memory operation occurs during step $i$, the
-		circuit computes the new log commitment by hashing the previous
-		commitment (from $z_{i-1\_\text{comm}}$) together with the details of
-		the current operation. This result is constrained to match the log
-		commitment in $z_{i\_\text{comm}}$'s preimage.
+	\item \textbf{Memory operations log:} The log represents a history of all
+	      memory operations. The commitment to this log must be updated
+	      incrementally. If a memory operation occurs during step $i$, the
+	      circuit computes the new log commitment by hashing the previous
+	      commitment (from $z_{i-1\_\text{comm}}$) together with the details of
+	      the current operation. This result is constrained to match the log
+	      commitment in $z_{i\_\text{comm}}$'s preimage.
 \end{enumerate}
 
 
@@ -97,7 +97,7 @@ step circuit $F$, as detailed in Section \ref{sec:riscv_circuit}.
 
 \subsection{Output generation}
 
-The execution of $F'$ concludes by generating the artifacts required for the
+The execution of one IVC step concludes by generating the artifacts required for the
 subsequent step. This includes the new folded accumulator instance $U_i$, the new
 folding proof $\pi_i$, and the new IVC commitment $h_i$. $h_i$ is calculated by
 hashing the updated step counter, the initial state commitment

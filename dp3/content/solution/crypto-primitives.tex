@@ -12,13 +12,12 @@ The foundational theoretical model for this ZkVM is IVC, introduced by Valiant
 \cite{ValiantIVC}. IVC enables a single proof to attest to the correct
 execution of a long-running computation $y = F^{(n)}(x)$ by recursively
 proving that the state at step $i$ is valid and that a valid proof exists for
-step $i-1$. RISC-V execution traces of unbounded length perfectly align with
-this model.
+step $i-1$. RISC-V execution traces of unbounded length align with this model.
 
 \subsection{Folding schemes and Nova}
 
 To make IVC practical, this work utilizes the concept of \textit{Folding
-schemes} as introduced in the Nova system \cite{Nova}. Unlike traditional
+	schemes} as introduced in the Nova system \cite{Nova}. Unlike traditional
 recursion, where a circuit must fully verify a SNARK at every step, folding
 allows the prover to compress two instances of the same relation (one
 representing the current step and one representing the accumulator) into a
@@ -33,13 +32,13 @@ S-Box, which is exponentiation to the 7th degree \cite{Poseidon2}). A CCS struct
 consists of:
 
 \begin{itemize}
-    \item Size bounds $m, n, N, \ell, t, q, d \in \mathbb{N}$ where $n > \ell$.
-    \item A sequence of matrices $M_0, \dots, M_{t-1} \in \mathbb{F}^{m \times n}$.
-    \item A sequence of $q$ multisets $[S_0, \dots, S_{q-1}]$, where an
-		element in each multiset is from the domain $\{0, \dots, t-1\}$ and
-		the cardinality of each multiset is at most $d$.
-    \item A sequence of $q$ constants $[c_0, \dots, c_{q-1}]$, where each
-		constant is from $\mathbb{F}$.
+	\item Size bounds $m, n, N, \ell, t, q, d \in \mathbb{N}$ where $n > \ell$.
+	\item A sequence of matrices $M_0, \dots, M_{t-1} \in \mathbb{F}^{m \times n}$.
+	\item A sequence of $q$ multisets $[S_0, \dots, S_{q-1}]$, where an
+	      element in each multiset is from the domain $\{0, \dots, t-1\}$ and
+	      the cardinality of each multiset is at most $d$.
+	\item A sequence of $q$ constants $[c_0, \dots, c_{q-1}]$, where each
+	      constant is from $\mathbb{F}$.
 \end{itemize}
 
 A CCS instance consists of a public input $x \in \mathbb{F}^\ell$. A CCS
@@ -66,7 +65,7 @@ rely on hardness assumptions over lattices rather than the Discrete Logarithm
 Problem (DLP) used in Nova or HyperNova. The security relies on the hardness
 of the Shortest Integer Solution (SIS) and Module-SIS problems. These problems
 remain hard even in the presence of quantum computers \cite{AjtaiLattices,
-Ajtai1998, LatticeTutorial, LatticesInZKP}.
+	Ajtai1998, LatticeTutorial, LatticesInZKP}.
 
 \subsection{LatticeFold}
 
@@ -115,34 +114,33 @@ the system constructs a second transcript $tr'$ by sorting $tr$ lexicographicall
 by $(a, t)$, where each access is augmented with a time field $t_i = i$.
 The prover must demonstrate three properties:
 \begin{enumerate}
-    \item $tr'$ is a \textbf{permutation} of $tr$ (same accesses, different order);
-    \item $tr'$ is \textbf{$(a, t)$-ordered}: accesses are grouped by address and
-          time-ordered within each group;
-    \item $tr'$ respects \textbf{read-over-write (RoW)} semantics: reads return the
-          most recent written value to each address.
+	\item $tr'$ is a \textbf{permutation} of $tr$ (same accesses, different order);
+	\item $tr'$ is \textbf{$(a, t)$-ordered}: accesses are grouped by address and
+	      time-ordered within each group;
+	\item $tr'$ respects \textbf{read-over-write (RoW)} semantics: reads return the
+	      most recent written value to each address.
 \end{enumerate}
 
 The full memory consistency proof consists of three components, as described
-by Ozdemir, Laufer, and Boneh \cite{MemoryAccessInSnarks}:
+by Ozdemir, Laufer, and Boneh:
 
 \begin{enumerate}
 	\item \textbf{Permutation proof:} demonstrates that $tr'$ is a permutation of
-		$tr$. Both transcripts contain the same multiset of memory
-		accesses \cite{MemoryAccessInSnarks}.
+	      $tr$. Both transcripts contain the same multiset of memory
+	      accesses.
 
 	\item \textbf{$(a, t)$-ordering proof}: verifies that $tr'$ is correctly sorted
-		by address and time within each address group, using conditional ordering
-		and conditional uniqueness sub-proofs \cite{MemoryAccessInSnarks}.
+	      by address and time within each address group, using conditional ordering
+	      and conditional uniqueness sub-proofs.
 
 	\item \textbf{RoW proof}: enforces read-over-write semantics, ensuring
-		that each read returns the most recent written value to its address
-		\cite{MemoryAccessInSnarks}.
+	      that each read returns the most recent written value to its address.
 \end{enumerate}
 
 for the detailed construction and security analysis of these protocols, refer
 to the original work \cite{MemoryAccessInSnarks}.
 
-\subsection{Future optimization - LatticeFold+}
+\subsection{LatticeFold+}
 
 It is noted that a newer iteration of the folding scheme, LatticeFold+
 \cite{LatticeFoldPlus}, has been proposed. LatticeFold+ introduces
@@ -150,6 +148,4 @@ algebraic range proofs and double commitments, which reduce the prover
 overhead by eliminating the need for bit decomposition during witness norm
 management. However, at the time of system design, the available libraries for
 LatticeFold+ did not support CCS constraints. Thus, this work utilizes the
-standard LatticeFold protocol. The architecture is modular, allowing for the
-backend to be upgraded to LatticeFold+ in future iterations to further
-optimize proving time.
+standard LatticeFold protocol.
