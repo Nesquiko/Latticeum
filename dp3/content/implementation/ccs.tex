@@ -3,24 +3,10 @@
 The constraints defining the validity of the VM execution and the IVC chain
 are synthesized into a CCS.
 
-\subsection{Layout Management}
-
-A central component of the synthesis is the \texttt{CCSLayout} structure. This
-structure dynamically maps semantic variables (such as \texttt{is\_add},
-\texttt{val\_rs1}, or specific Poseidon2 round constants) to column indices
-within the CCS witness vector $z$.
-
-This dynamic allocation allows for the easy addition of new constraints.
-When a new variable is registered in the layout (e.g., adding support for a
-new instruction), the layout automatically shifts all subsequent indices.
-The witness generation logic in arithmetization and the constraint
-definition logic in remain synchronized without manual recalculation of column
-offsets.
-
 \subsection{Poseidon2 constraint example}
 
 This section illustrates the construction of CCS constraints for Poseidon2
-hash. Poseidon2 permutation in Goldilocks field on 12 elements (rate is 12,
+hash \cite{Poseidon2}. Poseidon2 permutation in Goldilocks field on 12 elements (rate is 12,
 with capacity 4, total width then being 16) consists of:
 
 \begin{enumerate}
@@ -35,7 +21,7 @@ with capacity 4, total width then being 16) consists of:
 The first operation applies the MDS matrix to the absorbed state. The input 12 elements
 and 4 zeroes must be in the witness. Here this input will be denoted as $s = (s_0, s_1, \ldots, s_{11}, 0, 0, 0, 0)$.
 Then the output of the MDS application is captured into the witness, denoted as $s_{after\_mds}$.
-The constraint enforces 
+The constraint enforces
 
 \[
 	s_{after\_mds\_i} - s'_i = 0
@@ -67,13 +53,13 @@ The state after each round is captured into witness, denoted as $s_{\text{inter\
 Each internal round computes for each first element:
 
 \begin{equation}
-	M_I^{-1} * s_{\text{inter\_r\_0}} - (s_{\text{in\_r\_0}} + c_{\text{inter\_0}})^7 = 0
+	M_I^{-1} \cdot s_{\text{inter\_r\_0}} - (s_{\text{in\_r\_0}} + c_{\text{inter\_0}})^7 = 0
 \end{equation}
 
 For other than first element ($i \in (1, 2, \ldots, 15)$ it does:
 
 \begin{equation}
-	M_I^{-1} * s_{\text{inter\_r\_i}} - s_{\text{in\_r\_i}} = 0
+	M_I^{-1} \cdot s_{\text{inter\_r\_i}} - s_{\text{in\_r\_i}} = 0
 \end{equation}
 
 The $s_{\text{in\_0}}$ is the output of the last external initial round, other
@@ -100,7 +86,7 @@ After the final external terminal round, the output digest is extracted
 from first 4 elements of the state
 
 \begin{equation}
-    h = (s_0, s_1, s_2, s_3)
+	h = (s_0, s_1, s_2, s_3)
 \end{equation}
 
 And compared to the claimed result.
@@ -108,10 +94,36 @@ And compared to the claimed result.
 \paragraph{Complexity analysis.}
 
 For a single Poseidon2 sponge pass, the constraint system captures 388 witness
-variables across the permutation computation. The system requires 44 sparse
-matrices to encode the linear transformations, round constants, and S-box
+variables across the permutation computation. The system requires 44
+matrices to encode the transformations, round constants, and S-box
 operations. The number of matrices remains constant regardless of
 the number of sponge passes, though their dimensions scale with the permutation
 state size. The highest degree constraint is a 7th degree multiset constraint
 corresponding to the Goldilocks S-box, and this degree does not increase with
 additional sponge passes.
+
+\subsection{Self-aware NIFS constraints}
+
+Some constraints needed for the in-circuit NIFS verifier are not local in the
+sense that they do not only depend on a fixed small set of witness variables,
+but on the final structure of the whole CCS. The most notable example is the
+linearization inner-product check, which verifies the relation
+
+\[
+	\texttt{inner} = \sum_i c_i \cdot \prod_{j \in S_i} u_j,
+\]
+
+where the multisets $S_i$ are precisely the multisets of the CCS currently being
+built. Therefore, this part of the verifier is self-aware. It must inspect the
+complete list of already created multisets and generate constraints from them.
+
+In the implementation this means that such constraints cannot be synthesized in
+a single pass. The builder first creates all ordinary VM, Poseidon2,
+decomposition, and folding constraints. Only after the full multiset structure
+is known are the matrices for the linearization inner-product check
+preallocated. Afterwards, in a second pass, these preallocated matrices are
+filled row-by-row with the concrete indices corresponding to the final CCS
+multisets. This is the reason why the folding related part of the builder must
+ordered carefully, and why the constants describing the final CCS dimensions
+(such as the number of matrices, multisets, and $\log_2(m)$) must be kept in
+sync with the generated system.

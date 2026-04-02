@@ -1,18 +1,19 @@
 \chapter{Implementation}\label{chap:implementation}
 
 This chapter presents the prototype implementation of the lattice-based RISC-V
-ZkVM architecture described in the Chapter~\ref{chap:design}. As of writing this work,
-the implementation covers a subset of RISC-V instructions sufficient to run
-simple programs such as an Nth Fibonacci number computation, the CCS
-constraints for these instructions, and the CCS constraints for the Poseidon2
-IVC step commitment. The circuit NIFS verifier and the final SuperSpartan+Greyhound wrapper
-are under development.
+ZkVM architecture described in the Chapter~\ref{chap:design}.
+The implementation covers:
 
-Regarding the choice of folding scheme, this work utilizes the LatticeFold
+\begin{itemize}
+	\item A subset of rv32ima instructions sufficient to run Nth Fibonacci and validate an Ethereum block.
+	\item CCS constraints for these instructions.
+	\item CCS constraints for the Poseidon2 IVC step commitment.
+	\item CCS constraints for NIFS verifier.
+\end{itemize}
+
+Regarding the choice of folding scheme, this work uses the NetherMind's implementation of LatticeFold
 protocol rather than its successor LatticeFold+, as the latter's library
 implementation was not available at the time of system design and development.
-In future migration to LatticeFold+ or other folding schemes
-is possible.
 
 \input{content/implementation/tech-stack.tex}
 
@@ -21,6 +22,8 @@ is possible.
 \input{content/implementation/riscv-emul.tex}
 
 \input{content/implementation/ccs.tex}
+
+\input{content/implementation/optimizations.tex}
 
 \section{High level overview}
 
@@ -42,133 +45,133 @@ $i$ becomes the \texttt{IVCStepInput} for step $i+1$.
 			% --- Styles ---
 			% Functions / Logic
 			func/.style={
-				rectangle, 
-				draw=red!80!black, 
-				fill=red!10, 
-				thick, 
-				minimum height=0.7cm, 
-				minimum width=4.5cm,
-				align=center,
-				rounded corners=2pt
-			},
+					rectangle,
+					draw=red!80!black,
+					fill=red!10,
+					thick,
+					minimum height=0.7cm,
+					minimum width=4.5cm,
+					align=center,
+					rounded corners=2pt
+				},
 			% Data Structures
 			data/.style={
-				rectangle, 
-				draw=blue!80!black, 
-				fill=blue!5, 
-				thick, 
-				minimum height=0.6cm, 
-				minimum width=4cm,
-				align=center,
-				dashed,
-				font=\sffamily\footnotesize
-			},
+					rectangle,
+					draw=blue!80!black,
+					fill=blue!5,
+					thick,
+					minimum height=0.6cm,
+					minimum width=4cm,
+					align=center,
+					dashed,
+					font=\sffamily\footnotesize
+				},
 			% Module Containers
 			module/.style={
-				draw=gray!40, 
-				dashed, 
-				inner sep=0.5cm, 
-				rounded corners=5pt,
-				fill=white,
-				fill opacity=0.0
-			},
+					draw=gray!40,
+					dashed,
+					inner sep=0.5cm,
+					rounded corners=5pt,
+					fill=white,
+					fill opacity=0.0
+				},
 			% Module Label
 			modlabel/.style={
-				font=\bfseries\scriptsize,
-				text=gray!60!black,
-				anchor=north east
-			},
+					font=\bfseries\scriptsize,
+					text=gray!60!black,
+					anchor=north east
+				},
 			% Lines
 			line/.style={
-				draw, 
-				-Latex, 
-				thick, 
-				gray!70!black
-			}
-			]
+					draw,
+					-Latex,
+					thick,
+					gray!70!black
+				}
+		]
 
-			% --- 1. SETUP PHASE (Top) ---
-			\node[func] (setup_vm) {\texttt{VM::load\_elf}};
-			\node[func, right=0.5cm of setup_vm] (setup_ccs) {\texttt{CCSBuilder::create\_riscv\_ccs}};
+		% --- 1. SETUP PHASE (Top) ---
+		\node[func] (setup_vm) {\texttt{VM::load\_elf}};
+		\node[func, right=0.5cm of setup_vm] (setup_ccs) {\texttt{CCSBuilder::create\_riscv\_ccs}};
 
-			% --- 2. THE LOOP  ---
+		% --- 2. THE LOOP  ---
 
-			% --- Module: riscvm ---
-			\node[func, below=1.8cm of setup_vm, xshift=2.5cm] (vm_exec) {\texttt{VM::fetch\_execute}};
-			\node[data, below=0.3cm of vm_exec] (trace) {\texttt{ExecutionTrace}};
+		% --- Module: riscvm ---
+		\node[func, below=1.8cm of setup_vm, xshift=2.5cm] (vm_exec) {\texttt{VM::fetch\_execute}};
+		\node[data, below=0.3cm of vm_exec] (trace) {\texttt{ExecutionTrace}};
 
-			% --- Module: commitments ---
-			\node[func, below=1.5cm of trace] (committer) {
-				\textbf{ZkVmCommitter methods:} \\
-				ivc\_step\_comm,\\
-				state\_i\_comm,\\
-				acc\_comm,\\
-				vm\_regs\_comm,\\
-				vm\_mem\_comm
-			};
-			\node[data, below=0.3cm of committer] (comms) {Commitments represented by\\\texttt{GoldilocksComm}\\(4 Goldilocks field elements)};
+		% --- Module: commitments ---
+		\node[func, below=1.5cm of trace] (committer) {
+			\textbf{ZkVmCommitter methods:} \\
+			ivc\_step\_comm,\\
+			state\_i\_comm,\\
+			acc\_comm,\\
+			vm\_regs\_comm,\\
+			vm\_mem\_comm
+		};
+		\node[data, below=0.3cm of committer] (comms) {Commitments represented by\\\texttt{GoldilocksComm}\\(4 Goldilocks field elements)};
 
-			% --- Module: ivc ---
-			\node[data, below=1.5cm of comms] (ivc_input) {\textbf{\texttt{IVCStepInput}} \\ (Prev Acc + Trace + Comms)};
-			\node[func, below=0.3cm of ivc_input] (arith) {\texttt{arithmetize(input, layout)}};
-			\node[data, below=0.3cm of arith] (z_vec) {\texttt{Vec<GoldilocksRingNTT>}\\($z$ vector)};
+		% --- Module: ivc ---
+		\node[data, below=1.5cm of comms] (ivc_input) {\textbf{\texttt{IVCStepInput}} \\ (Prev Acc + Trace + Comms)};
+		\node[func, below=0.3cm of ivc_input] (arith) {\texttt{arithmetize(input, layout)}};
+		\node[data, below=0.3cm of arith] (z_vec) {\texttt{Vec<GoldilocksRingNTT>}\\($z$ vector)};
 
-			% --- Module: main ---
-			\node[func, below=1.5cm of z_vec] (commit_wit) {\texttt{commit(z, ccs, scheme)}};
-			\node[data, below=0.3cm of commit_wit] (cccs) {\texttt{CCCS} ($cm_i$) + \texttt{Witness} ($w_i$)};
+		% --- Module: main ---
+		\node[func, below=1.5cm of z_vec] (commit_wit) {\texttt{commit(z, ccs, scheme)}};
+		\node[data, below=0.3cm of commit_wit] (cccs) {\texttt{CCCS} ($cm_i$) + \texttt{Witness} ($w_i$)};
 
-			\node[func, below=0.3cm of cccs] (nifs) {\texttt{fold(ccs, scheme, acc, w\_acc, cm\_i, w\_i)}};
-			\node[data, below=0.3cm of nifs] (output) {\textbf{\texttt{IVCStepOutput}} \\ (New Accumulator + Proof)};
+		\node[func, below=0.3cm of cccs] (nifs) {\texttt{fold(ccs, scheme, acc, w\_acc, cm\_i, w\_i)}};
+		\node[data, below=0.3cm of nifs] (output) {\textbf{\texttt{IVCStepOutput}} \\ (New Accumulator + Proof)};
 
-			% --- 3. MODULE BOUNDARIES ---
-			\begin{scope}[on background layer]
-				% VM Box
-				\node[module, fit=(vm_exec) (trace)] (box_riscv) {};
-				\node[modlabel] at (box_riscv.north east) {\texttt{mod riscvm}};
+		% --- 3. MODULE BOUNDARIES ---
+		\begin{scope}[on background layer]
+			% VM Box
+			\node[module, fit=(vm_exec) (trace)] (box_riscv) {};
+			\node[modlabel] at (box_riscv.north east) {\texttt{mod riscvm}};
 
-				% Comm Box
-				\node[module, fit=(committer) (comms)] (box_comm) {};
-				\node[modlabel] at (box_comm.north east) {\texttt{mod commitments}};
+			% Comm Box
+			\node[module, fit=(committer) (comms)] (box_comm) {};
+			\node[modlabel] at (box_comm.north east) {\texttt{mod commitments}};
 
-				% IVC Box
-				\node[module, fit=(ivc_input) (arith) (z_vec)] (box_ivc) {};
-				\node[modlabel] at (box_ivc.north east) {\texttt{mod ivc}};
+			% IVC Box
+			\node[module, fit=(ivc_input) (arith) (z_vec)] (box_ivc) {};
+			\node[modlabel] at (box_ivc.north east) {\texttt{mod ivc}};
 
-				% Latticefold Box
-				\node[module, fit=(commit_wit) (cccs) (nifs) (output)] (box_fold) {};
-				\node[modlabel] at (box_fold.north east) {\texttt{crate latticefold}};
+			% Latticefold Box
+			\node[module, fit=(commit_wit) (cccs) (nifs) (output)] (box_fold) {};
+			\node[modlabel] at (box_fold.north east) {\texttt{crate latticefold}};
 
-				% Main Loop Container
-				\node[draw=gray!80, thick, inner sep=25pt, fit=(box_riscv) (box_fold), label={[anchor=north west, font=\bfseries]north west:Execution Loop (\texttt{vm.run})}] (main_loop) {};
-			\end{scope}
+			% Main Loop Container
+			\node[draw=gray!80, thick, inner sep=25pt, fit=(box_riscv) (box_fold), label={[anchor=north west, font=\bfseries]north west:Execution Loop (\texttt{vm.run})}] (main_loop) {};
+		\end{scope}
 
-			% --- 4. CONNECTIONS ---
+		% --- 4. CONNECTIONS ---
 
-			% Init -> Loop
-			% Manual orthogonal lines
-			\draw[line] (setup_vm.south east) -- (vm_exec.north);
-			\draw[line] (setup_ccs.south east) -- ++(0,-4.5) -- (commit_wit.east);
+		% Init -> Loop
+		% Manual orthogonal lines
+		\draw[line] (setup_vm.south east) -- (vm_exec.north);
+		\draw[line] (setup_ccs.south east) -- ++(0,-4.5) -- (commit_wit.east);
 
-			% Flow down
-			\draw[line] (vm_exec) -- (trace);
-			\draw[line] (trace) -- (committer);
-			\draw[line] (committer) -- (comms);
-			\draw[line] (comms) -- (ivc_input);
-			\draw[line] (ivc_input) -- (arith);
-			\draw[line] (arith) -- (z_vec);
-			\draw[line] (z_vec) -- (commit_wit);
-			\draw[line] (commit_wit) -- (cccs);
-			\draw[line] (cccs) -- (nifs);
-			\draw[line] (nifs) -- (output);
+		% Flow down
+		\draw[line] (vm_exec) -- (trace);
+		\draw[line] (trace) -- (committer);
+		\draw[line] (committer) -- (comms);
+		\draw[line] (comms) -- (ivc_input);
+		\draw[line] (ivc_input) -- (arith);
+		\draw[line] (arith) -- (z_vec);
+		\draw[line] (z_vec) -- (commit_wit);
+		\draw[line] (commit_wit) -- (cccs);
+		\draw[line] (cccs) -- (nifs);
+		\draw[line] (nifs) -- (output);
 
-			\draw[line, dashed] (output.east) -- ++(2.9, 0) 
-			-- ++(0, 7.3)
-			-- (ivc_input.east);
+		\draw[line, dashed] (output.east) -- ++(2.9, 0)
+		-- ++(0, 7.3)
+		-- (ivc_input.east);
 
-			% Label for loop
-			\node[font=\scriptsize\bfseries, text=gray!80!black, rotate=90] at ($(output.east) + (2.7, 3.5)$) {Accumulator ($i \to i+1$)};
-		\end{tikzpicture}
-   \caption{High-level overview of the implemented execution flow.}
-    \label{fig:execution_flow_overview}
+		% Label for loop
+		\node[font=\scriptsize\bfseries, text=gray!80!black, rotate=90] at ($(output.east) + (2.7, 3.5)$) {Accumulator ($i \to i+1$)};
+	\end{tikzpicture}
+	\caption{High-level overview of the implemented execution flow.}
+	\label{fig:execution_flow_overview}
 \end{tikzFigure}
 

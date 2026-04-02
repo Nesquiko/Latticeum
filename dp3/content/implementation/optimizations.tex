@@ -1,0 +1,28 @@
+\section{Implementation optimizations}
+
+Besides the direct translation of algebraic relations into CCS constraints,
+several optimizations were done in order to keep the ZkVM runnable on local
+consumer-grade hardware as long as possible in development.
+
+\subsection{\texttt{arkworks-rs} upgrade}
+
+The LatticeFold library, and its dependencies, use the \texttt{arkworks-rs}\footnote{\url{https://github.com/arkworks-rs}}
+version \texttt{v0.4.x} libraries for low level cryptography primitives. New versions
+of these foundational libraries were released with optimizations and improvements.
+In order to update and gain these benefits, the local fork of \texttt{latticefold}
+was migrated to new version along with forking its dependencies
+\texttt{cyclotomic-rings}, \texttt{stark-rings} and also migrating them to new versions.
+
+\subsection{Reusing matrix structures}
+
+Another optimization is that the builder groups together constraints
+that share the same algebraic shape, even if they correspond to different parts
+of the verifier. Instead of creating completely separate matrices and multisets
+for every single row, the implementation often allocates one small family of
+matrices and reuses them across many rows. For example, all product constraints
+of the form "left input times right input equals intermediate product" can be
+stored in the same pair of matrices and one linear
+matrix for the output product. Likewise, entire families of recomposition
+constraints are accumulated into shared linear matrices, differing only in the
+rows that are populated. This reduces CCS size and avoids unnecessary growth in
+the number of matrices and multisets.
