@@ -1,35 +1,69 @@
 \chapter{Conclusion}\label{chap:conclusion}
 
-This thesis presented the design and initial implementation of a post-quantum
-ZkVM based on lattice-based cryptography. The proposed architecture integrates a
-RISC-V execution environment with the LatticeFold folding scheme, supported by
-CCS for arithmetization. The design provides
-a theoretical blueprint, addressing the challenges of post-quantum
-security and incrementally verifiable computation.
+This thesis investigated whether a general-purpose RISC-V ZkVM can be built
+from lattice-based cryptographic primitives and still remain compatible with an
+IVC-style proving architecture. The main result is a concrete design for such a
+system. The proposed architecture combines a 32-bit RISC-V execution model,
+CCS-based arithmetization, LatticeFold recursion, deferred memory checking,
+and a Greyhound wrapping SNARK proof. In this sense,
+the thesis provides not only a conceptual motivation for a post-quantum ZkVM,
+but also a blueprint of how the individual components can be
+connected into a single proving pipeline.
 
-The implementation validates core component integration. The RISC-V emulator
-successfully generates execution traces, CCS constraints for Poseidon2 hashes are
-synthesized and integrated with LatticeFold, and the IVC step commitment
-mechanism is functional. The performance baseline of approximately 42 seconds
-for a 16 cycles long Fibonacci computation provides a positive outlook.
+The implementation demonstrates that the main building blocks of this design can
+be made to work together. A functional RISC-V emulator was implemented, witness
+generation for the execution trace was integrated with CCS construction,
+Poseidon2 was constrained inside the proving system, and the LatticeFold
+IVC chain was connected to the execution layer. The experimental results show
+that the current prototype is significantly slower than established zkVMs, and
+profiling indicates that the dominant cost lies in multilinear-extension and
+folding related algebraic computation rather than in the VM execution itself.
+
+At the same time, the results are not purely negative. The system successfully
+produced artifacts for the benchmarked execution, and a
+longer \texttt{revm}-based EVM experiment continued for more than nine hours
+while the IVC chain was being verified and memory usage remained bounded. This
+does not yet show practical competitiveness with production zkVMs, but it does
+support the central claim of the thesis: a lattice-based, non-hash-based,
+post-quantum ZkVM is feasible at the architectural level, and its current
+limitations appear to be mainly engineering and arithmetization issues rather
+than a fundamental impossibility of the approach. In addition, although the
+prototype does not yet implement the final Greyhound wrapper, the expected
+proof size of such a wrapper remains attractive. Based on Greyhound's reported
+evaluation proof sizes, a future final proof in the range of a few tens of
+kilobytes appears plausible, which would be a strong practical property of this
+design.
 
 \section{Future Work}
 
 Several directions for future research and development emerge from this work:
 
 \begin{itemize}
-    \item \textbf{Formal verification:} Formal verification of the implementation
-		would provide strong guarantees of correctness.
-    
-    \item \textbf{LatticeFold+ integration:} Migrating the folding backend to
-		LatticeFold+ could yield significant performance improvements through its
-		more efficient algebraic range proofs and double commitment techniques.
-    
-    \item \textbf{GPU acceleration:} The LatticeFold prover operations, including
-		NTT transformations and matrix-vector multiplications can be sped up with
-		GPU acceleration, thus bringing proving times down.
-    
-	\item \textbf{Lookup incorporation:} Integrating lookup arguments could
-		optimize constraint generation for certain operations, potentially reducing
-		circuit size and improving performance for complex instructions.
+	\item \textbf{Different computation model than CCS:} One important question is
+	      whether CCS is the right arithmetization for a self-proving IVC system.
+	      While CCS is expressive and convenient for some VM instructions, the
+	      evaluation suggests that it may be a poor fit for recursive verifier
+	      logic and for some non-linear cryptographic components. Alternative
+	      models, such as AIR or lookup formulations, may be a better
+	      foundation for future iterations.
+
+	\item \textbf{SIMD and GPU acceleration for lattice operations:} A large part
+	      of the current prover cost comes from lattice arithmetic, decomposition,
+	      multilinear extensions, and related linear algebra. These operations are
+	      regular and parallel, which makes them promising candidates for both
+	      SIMD optimization and GPU acceleration.
+
+	\item \textbf{LatticeFold+ or Neo as a backend:} Replacing the current folding
+	      backend with LatticeFold+ \cite{LatticeFoldPlus} or Neo \cite{Neo} is a
+	      natural next step. LatticeFold+ offers a more efficient folding design,
+	      while Neo is especially interesting because it targets CCS over small
+	      fields directly and introduces pay-per-bit commitments.
+
+	\item \textbf{Algebraic and architectural optimization:} Beyond low-level
+	      implementation tuning, the system may benefit from more specialized
+	      lattice oriented mathematical optimizations. Another promising direction
+	      is to revisit the proving architecture itself. Instead of proving steps in
+	      a mostly inline sequential manner, a tree shaped proving structure may
+	      allow much stronger parallelization and significantly better hardware
+	      utilization.
 \end{itemize}
