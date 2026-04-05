@@ -1,8 +1,10 @@
+## TODOs
+
+- The libraries was forked in order to export data needed in the CCS NIFS circuitry and to use ark std 0.5
+
 ## Feedback from DP2
 
-- there are post quantum zkvms, but based on hashes
 - be prepared with lattice problems that are hard
-- local benchmarks of other zkvms against mine
 
 ## Add to analysis
 

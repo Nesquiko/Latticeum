@@ -1,125 +1,280 @@
 \chapter{Evaluation}\label{chap:evaluation}
 
-This chapter provides an initial evaluation of the lattice-based RISC-V ZkVM
-implementation. It is important to note that the implementation is currently
-incomplete and does not represent a fully functional system. The results
-presented here establish baseline performance metrics for the implemented
-components rather than providing a comprehensive performance comparison with
-existing ZkVMs.
+This chapter evaluates the lattice-based RISC-V ZkVM prototype developed in
+this work. The current implementation is incomplete and should not be understood
+as a production-ready ZkVM. The goal of this chapter is therefore not to claim
+state-of-the-art performance, but to compare the prototype with existing ZkVMs,
+to explain the observed differences, and to answer the research questions of
+this thesis.
 
-The performance measurements were conducted on consumer-grade hardware using
-the following system configuration:
-
-\begin{itemize}
-    \item \textbf{CPU:} 11th Gen Intel i7
-    \item \textbf{OS:} Arch Linux 
-    \item \textbf{Memory:} 16 GB RAM
-\end{itemize}
-
-\section{Limitations}
-
-This evaluation is subject to several important limitations:
+The performance measurements were conducted on server-grade hardware with the
+following configuration:
 
 \begin{itemize}
-    \item \textbf{Incomplete implementation:} The in-circuit NIFS verifier,
-		memory consistency checks, and final wrapping SNARK are not yet
-		implemented. The measured performance does not reflect the full
-		proving pipeline.
-    \item \textbf{Small test case:} The evaluation uses a simple Fibonacci
-		computation (16 execution traces), which is insufficient to assess
-		performance on realistic workloads like Ethereum block validation.
-    \item \textbf{Consumer hardware:} The benchmarks were run on consumer
-		hardware. Production deployments of other ZkVMs use GPU clusters.
+	\item \textbf{CPU:} Intel Xeon E312xx
+	\item \textbf{OS:} Ubuntu 24.04
+	\item \textbf{Memory:} 64 GB RAM
 \end{itemize}
 
-\section{Fibonacci benchmark results}
+\section{Fibonacci benchmark}
 
 A simple benchmark was conducted using a program that computes the 100th
-Fibonacci number. This program was chosen because it does not need many RISC-V
-instructions to calculate the result.
+Fibonacci number. This benchmark was selected because it is small, easy to
+reproduce, and does not require a large number of RISC-V instructions.
 
-The Fibonacci program execution resulted in:
+The Fibonacci program execution in the prototype resulted in:
 
 \begin{itemize}
-    \item \textbf{Execution traces:} 16 instructions
-    \item \textbf{Memory operations:} 2 operations (loads/stores)
-	\item \textbf{Total proving time:} 41.95 seconds
+	\item \textbf{Execution traces:} 16 instructions
+	\item \textbf{Memory operations:} 2 operations
+	\item \textbf{Total folding time:} 688.24 seconds
 \end{itemize}
 
-\subsection{Comparison with State-of-the-Art ZkVMs}
+This result already shows that the current implementation is considerably slower
+than modern ZkVM systems. However, this number must be interpreted carefully,
+because the prototype still contains many unoptimized components and runs only
+on CPU.
 
-For context, benchmarks from Fenbushi Capital report proving times for the
-100,000th Fibonacci number on an EC2 g5.x16xlarge instance (64 vCPUs, AMD EPYC
-7R32, 256 GB RAM, NVIDIA A10G GPU with 24 GB VRAM) \cite{FenbushiBenchmarks}:
+\section{Comparison with other ZkVMs}
 
-\begin{center}
-    \begin{tabular}{|l|c|}
-        \hline
-        \textbf{ZkVM} & \textbf{Time (seconds)} \\
-        \hline
-        SP1 & 3.4 \\
-        RISC Zero & 3.7 \\
-        OpenVM & 7.6 \\
-        \hline
-    \end{tabular}
-\end{center}
+Additional benchmark artifacts were collected on the same machine for Pico,
+SP1, and ZKsync Airbender. Table~\ref{tab:zkvm-benchmarks-v2} compares the
+wall-clock time of the proving and the peak RAM usage.
 
-The measured proving time of approximately 42 seconds for 16 traces provides
-does not sound very "performant" nor nowhere close to real time proving of Ethereum
-blocks. And compared to established ZkVMs it seems miserable.
-However, the interpretation of this measurement does not have to be so negative.
-Firstly, the implementation is not complete, is not optimized and is running only
-on CPU, no GPU acceleration. There is not enough evidence to rule out this design.
+ZisK is not included in this comparison. The benchmark server did not support
+the SIMD instruction set required by ZisK, and therefore a comparable proof run
+could not be executed on the same hardware.
 
-\section{Addressing the research objectives}
+\begin{table}[h]
+	\centering
+	\begin{tabular}{|l|c|c|}
+		\hline
+		\textbf{ZkVM}    & \textbf{Proof time} & \textbf{Peak RAM} \\
+		\hline
+		Latticeum        & 11:28.92            & 12.34 GB          \\
+		Pico             & 2:04.50             & 6.27 GB           \\
+		SP1              & 1:50.17             & 9.96 GB           \\
+		ZKsync Airbender & 4:06.73             & 24.34 GB          \\
+		\hline
+	\end{tabular}
+	\caption{Comparison of proof generation time and peak RAM usage for the Fibonacci benchmark.}
+	\label{tab:zkvm-benchmarks-v2}
+\end{table}
+
+The comparison shows that the proposed system is slower than the compared
+systems. Pico and SP1 complete the proof much faster, and Airbender is also
+significantly faster in time, although it uses substantially more memory.
+
+At the same time, one possible advantage of the lattice-based construction may
+be proof size. The current prototype does not yet produce the final Greyhound
+wrapping proof, so no measured proof size can be reported at this
+stage. Therefore, the following comparison is only theoretical.
+
+For the compared ZkVMs, the reported final proof sizes are approximately 1 MB
+for Airbender, approximately 1 MB for Pico, and approximately 260 KB for ZisK,
+as summarized in the earlier ZkEVM comparison in this thesis. In contrast, the
+Greyhound paper reports polynomial evaluation proofs of about 53 KB for large
+polynomials of degree up to $N = 2^{30}$. This is not directly the same as a
+final wrapping proof for the proposed ZkVM, so these values are not fully
+comparable. However, they indicate that a future Greyhound-based wrapper could
+potentially produce proofs in the order of tens of kilobytes. If this can be
+achieved in a complete implementation, proof size could become an important
+practical advantage of the lattice-based approach.
+
+To complement the small Fibonacci benchmark, a longer experiment was also run
+with the \texttt{evm} guest based on \texttt{revm}. This run continued for
+approximately 9 hours and 29 minutes on the same machine. During this time, the
+system kept processing the execution and verifying the IVC chain, while peak RAM
+usage remained around 13.7 GB. This is still far from production-level
+performance, but it is an encouraging sign that the implementation can continue
+working on a substantially more complex workload without an uncontrolled memory
+increase or failing to produce proof.
+
+\section{Why is the prototype slower?}
+
+The benchmark results suggest that the main limitation of the current prototype
+is not correctness, but performance. Several reasons can explain this outcome.
+
+\paragraph{Folding is not as cheap in practice as it appears in theory.}
+
+The literature often describes folding as a sequence of relatively cheap random
+linear combinations. From a theoretical perspective this description is correct.
+However, the practical implementation cost is still high.
+
+In the prototype, a significant amount of time is spent in multilinear
+extension-related computations. Even if the algebraic step is conceptually only
+a random linear combination, the real implementation still has to evaluate large
+objects, move large vectors through memory, and repeatedly perform arithmetic on
+high-dimensional representations. Therefore, even though LatticeFold is
+efficient in theory, it is not automatically efficient in practice.
+
+This observation is supported by profiling of the Fibonacci proving run. The
+flame graph (which can be found in the project source code named\\\texttt{fibonacci\_flamegraph.svg}) shows that most of the
+runtime is spent inside Rayon worker threads, where the dominant application
+hotspots belong to \texttt{latticefold}'s multilinear extension and
+folding/decomposition routines. The most latticefold related functions are
+\texttt{compute\_mz\_mles}, \texttt{to\_mles\_err},
+\texttt{evaluate\_mles}, \texttt{get\_etas},
+\texttt{compute\_u\_s} and there is also visible time spent in
+\texttt{DenseMultilinearExtension} arithmetic.
+
+By contrast, the commitment computation is present in the profile but is not one
+of the main bottlenecks, and witness arithmetization itself is not especially
+prominent. The profile therefore suggests that the main practical cost of the
+current prototype is not the front-end VM execution, but the MLE-heavy algebraic
+work required by decomposition and folding. This is consistent with the measured
+runtime, where the proving overhead is dominated by the algebraic representation
+of the witness rather than by the small Fibonacci program itself.
+
+\paragraph{CCS may be an inconvenient computation model for this use case.}
+
+Another possible reason is the choice of CCS as the computation model.
+
+CCS is flexible and is well suited for expressing linear relations. This makes
+it a reasonable model for several simple VM instructions. However, the full
+system does not contain only linear computation. The non-interactive folding
+scheme itself is not purely linear, and the verifier logic introduces higher
+degree structure.
+
+This creates several problems in practice:
+
+\begin{itemize}
+	\item CCS does not provide custom gates in the same sense as many modern proving
+	      systems. Because of that, the representation may require more matrices and
+	      more bookkeeping than a more specialized system.
+	\item Some parts of the VM are relatively simple in CCS, but components such as
+	      Poseidon2 and the folding verifier are much less natural to express.
+	\item The folding verifier is especially difficult because its constraints must be
+	      self-aware. In other words, they must already know the shape of the proof
+	      that they are verifying.
+\end{itemize}
+
+This last point may create a kind of circular dependency. To verify an object of
+higher degree $D$, the verifier may require information whose own constraint
+system increases the degree again. Then one has to enlarge the representation,
+which may increase the maximal degree once more. In this sense, the model may
+create a loop where expressing the verifier makes the verifier itself more
+expensive to express.
+
+For this reason, CCS may be acceptable for basic linear VM instructions, but it
+may be a poor fit for cryptographic permutations such as Poseidon2 and for the
+self-referential structure of folding verification.
+
+\section{Potential speed improvements}
+
+The current benchmark should not be understood as a final performance limit.
+Several optimization directions remain open.
+
+\subsection{SIMD and GPU acceleration}
+
+The present implementation runs only on CPU. This immediately puts it at a
+disadvantage compared to systems that use heavily optimized parallel proving
+pipelines.
+
+The arithmetic in the prototype has regular structure, which makes it suitable
+for SIMD acceleration. Large vector operations, MLE evaluations, and some parts
+of the commitment computations could benefit from parallel execution.
+GPU acceleration is another natural direction, especially for large batches of
+similar field or ring operations.
+
+There is also some encouraging ecosystem progress in this direction. Recently,
+a pull request was merged into the Arkworks algebra libraries whose primary
+motivation was to create a generalized path toward vectorized SIMD
+optimizations for finite fields in Arkworks\footnote{\url{https://github.com/arkworks-rs/algebra/pull/1044}.}.
+This is relevant, because the current implementation depends on Arkworks-based components.
+However, using this new path in practice would still require non-trivial work.
+In particular, the \texttt{latticefold} library would need to rewrite important
+parts of its internal representation to use the new SIMD-friendly field types.
+Therefore, this optimization direction is promising, but it is not something
+that can be enabled by a small configuration change.
+
+\subsection{More mathematical optimizations}
+
+Because the system is built over algebraic structures, it may admit more
+specialized optimizations than a direct implementation currently uses.
+
+Possible examples include:
+
+\begin{itemize}
+	\item more efficient layouts for multilinear extensions,
+	\item better batching of linear algebra operations,
+	\item reuse of intermediate evaluations across folding steps,
+	\item specialization of constraints for the most common instruction classes.
+\end{itemize}
+
+These improvements are not only low-level engineering optimizations. They are
+also mathematical optimizations, because the efficiency of the system depends
+strongly on how the algebraic objects are represented and evaluated.
+
+\section{Addressing the research questions}
 
 \subsection*{Feasibility of lattice-based instantiation}
 
 \textit{Is it feasible to instantiate a full RISC-V execution environment using
-CCS compatible with the LatticeFold protocol?}
+	CCS compatible with the LatticeFold protocol?}
 
-\textbf{Design perspective:} The proposed architecture provides a complete
-theoretical blueprint. The mapping of RISC-V state transitions to CCS constraints
-and integration with LatticeFold folding is specified, demonstrating
-architectural feasibility.
+\textbf{Answer:} Partially yes.
 
-\textbf{Implementation perspective:} Partial feasibility demonstrated. The
-RISC-V emulator and Poseidon2 CCS constraints are functional and integrated
-with LatticeFold. In-circuit NIFS verifier and complete instruction set coverage
-remain to be implemented.
+From the design perspective, the thesis demonstrates that such an architecture
+can be specified. The mapping from RISC-V execution state to CCS-compatible
+constraints was designed, and the connection to LatticeFold was established.
+
+From the implementation perspective, the feasibility is only partially shown.
+The prototype contains a functional RISC-V emulator, witness generation, and the
+basic integration with folding. However, it still lacks complete instruction set
+coverage and a complete in-circuit verifier for the full recursive workflow.
+
+Therefore, the answer is positive on the architectural level, but still
+incomplete on the implementation level.
 
 \subsection*{Performance trade-offs}
 
 \textit{How does the performance of a lattice-based folding scheme compare to
-traditional elliptic curve-based folding schemes when applied to general-purpose
-VM execution?}
+	traditional elliptic curve-based folding schemes when applied to general-purpose
+	VM execution?}
 
-\textbf{Design perspective:} The design leverages lattice-based commitments
-with additive homomorphic properties, theoretically suitable for efficient
-folding. Performance trade-offs are architecturally addressed through
-optimization opportunities such as LatticeFold+ and parallelization.
+\textbf{Answer:} In the current prototype, the lattice-based approach is slower.
 
-\textbf{Implementation perspective:} No answer can be provided yet, as there
-is not direct comparison yet. When the implementation will be completed,
-then benchmarks can be created and compared to existing ZkVMs.
+The benchmark comparison shows that the implemented system needs more time than
+the compared ZkVMs to generate a proof for the benchmark program. The main
+practical reason appears to be that the algebraic work of folding, especially
+MLE-related computation, is expensive in the current implementation. Another
+reason is that CCS may not be the most convenient model for all parts of the
+system, especially for cryptographic permutations and folding verification.
+
+At the same time, the results do not imply that lattice-based folding is a bad
+direction in principle. The implementation is still early, CPU-only, and not yet
+optimized. In addition, compact proof size remains a positive property of the
+approach.
+
+Therefore, the present answer is that the current implementation has worse
+practical proving time, but the long-term trade-off remains open.
 
 \subsection*{Suitability for long-running computations}
 
 \textit{Does the noise growth inherent in lattice-based cryptography hinder the
-ability to prove long execution traces, such as those required for Ethereum block
-validation?}
+	ability to prove long execution traces, such as those required for Ethereum block
+	validation?}
 
-\textbf{Design perspective:} LatticeFold addresses witness norm growth through
-decomposition at each folding step. By decomposing the witness during every fold,
-the system maintains bounded norms, making execution of long-running
-computations secure and feasible.
+\textbf{Answer:} The current results are not conclusive, but they provide a
+positive outlook.
 
-\textbf{Implementation perspective:} Inconclusive. The 100th Fibonacci benchmark
-with 16 traces does not exercise long-running computation paths. Testing with
-larger programs is required to observe noise growth effects in practice.
+From the design perspective, LatticeFold addresses witness norm growth by
+decomposition during folding. This suggests that long computations should remain
+manageable in principle.
 
-% \subsection{Positive Outlook}
-% The design demonstrates architectural soundness, while the implementation
-% validates core component integration. The performance baseline provides a
-% foundation for optimization efforts, and the modular design supports
-% incremental improvements and adoption of advancements like LatticeFold+.
+From the implementation perspective, the Fibonacci benchmark is too small to
+provide a strong answer, because 16 traces do not meaningfully stress the
+long-run behavior of the system. However, the additional \texttt{revm}-based EVM
+experiment gives a more encouraging signal. That run continued for more than 9
+hours, the IVC chain kept being verified, and memory usage stayed within a
+stable range instead of growing out of control. This does not yet prove that the
+system is ready for Ethereum block proving in practice, but it suggests that
+longer executions are not immediately blocked by catastrophic witness or memory
+growth.
+
+Therefore, the final answer is cautiously positive. The current implementation
+does not yet provide a complete experimental proof that noise growth will remain
+manageable at production scale, but the observed long-running behavior supports
+the claim that the lattice-based design is viable and deserves further
+optimization and larger-scale testing.

@@ -40,9 +40,9 @@
 
 % Table of contents
 \ifx\FIITlagEN\undefined
-    \renewcommand{\contentsname}{Obsah}
+	\renewcommand{\contentsname}{Obsah}
 \else
-    \renewcommand{\contentsname}{Table of contents}
+	\renewcommand{\contentsname}{Table of contents}
 \fi
 \tableofcontents{}
 
@@ -58,26 +58,26 @@
 % Begin references segment
 \begin{refsegment}
 
-    \include{content/introduction}
+	\include{content/introduction}
 
-    \include{content/analysis/analysis}
+	\include{content/analysis/analysis}
 
 	\include{content/problem_statement}
 
-    \include{content/solution/solution}
+	\include{content/solution/solution}
 
-    \include{content/implementation/implementation}
+	\include{content/implementation/implementation}
 
-    \include{content/evaluation}
+	\include{content/evaluation_v2}
 
-    \include{content/fw_and_conslussion}
+	\include{content/fw_and_conslussion}
 
-    % Bibliography
-    \printbibliography[heading=references,segment=\therefsegment]
+	% Bibliography
+	\printbibliography[heading=references,segment=\therefsegment]
 
-    % no page numbers for appendices
-    \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
-    \addtocontents{toc}{\cftpagenumbersoff{chapter}}
+	% no page numbers for appendices
+	\addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
+	\addtocontents{toc}{\cftpagenumbersoff{chapter}}
 
 \end{refsegment}
 
