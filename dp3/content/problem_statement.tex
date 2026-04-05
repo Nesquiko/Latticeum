@@ -17,7 +17,7 @@ languages (such as Rust or C++) and prove their correct execution.
 Some currently deployed ZkEVMs and ZkVMs rely on cryptographic hardness
 assumptions, specifically the Discrete Logarithm Problem in elliptic curve
 groups, that are vulnerable to attacks by sufficiently powerful quantum
-computers. Majority of ZkVMs use hash-based STARKs, which offer a post-quantum
+computers. Majority of ZkVMs use hash-based STARKs \cite{STARK}, which offer a post-quantum
 alternative, but they incur significant costs in terms of proof size or
 verification complexity compared to SNARKs based on specific algebraic structures.
 
@@ -38,6 +38,9 @@ unproven whether the theoretical efficiency of lattice folding translates to
 practical performance for complex computations like a VM. Without such an
 implementation, it is impossible to accurately compare the performance
 trade-offs between lattice-based approaches and the elliptic curve architectures.
+This difficulty is reinforced by the fact that existing ZkVMs already span a
+highly heterogeneous design space across the ISA, VM, and proving layers
+\cite{SoKZkVMs}.
 
 \section{Research objectives}
 

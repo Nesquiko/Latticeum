@@ -30,13 +30,15 @@ aggregate computation steps, leading to the first generation of Layer 2
 ZkEVMs. Folding schemes further optimized this by compressing instances. The
 current trend involves Zero-Knowledge Virtual Machines (ZkVMs), especially
 those based on the simpler, register-based RISC-V ISA \cite{RISCV}, which is
-more amenable to ZK proof generation.
+more amenable to ZK proof generation. Recent systematization work also shows
+that ZkVMs differ substantially in ISA choices, trace layouts, memory checking,
+and proving backends \cite{SoKZkVMs}.
 
 While many ZKP systems rely on assumptions vulnerable to quantum attacks,
 lattice-based cryptography provides a foundation for post-quantum secure ZK
 solutions, with security often based on hard problems like SVP or SIS \cite{Ajtai1998}.
 
-The majority of currently deployed ZkVMs and ZkEVMs employ hash-based STARKs \cite{SoKZkVMs},
+The majority of currently deployed ZkVMs and ZkEVMs employ hash-based STARKs \cite{SoKZkVMs, STARK},
 which achieve post-quantum security through unstructured cryptographic hash functions
 but incur costs in proof size and verification complexity. A smaller portion
 of the ecosystem continues to rely on quantum-vulnerable elliptic curve assumptions,

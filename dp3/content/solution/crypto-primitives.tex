@@ -4,7 +4,10 @@ ZkVM integrates several zero-knowledge cryptography primitives to achieve
 IVC via folding. This compositional approach allows the system to benefit from
 the efficiency of folding in recursive steps while maintaining post-quantum
 security under lattice-based assumptions. The following section details the
-selected cryptographic building blocks.
+selected cryptographic building blocks. From the perspective of zkVM
+architecture, these choices belong mainly to the proving layer, which interacts
+closely with the ISA and execution design decisions surveyed in
+\cite{SoKZkVMs}.
 
 \subsection{Incrementally Verifiable Computation (IVC)}
 
@@ -22,7 +25,8 @@ recursion, where a circuit must fully verify a SNARK at every step, folding
 allows the prover to compress two instances of the same relation (one
 representing the current step and one representing the accumulator) into a
 single instance. The cryptographic cost of folding is negligible compared to
-SNARK verification.
+SNARK verification. The resulting recursive proof can then be compressed by a
+Spartan-style SNARK \cite{Spartan}.
 
 \subsection{Customizable Constraint Systems (CCS)}
 
@@ -85,13 +89,13 @@ While LatticeFold allows for efficient recursion, the final artifact is a
 large lattice-based accumulator that is expensive to verify directly.
 A wrapping SNARK is used to compress this into a succinct proof.
 
-This wrapper is constructed by combining the \textbf{SuperSpartan} \cite{HyperNova}
+This wrapper is constructed by combining the \textbf{SuperSpartan} \cite{Spartan, HyperNova}
 IOP, which verifies the satisfiability of the CCS relation, with
 \textbf{Greyhound} \cite{Greyhound}, a lattice-based PCS with polylogarithmic
 verification complexity.
 
 SuperSpartan is agnostic to the underlying algebraic structure (field vs. ring),
-allowing instantiation of the Sum-Check protocol over the lattice
+allowing instantiation of the Sum-Check protocol \cite{SumcheckArticle} over the lattice
 ring $R_q$. The final polynomial evaluation query required by SuperSpartan is
 then proven using the Greyhound PCS, which supports the same ring structure \cite{HyperNova, Greyhound}.
 

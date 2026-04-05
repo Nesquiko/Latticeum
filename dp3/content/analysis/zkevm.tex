@@ -180,8 +180,11 @@ In the 2022 to early 2024 first generation of ZkEVMs was successfully deployed.
 Thanks to recursive proving, it was feasible for these ZkEVMs to be created.
 They first prove the EVM execution, and then prove knowledge of a EVM proof inside another circuit.
 This enabled parallelization of proving and reduced the size and complexity of
-the final proof submitted to L1. ZK systems like Plonky2 \cite{Plonky2}, or
-Halo2 \cite{Halo2}, are examples of recursive ZKP systems. Notable references
+the final proof submitted to L1. The proving system landscape of this period was
+strongly influenced by PLONK \cite{Plonk}, while recursive systems such as
+Plonky2 \cite{Plonky2} and Halo2 \cite{Halo2} became practical examples of this
+direction. In a broader system view, this period also laid the foundations for
+the more modular zkVM architectures surveyed in \cite{SoKZkVMs}. Notable references
 include Scroll, zkSync Era, Polygon ZkEVM.
 
 \subsection{Folding schemes}
@@ -342,6 +345,11 @@ The only sensible comparison method for ZkEVMs is to benchmark them on proving
 Ethereum blocks. EthProofs \cite{EthProofs} is a portal where ZkEVM teams can
 join and be measured on the most important thing, the proving times of Ethereum
 blocks. As of writing this work, around 75\% of blocks are proven under 10 seconds.
+The leading systems in this comparison are all based on STARK-style proving
+systems \cite{STARK}, typically combined with FRI commitments \cite{FRI}.
+At the same time, these systems also differ in ISA design, trace structure,
+memory organization, and recursion strategy, which complicates direct
+performance comparison \cite{SoKZkVMs}.
 Comparison of currently top 3 ZkVMs can be found in Table \ref{tab:zkvm-comparison}.
 
 \begin{table}[h]

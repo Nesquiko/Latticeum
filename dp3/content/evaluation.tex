@@ -64,6 +64,9 @@ could not be executed on the same hardware.
 The comparison shows that the proposed system is slower than the compared
 systems. Pico and SP1 complete the proof much faster, and Airbender is also
 significantly faster in time, although it uses substantially more memory.
+As recent systematization work emphasizes, such differences are influenced not
+only by the proof system itself, but also by ISA choice, trace layout, memory
+checking strategy, and recursion architecture \cite{SoKZkVMs}.
 
 At the same time, one possible advantage of the lattice-based construction may
 be proof size. The current prototype does not yet produce the final Greyhound
@@ -155,6 +158,11 @@ system increases the degree again. Then one has to enlarge the representation,
 which may increase the maximal degree once more. In this sense, the model may
 create a loop where expressing the verifier makes the verifier itself more
 expensive to express.
+
+This also suggests that lookup arguments may be a useful complement to the
+current design. Lookup systems such as Lasso \cite{Lasso} can encode repeated
+table relations more compactly than direct constraint expansion, which may
+be relevant for operations on bytes, value checks, and other common VM subroutines.
 
 For this reason, CCS may be acceptable for basic linear VM instructions, but it
 may be a poor fit for cryptographic permutations such as Poseidon2 and for the

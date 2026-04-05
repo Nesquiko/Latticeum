@@ -6,6 +6,9 @@ leverages IVC to break down the execution of a program into individual steps.
 To instantiate IVC a folding scheme LatticeFold \cite{LatticeFold} is used,
 which recursively folds steps into a single, constant-sized cryptographic object.
 The architecture is designed to support the 32 bit RISC-V instruction set.
+Following recent zkVM systematization work \cite{SoKZkVMs}, this design can be
+understood as a composition of an ISA layer, an execution layer that produces
+traces, and a proving layer that arithmetizes and proves them.
 
 \subsection{The ZkVM IVC}
 
@@ -191,4 +194,3 @@ The verification logic exists at two distinct levels:
 	      supply initial public arguments and verify the succinct proof of the
 	      whole RISC-V VM execution.
 \end{enumerate}
-

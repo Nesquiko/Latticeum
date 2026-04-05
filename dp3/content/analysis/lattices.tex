@@ -180,3 +180,19 @@ two main lattice techniques:
 
 LatticeFold+ aims to be competitive with, or even outperform, pre-quantum
 folding schemes like HyperNova \cite{HyperNova} while offering plausible post-quantum security.
+
+\subsubsection{Neo}
+
+More recently, Nguyen and Setty proposed Neo \cite{Neo}, a lattice-based
+folding scheme for CCS over small prime fields. This is particularly relevant to
+the design space of this thesis, because CCS is also the chosen arithmetization
+here and the implementation works over a small field.
+
+Neo can be viewed as bringing the HyperNova style of folding into the
+lattice-based setting while avoiding some of the overheads of LatticeFold's
+cyclotomic-ring formulation. In particular, the paper emphasizes native support
+for small fields such as Goldilocks, a single sum-check invocation over an
+extension of a small prime field, and a new folding friendly Ajtai commitment
+scheme with pay-per-bit commitment costs. These properties make Neo one of the
+closest known lattice-based systems to the architecture targeted in this work.
+
