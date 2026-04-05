@@ -949,7 +949,7 @@ pub fn set_trace_witness(z: &mut Vec<usize>, trace: &ExecutionTrace, layout: &CC
 
             z[layout.has_overflown_idx] = trace.side_effects.has_overflown.into();
         }
-        _ => panic!("unsupported instruction: {:?}", trace.instruction.inst),
+        _ => tracing::warn!("unsupported instruction: {:?}", trace.instruction.inst),
     };
 
     z[layout.pc_out_idx] = trace

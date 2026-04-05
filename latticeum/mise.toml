@@ -3,9 +3,9 @@
 [tasks.debug]
 run = "RUST_LOG=debug cargo run --bin zkvm --features debug,latticefold/parallel --release -- --guest ./target/riscv32imac-unknown-none-elf/release/fibonacci"
 
-[tasks.copy-debug-to-vm]
+[tasks.copy-to-vm]
 run = [
-	'cargo build --bin zkvm --features debug,latticefold/parallel --release',
+	'cargo build --bin zkvm --features latticefold/parallel --release',
 	'rsync -avzP ./target/release/zkvm dp:/home/ubuntu/latticeum/',
 	'rsync -avzP ./target/riscv32imac-unknown-none-elf/release/fibonacci dp:/home/ubuntu/latticeum/'
 ]

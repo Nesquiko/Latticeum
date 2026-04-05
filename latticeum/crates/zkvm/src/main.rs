@@ -7,6 +7,7 @@ mod ivc;
 mod poseidon2;
 mod zk_latticefold;
 
+use ark_serialize::{CanonicalSerialize, Compress};
 use clap::Parser;
 use cyclotomic_rings::rings::{GoldilocksRingNTT, GoldilocksRingPoly};
 use latticefold::{
@@ -25,7 +26,7 @@ use std::path::PathBuf;
 use tracing::{Level, instrument};
 use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
 
-use vm::riscvm::vm::{InterceptArgs, new_vm_1mb};
+use vm::riscvm::vm::{InterceptArgs, new_vm_8mb};
 
 #[cfg(feature = "debug")]
 use crate::constraints::check_relation_debug;
@@ -67,7 +68,7 @@ fn main() {
 
     tracing::info!("proving program '{}'", program_path);
 
-    let vm = new_vm_1mb();
+    let vm = new_vm_8mb();
     let mut vm = match vm.load_elf(program) {
         Ok(vm) => vm,
         Err(e) => panic!("failed to load '{}' elf, {}", program_path, e),
@@ -227,6 +228,10 @@ fn main() {
 
     let vm_run_time = start_zkvm_run.elapsed();
     tracing::info!("folding completed in {:?} ({} cycles)", vm_run_time, step,);
+    if let Some(final_folding_proof) = ivc_output.folding_proof.as_ref() {
+        let proof_size_bytes = final_folding_proof.serialized_size(Compress::Yes);
+        tracing::info!("final folding proof size: {} bytes", proof_size_bytes);
+    }
 }
 
 // tracing::info!("generating final folding proof...");
