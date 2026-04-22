@@ -1,0 +1,309 @@
+% Resume
+\thispagestyle{empty}
+
+\chapter*{Resum\'e}
+\addcontentsline{toc}{chapter}{Resum\'e}
+\markboth{Resum\'e}{Resum\'e}
+
+\section{Motivácia práce}
+
+Diplomová práca sa venuje využitiu dôkazov s nulovou znalosťou v ekosystéme
+Ethereum, konkrétne návrhu post-kvantovo bezpečného ZkVM založeného na
+mriežkovej kryptografii. Hlavnou motiváciou práce je problém škálovateľnosti
+Etherea. V súčasnom modeli musia uzly siete pri spracovaní blokov opätovne
+vykonávať a overovať všetky transakcie. Tento prístup je síce bezpečný, ale pri
+väčšom zaťažení siete vedie k vysokým výpočtovým nárokom a obmedzuje celkovú
+priepustnosť systému.
+
+Jedným z hlavných smerov, ako tento problém riešiť, je použitie dôkazov s
+nulovou znalosťou. Tie umožňujú dokázať správnosť výpočtu bez toho, aby musel
+overovateľ celý výpočet vykonať znova. V prostredí Ethereum sa preto objavuje
+myšlienka tzv. snarkifikácie, teda nahradenia priameho overovania vykonania
+blokov overením stručného kryptografického dôkazu. Ak je možné správnosť
+vykonania bloku potvrdiť jediným dôkazom, otvára sa cesta k efektívnejšiemu
+overovaniu, jednoduchšej škálovateľnosti a do budúcnosti aj k prirodzenejšej
+integrácii rollupových riešení. Širší kontext Ethereum a snarkifikácie je
+spracovaný v kapitole~\ref{chap:analysis}, konkrétne v sekciách
+\ref{sec:ethereum} a~\ref{sec:snarkification}. Vývoj od ZkEVM k všeobecným
+ZkVM, ako aj úloha rekurzie a skladania, sú opísané v sekcii~\ref{sec:zkevm}
+a znázornené na obrázkoch~\ref{fig:ivc_diagram} a~\ref{fig:ivc-folding}.
+
+Popri škálovateľnosti je dôležitou motiváciou aj bezpečnosť. Mnohé súčasné ZKP
+systémy využívajú predpoklady, ktoré nie sú odolné voči kvantovým útokom.
+Časť ekosystému síce smeruje k post-kvantovým riešeniam založených na hašoch, napríklad k
+systémom typu STARK, no tie majú často menej priaznivé vlastnosti z pohľadu
+veľkosti dôkazu alebo nákladov na verifikáciu. Práve preto sa v práci skúma
+mriežková kryptografia ako alternatíva, ktorá ponúka post-kvantovú bezpečnosť
+založenú na problémoch ako SVP a SIS a zároveň zachováva algebraickú štruktúru
+vhodnú pre konštrukciu pokročilých dôkazových systémov.
+
+Mriežková kryptografia je pre túto prácu dôležitá aj z architektonického
+hľadiska. Nie je zaujímavá iba ako náhrada za klasické schémy založené na
+eliptických krivkách, ale aj ako základ pre skladanie dôkazov v štýle IVC.
+Práce ako Ajtaijove záväzky, LaBRADOR, Greyhound a najmä LatticeFold ukazujú,
+že mriežkové primitíva možno využiť aj pri návrhu stručných a rekurzívnych
+dôkazových mechanizmov. Práca preto skúma, či možno tieto prístupy použiť na
+vytvorenie všeobecného RISC-V ZkVM, ktorá by bola použiteľná aj pre úlohy
+súvisiace s dokazovaním správneho vykonania Ethereum blokov. Teoretické
+vlastnosti mriežkovej kryptografie sú rozobraté v sekcii~\ref{sec:lattices} a
+výber použitých kryptografických primitív v návrhu riešenia v sekcii
+~\ref{sec:crypto}.
+
+Ďalšou motiváciou práce je výber vhodného výpočtového modelu. Priame dokazovanie
+EVM je zložité, pretože EVM nebolo navrhnuté s ohľadom na efektívnu ZK
+aritmetizáciu. Obsahuje komplikovanejšie inštrukcie, pracuje s 256-bitovými
+slovami a používa model, ktorý je pre tvorbu dôkazov menej prirodzený. Preto sa
+v súčasnosti pozornosť presúva k všeobecným ZkVM nad architektúrou RISC-V,
+ktorá je jednoduchšia, registrová a vhodnejšia na formálne zachytenie vykonania
+programu. V tejto práci je RISC-V zvolený ako vhodný základ na návrh systému,
+ktorý by spájal post-kvantovú bezpečnosť, architektúru ZkVM a potenciálne
+využitie v prostredí Ethereum. Porovnanie vlastností existujúcich ZkVM je
+uvedené v tabuľke~\ref{tab:zkvm-comparison}.
+
+Motiváciou práce je teda spojiť tri hlavné požiadavky: zlepšenie
+škálovateľnosti, zachovanie post-kvantovej bezpečnosti a návrh realistickej
+architektúry všeobecného ZkVM. Z tejto motivácie prirodzene vyplýva aj samotný
+problém, ktorému sa práca venuje.
+
+\section{Vymedzenie problému}
+
+Na základe analýzy súčasného stavu možno povedať, že oblasť ZkVM sa rýchlo
+rozvíja, no zároveň je veľmi rozmanitá. Existujú riešenia založené na rôznych
+inštrukčných sadách, rôznych modeloch aritmetizácie aj na rôznych dôkazových
+mechanizmoch. Napriek tomu však v literatúre ani v dostupnom open-source
+ekosystéme zatiaľ neexistuje praktické riešenie všeobecného RISC-V ZkVM, ktoré
+by bolo postavené na mriežkových primitívach a využívalo skladanie ako základ
+inkrementálne overiteľného výpočtu.
+
+Práve táto medzera tvorí hlavný problém diplomovej práce. Hoci mriežková
+kryptografia a schémy ako LatticeFold teoreticky naznačujú, že post-kvantové
+skladanie dôkazov je možné, nie je zrejmé, či sa tieto myšlienky dajú pretaviť
+do funkčného systému pre všeobecné vykonávanie programov. Nestačí totiž iba
+navrhnúť jednotlivé kryptografické primitíva. Je potrebné vytvoriť celú
+architektúru, v ktorej bude možné reprezentovať stav virtuálneho stroja,
+aritmetizovať jednotlivé kroky vykonania, kontrolovať konzistenciu pamäte a
+spájať všetky kroky do jedného IVC reťazca. Tento problém je formulovaný v
+kapitole~\ref{chap:problem_statement}. Základná schéma navrhovanej architektúry
+je rozpracovaná v kapitole návrhu riešenia~\ref{chap:design}, najmä v sekciách
+\ref{sec:arch}, \ref{sec:riscv_circuit} a~\ref{sec:ivc}, a znázornená na
+obrázkoch~\ref{fig:execution_flow} a~\ref{fig:snark_wrap}.
+
+Ďalšou časťou problému je výkonnosť takéhoto riešenia. To, že je nejaký prístup
+teoreticky možný, ešte neznamená, že bude aj prakticky použiteľný. Pri návrhu
+ZkVM založeného na mriežkovej kryptografii vznikajú náklady spojené s
+aritmetizáciou inštrukcií, generovaním dôkazových dát, skladaním inštancií a
+rekurzívnym overovaním. Bez konkrétnej implementácie nie je možné reálne
+posúdiť, ako sa takýto systém správa, aké sú jeho časové a pamäťové nároky a
+ako sa porovnáva s existujúcimi ZkVM založenými na klasických alebo hash-based
+post-kvantových prístupoch.
+
+Dôležitou súčasťou problému je aj otázka dlhých výpočtov. Ak má byť takýto
+systém zaujímavý pre Ethereum, nestačí ukázať, že funguje na malých ukážkových
+príkladoch. Musí byť aspoň na prototypovej úrovni overené, či je schopný zvládať
+dlhšie výpočtové stopy bez zjavného zlyhania. V prípade mriežkovej kryptografie
+je táto otázka obzvlášť dôležitá aj kvôli rastu šumu a praktickým obmedzeniam,
+ktoré sa môžu objaviť pri dlhšom rekurzívnom skladaní.
+
+Problém riešený v tejto diplomovej práci možno preto zhrnúť nasledovne: chýba
+konkrétna a experimentálne overená inštancia všeobecného RISC-V ZkVM založeného
+na mriežkovej kryptografii, ktorá by umožnila posúdiť jeho realizovateľnosť,
+výkonnostné kompromisy a vhodnosť pre dlhšie výpočty. Práca na túto medzeru
+reaguje návrhom a implementáciou prototypu. Cieľom nie je vytvoriť okamžite
+produkčne použiteľný systém, ale overiť, či je takýto smer z architektonického
+a implementačného hľadiska uskutočniteľný a aké obmedzenia sa pri ňom prejavia.
+
+\section{Návrh riešenia}
+
+Návrh riešenia je opísaný v kapitole~\ref{chap:design}. Jeho cieľom je vytvoriť
+architektúru všeobecného RISC-V ZkVM, ktorá bude vhodná pre dokazovanie dlhých
+výpočtov a zároveň bude postavená na mriežkových kryptografických primitívach.
+Navrhovaný systém je rozdelený na niekoľko vrstiev. Na vstupnej strane vchádza
+program napísaný vo vyššom programovacom jazyku, typicky v Ruste, ktorý sa
+skompiluje do binárnej podoby pre 32-bitovú architektúru RISC-V. Tento binárny
+súbor následne vykonáva virtuálny stroj, pričom počas vykonávania vzniká stopa
+obsahujúca informácie o stave stroja, dekódovanej inštrukcii a prípadných
+pamäťových operáciách. Celkový tok spracovania je znázornený na
+obrázku~\ref{fig:execution_flow}.
+
+Základným stavebným prvkom navrhovaného riešenia je tzv. krokový obvod $F$,
+ktorý je opísaný v sekcii~\ref{sec:riscv_circuit}. Tento obvod reprezentuje
+jeden krok vykonania RISC-V programu. Jeho úlohou je overiť, že prechod medzi
+stavom pred vykonaním inštrukcie a stavom po jej vykonaní zodpovedá pravidlám
+zvolenej ISA. To zahŕňa načítanie inštrukcie, jej dekódovanie, kontrolu
+správnosti operandov, vykonanie samotnej semantiky inštrukcie a aktualizáciu
+stavu stroja. Zvolený kryptografický postup pracuje nad algebraickou
+štruktúrou z Goldilocks cyklotomického poľa, bolo potrebné
+aritmetizovať 32-bitovú logiku procesora do formy vhodnej pre CCS. Práve CCS
+predstavuje model obmedzení, na ktorom je návrh postavený.
+
+Samotný obvod $F$ však nestačí na dokazovanie dlhých výpočtov. Z tohto dôvodu
+je v sekcii~\ref{sec:ivc} definovaný rozšírený obvod $F'$, ktorý slúži ako
+jadro IVC mechanizmu. Tento obvod obaluje jeden krok vykonania a zároveň
+zabezpečuje integritu celého reťazca dôkazov. V každom kroku kontroluje, že
+aktuálny stav nadväzuje na predchádzajúci stav, že predchádzajúci akumulátor je
+platný a že predošlé skladanie prebehlo korektne. Na tento účel je do návrhu
+zaradený aj vnorený overovateľ pre LatticeFold. Výsledkom je architektúra,
+v ktorej sa jednotlivé kroky výpočtu neoverujú izolovane, ale sú postupne
+spájané do jedného priebežne aktualizovaného akumulátora.
+
+Z kryptografického hľadiska je návrh riešenia založený na kombinácii viacerých
+stavebných blokov, ktoré sú rozobraté v sekcii~\ref{sec:crypto}. Základom je
+model IVC, ktorý umožňuje dokazovať správnosť dlhého výpočtu inkrementálne.
+Praktickú realizáciu tejto myšlienky zabezpečuje skladanie inštancií, inšpirované
+prácami Nova a HyperNova, no v tejto práci je klasický mechanizmus nahradený
+schémou LatticeFold. Tá poskytuje post-kvantové bezpečnostné vlastnosti a
+zároveň umožňuje budovať rekurzívny dôkazový mechanizmus nad mriežkovými
+predpokladmi. Dôležitou súčasťou návrhu je aj použitie Poseidon2 záväzkov na
+reťazenie krokov a identifikáciu stavu IVC, ako aj voľba obaľovacieho SNARKu, kde sa
+uvažuje o spojení SuperSpartan a Greyhound, opísané v
+sekcii~\ref{subsec:wrapping_snark}. Záverečný krok obalenia výsledného artefaktu
+je znázornený na obrázku~\ref{fig:snark_wrap}.
+
+Osobitnou otázkou návrhu bola práca s pamäťou. Priamo vkladať úplnú kontrolu
+pamäte do každého kroku výpočtu by znamenalo výrazné zvýšenie zložitosti
+obvodu. Preto návrh využíva odloženú kontrolu konzistencie pamäte, opísanú v
+sekcii~\ref{subsec:memory_check}. Počas vykonávania sa zaznamenávajú všetky
+čítania a zápisy do pamäťového logu, pričom ich úplná kontrola sa presúva až do
+neskoršej fázy. Tento prístup znižuje záťaž krokového obvodu a zároveň zachováva
+možnosť overiť správnosť read-over-write správania pamäte.
+
+Z pohľadu architektúry je dôležité, že návrh riešenia nie je iba zoznamom
+samostatných kryptografických techník, ale tvorí prepojený systém. Sekcia
+\ref{sec:arch} opisuje vysokú úroveň architektúry, sekcia
+\ref{sec:riscv_circuit} formalizuje samotný krok vykonania a sekcia
+\ref{sec:ivc} vysvetľuje, ako sa tieto kroky spájajú do dlhého dôkazového
+reťazca. Cieľom návrhu nie je deklarovať finálne optimalizované riešenie, ale
+ukázať, že je možné vytvoriť konzistentnú architektúru, v ktorej sa spoja
+RISC-V vykonávanie, CCS aritmetizácia, IVC, skladanie pomocou LatticeFold a
+post-kvantový obaľovací mechanizmus do jedného uceleného ZkVM návrhu.
+
+\section{Implementácia}
+
+Implementácia navrhnutého riešenia je opísaná v kapitole~\ref{chap:implementation}.
+Jej cieľom bolo vytvoriť funkčný prototyp, na ktorom bude možné overiť praktickú
+uskutočniteľnosť navrhnutej architektúry. Implementácia nepokrýva všetky časti,
+ktoré by boli potrebné pre plnohodnotný produkčný ZkVM, ale zahŕňa hlavné
+stavebné bloky potrebné na experimentálne overenie konceptu. Súčasťou
+prototypu je podmnožina inštrukcií architektúry \texttt{rv32ima}, CCS obmedzenia
+pre ich vykonávanie, CCS obmedzenia pre Poseidon2 záväzky a taktiež
+obmedzenia potrebné pre vnútro obvodového overovateľa.
+
+Prototyp bol implementovaný v jazyku Rust a použitý technologický základ je
+opísaný v sekcii~\ref{sec:tech_stack}. Algebraická a hašovacia vrstva je
+postavená na knižniciach z ekosystému Plonky3, samotné skladanie využíva
+implementáciu LatticeFold od Nethermind. Ako hosťovský program bol v
+rámci experimentov použitý aj \texttt{REVM}, čo umožnilo skúmať správanie
+systému na dlhších výpočtoch súvisiacich s Ethereum prostredím.
+
+Významnou súčasťou implementácie bolo vytvorenie vlastného RISC-V
+emulátora, ktorý generuje vykonávaciu stopu potrebnú pre dôkazový systém.
+Emulátor vykonáva program po jednotlivých inštrukciách a pri každom kroku
+sprístupňuje úplný stav stroja. Tým sa oddelila samotná exekúcia programu od
+generovania dôkazových dát. Vykonávacia stopa sa následne používa pri tvorbe
+dôkazového vektora a pri napĺňaní CCS štruktúr. Vysokoúrovňový pohľad na
+implementovaný tok vykonania je znázornený na obrázku~\ref{fig:execution_flow_overview}.
+
+Z implementačného hľadiska patrili medzi najnáročnejšie časti integrácia
+kryptografických knižníc a syntéza obmedzení. Bežné kryptografické knižnice sú
+navrhnuté tak, aby vracali najmä finálny výsledok operácie, zatiaľ čo v ZkVM je
+potrebné zachytiť aj medzistavy výpočtu na účely witness generovania. Preto bola
+vytvorená vlastná implementácia permutácie Poseidon2, ktorá sprístupňuje vnútorné
+stavy potrebné pre CCS obmedzenia. Podobne bolo potrebné upraviť aj prácu s
+knižnicou LatticeFold, aby bolo možné znovu použiť interné verifierové a pomocné
+rutiny pri konštrukcii in-circuit logiky.
+
+Ďalšou dôležitou časťou implementácie bola syntéza CCS obmedzení. Tá zahŕňala
+preklad logiky RISC-V inštrukcií do algebraickej formy, explicitné zachytenie
+výpočtu Poseidon2 a aj konštrukciu seba referenčných obmedzení potrebných pre
+overovateľa skladania. Keďže tieto časti závisia od konečnej štruktúry celého CCS,
+implementácia musela prebiehať vo viacerých fázach. Súčasťou práce boli aj
+praktické optimalizácie, napríklad zdieľanie maticových štruktúr medzi podobnými
+typmi obmedzení, aby zostal prototyp spustiteľný aj na bežnom hardvéri.
+
+Výsledkom implementácie nie je úplne dokončený produkčný systém, ale funkčný
+prototyp hlavných architektonických komponentov. Tento prototyp umožnil overiť,
+že navrhnutý prístup nie je iba teoretický, ale že jeho kľúčové časti možno
+skutočne spojiť do jedného bežiaceho systému a následne experimentálne
+vyhodnotiť.
+
+\section{Vyhodnotenie}
+
+Vyhodnotenie prototypu je spracované v kapitole~\ref{chap:evaluation}. Jeho
+cieľom nie je preukázať produkčnú pripravenosť systému, ale posúdiť, či
+navrhnutá architektúra funguje v praxi a aké výsledky dosahuje neúplný
+prototyp.
+
+Základný benchmark bol vykonaný na programe počítajúcom 100. Fibonacciho číslo.
+Pri tomto behu vznikla vykonávacia stopa dlhá 16 inštrukcií a zaznamenali sa 2
+pamäťové operácie. Celkový čas skladania dosiahol 688,24 sekundy. Už tento
+jednoduchý príklad ukázal, že aktuálny prototyp je výrazne pomalší než moderné
+ZkVM riešenia.
+
+Podrobnejšie porovnanie s inými systémami je uvedené v tabuľke~\ref{tab:zkvm-benchmarks-v2}.
+Na rovnakom hardvéri dosiahla implementácia tejto práce čas generovania dôkazu
+11:28.92 pri maximálnej spotrebe 12.34 GB RAM. Pre porovnanie, Pico dosiahlo
+2:04.50 a 6.27 GB RAM, SP1 dosiahlo 1:50.17 a 9.96 GB RAM a ZKsync Airbender
+4:06.73 pri 24.34 GB RAM. Z týchto výsledkov vyplýva, že navrhovaný systém je v
+aktuálnej podobe pomalší ako porovnávané riešenia. Jednou z možných budúcich
+výhod však môže byť menšia veľkosť finálneho dôkazu.
+
+Popri malom benchmarku bol vykonaný aj dlhší experiment s hosťovským programom
+založeným na \texttt{revm}. Tento beh trval približne 9 hodín a 29 minút, počas
+ktorých systém pokračoval vo vykonávaní programu a overovaní IVC reťazca.
+Maximálna spotreba pamäte sa pohybovala okolo 13.7 GB. Hoci ani tento výsledok
+neznamená pripravenosť na produkčné dokazovanie Ethereum blokov, je dôležitý tým,
+že ukazuje schopnosť systému pokračovať v dlhšom výpočte bez zjavného kolapsu.
+
+Vyhodnotenie sa venuje aj otázke, prečo je aktuálny prototyp pomalší. Hlavným
+praktickým problémom sa ukázala byť algebraická náročnosť skladania, najmä práca
+s multilineárnymi rozšíreniami a súvisiacimi operáciami v rámci LatticeFold.
+Profilovanie ukázalo, že dominantná časť výpočtu neleží v samotnom vykonávaní
+virtuálneho stroja, ale v algebraických operáciách potrebných pre skladanie.
+Druhým možným dôvodom je samotná voľba CCS ako výpočtového modelu.
+
+Na základe vykonaných experimentov práca odpovedá aj na tri výskumné otázky.
+Na otázku realizovateľnosti mriežkového RISC-V ZkVM odpovedá čiastočne kladne:
+na architektonickej úrovni bol takýto systém navrhnutý a na prototypovej úrovni
+aj implementovaný, hoci zatiaľ neúplne. Na otázku výkonových kompromisov je
+odpoveď v súčasnom stave skôr negatívna, keďže implementácia je pomalšia než
+porovnávané ZkVM. Na otázku vhodnosti pre dlhé výpočty sú výsledky opatrne
+pozitívne, pretože dlhší experiment neukázal okamžitý problém s nekontrolovaným
+rastom pamäte ani zlyhanie rekurzívneho reťazca, hoci na definitívne závery by
+bolo potrebné rozsiahlejšie testovanie.
+
+Celkové vyhodnotenie teda ukazuje, že navrhovaný smer je architektonicky
+uskutočniteľný, ale zatiaľ výkonovo nekonkurencieschopný voči etablovaným
+riešeniam. Prototyp však potvrdil, že mriežková kryptografia sa dá použiť ako
+základ pre všeobecný RISC-V ZkVM a že tento smer má zmysel ďalej rozvíjať.
+
+\section{Záver}
+
+Záver práce je spracovaný v kapitole~\ref{chap:conclusion}. Diplomová práca sa
+venovala návrhu a prototypovej implementácii post-kvantovo bezpečného RISC-V
+ZkVM založeného na mriežkovej kryptografii s potenciálnym využitím v prostredí
+Ethereum. Hlavným prínosom práce je návrh ucelenej architektúry, ktorá spája
+RISC-V vykonávanie, CCS aritmetizáciu, IVC, skladanie pomocou LatticeFold a
+uvažovaný obaľovací mechanizmus založený na kombinácii SuperSpartan a
+Greyhound.
+
+Práca zároveň ukázala, že tento smer nie je iba teoretickou úvahou. Podarilo sa
+implementovať funkčný prototyp hlavných stavebných blokov systému, ktorý
+umožnil experimentálne overiť základnú realizovateľnosť navrhovaného prístupu.
+Výsledky síce ukazujú, že aktuálna implementácia zaostáva za etablovanými ZkVM
+z pohľadu výkonu a nemožno ju považovať za produkčne pripravené riešenie, no
+zároveň naznačujú, že hlavné obmedzenia sú skôr implementačné a aritmetizačné
+ako principiálne.
+
+Z pohľadu výskumného prínosu je dôležité najmä to, že práca adresuje konkrétnu
+medzeru v súčasnom stave poznania. Ukazuje, ako možno mriežkové primitíva
+využiť pri návrhu všeobecného ZkVM a aké praktické problémy pri tom vznikajú.
+Zároveň poskytuje prvé experimentálne údaje, na základe ktorých možno
+realistickejšie hodnotiť výkonové kompromisy, vhodnosť zvoleného výpočtového
+modelu a správanie systému pri dlhších výpočtoch.
+
+Práca tým vytvára základ pre ďalší výskum. Prirodzenými pokračovaniami sú
+efektívnejší výpočtový model než CCS, lepšia algebraická optimalizácia,
+využitie SIMD alebo GPU akcelerácie a tiež prechod na novšie mriežkové schémy,
+napríklad LatticeFold+ alebo Neo. Celkovo možno uzavrieť, že navrhnutý smer je
+perspektívny a zaslúži si ďalšie rozpracovanie, aj keď v súčasnom stave ešte
+nepredstavuje konkurencieschopné produkčné riešenie.
