@@ -90,7 +90,7 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 
 \begin{tikzFigure}
 	\begin{tikzpicture}
-		\node[dataNode] (rust) {Rust source};
+		\node[dataNode, xshift=-2.4cm] (rust) {Rust source};
 		\node[processNode, right=0.8cm of rust] (compiler) {Compiler\\(LLVM/GCC)};
 		\node[dataNode, right=0.8cm of compiler] (elf) {RISC-V\\binary};
 
@@ -103,7 +103,7 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 		\node[dataNode, below=1cm of vm] (witness) {Witness $w_i$};
 		\draw[arrow] (vm) -- node[midway, right] {Exec instruction $i$} (witness);
 
-		\node[processNode, below left=1.5cm and 0.5cm of witness] (stepCircuit) {Step circuit $F$\\ (RISC-V logic)};
+		\node[processNode, below left=1.5cm and 0.7cm of witness] (stepCircuit) {Step circuit $F$\\ (RISC-V logic)};
 		\node[processNode, below=0.5cm of stepCircuit] (ivcChainCheck) {IVC chain\\check};
 		\node[processNode, below=0.5cm of ivcChainCheck] (foldVerifier) {LatticeFold\\verifier};
 
@@ -130,37 +130,38 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 		\draw[arrow] (augCircuit.east) -- (ivcProofNext.west);
 		\draw[arrow] (augCircuit.east) -- (ivcHNext.west);
 
-		\node[dataNode, below=1cm of augCircuit, xshift=0.5cm] (memLog) {Memory\\operations log};
+		\node[dataNode, below=1cm of augCircuit] (memLog) {Memory\\operations log};
 		\draw[arrow] (stepCircuit.west) -- ++(-1.5,-1) -- ++(0,-1.5) -- (memLog.west) node[midway, left] {\scriptsize Memory logs};
 
-		\node[left=0.8cm of ivcProofPrev] (dotsStart) {\Large$\dots$};
-		\draw[arrow] (dotsStart) -- (accPrev);
-		\draw[arrow] (dotsStart) -- (ivcHPrev);
-		\draw[arrow] (dotsStart) -- (ivcProofPrev);
+		\coordinate[left=0.8cm of ivcProofPrev] (dotsStart);
+		\coordinate[right=0.8cm of ivcProofNext] (dotsEnd);
+		\path (outerBox.south east) ++(0.2cm,-1.4cm) coordinate (repeatRight);
+		\path (outerBox.south west) ++(-0.2cm,-1.4cm) coordinate (repeatLeft);
+		\path (memLog.south west) ++(-0.3cm,-0.35cm) coordinate (repeatUnderLogLeft);
+		\path (memLog.south east) ++(0.3cm,-0.35cm) coordinate (repeatUnderLogRight);
+		\path (repeatUnderLogLeft) -- (repeatUnderLogRight) coordinate[midway] (repeatMid);
+		\draw[arrow, dotted] (dotsStart) -- (accPrev);
+		\draw[arrow, dotted] (dotsStart) -- (ivcHPrev);
+		\draw[arrow, dotted] (dotsStart) -- (ivcProofPrev);
+		\draw[arrow, dotted] (accNext) -- (dotsEnd);
+		\draw[arrow, dotted] (ivcHNext) -- (dotsEnd);
+		\draw[arrow, dotted] (ivcProofNext) -- (dotsEnd);
+		\draw[arrow, dotted] (dotsEnd) to[out=-20, in=0] (repeatRight) -- (repeatUnderLogRight) -- (repeatUnderLogLeft) -- (repeatLeft) to[out=180, in=-160] (dotsStart);
 
-		\node[right=0.8cm of ivcProofNext] (dotsEnd) {\Large$\dots$};
-		\draw[arrow] (accNext) -- (dotsEnd);
-		\draw[arrow] (ivcHNext) -- (dotsEnd);
-		\draw[arrow] (ivcProofNext) -- (dotsEnd);
+		\node[wrapperNode, below=2.9cm of memLog] (wrapper) {Wrapper SNARK\\(SuperSpartan + Greyhound)};
+		\node[dataNode, above=0.6cm of wrapper, xshift=-2.8cm] (accFinal) {Accumulator\\$U_{final}$};
+		\node[dataNode, above=0.6cm of wrapper] (finalProof) {Final folding proof\\$\pi_{final\ fold}$};
+		\node[dataNode, above=0.6cm of wrapper, xshift=2.8cm] (memLogFinal) {Memory\\operations log};
+		\node[dataNode, right=1.8cm of wrapper] (proof) {Final proof\\$\pi_{final}$};
+		\draw[arrow, dotted] (repeatUnderLogRight) to[out=-80, in=90] node[midway, right] {After last step} (finalProof.north);
+		\draw[arrow] (accFinal.south) -- (wrapper.north);
+		\draw[arrow] (finalProof.south) -- (wrapper.north);
+		\draw[arrow] (memLogFinal.south) -- (wrapper.north);
+		\draw[arrow] (wrapper) -- (proof);
 	\end{tikzpicture}
 
 	\caption{Execution flow of the lattice-based RISC-V ZkVM IVC instantiation.}
 	\label{fig:execution_flow}
-\end{tikzFigure}
-
-\begin{tikzFigure}
-	\begin{tikzpicture}
-		\node[wrapperNode] (wrapper) {Wrapper SNARK\\(SuperSpartan + Greyhound)};
-		\node[dataNode, above=0.5cm of wrapper, xshift=-2cm] (accNext) {Accumulator\\$U_{final}$};
-		\node[dataNode, above=0.5cm of wrapper, xshift=2cm] (memLog) {Memory\\operations log};
-
-		\node[dataNode, right=1.5cm of wrapper] (proof) {Final proof\\$\pi_{final}$};
-		\draw[arrow] (memLog) -- (wrapper);
-		\draw[arrow] (accNext.south) -- (wrapper.north);
-		\draw[arrow] (wrapper) -- (proof);
-	\end{tikzpicture}
-
-	\caption{Wrapping last folding step into SNARK.}
 	\label{fig:snark_wrap}
 \end{tikzFigure}
 \pagebreak
