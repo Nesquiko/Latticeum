@@ -345,40 +345,44 @@ The only sensible comparison method for ZkEVMs is to benchmark them on proving
 Ethereum blocks. EthProofs \cite{EthProofs} is a portal where ZkEVM teams can
 join and be measured on the most important thing, the proving times of Ethereum
 blocks. As of writing this work, around 75\% of blocks are proven under 10 seconds.
-The leading systems in this comparison are all based on STARK-style proving
-systems \cite{STARK}, typically combined with FRI commitments \cite{FRI}.
-At the same time, these systems also differ in ISA design, trace structure,
-memory organization, and recursion strategy, which complicates direct
-performance comparison \cite{SoKZkVMs}.
-Comparison of currently top 3 ZkVMs can be found in Table \ref{tab:zkvm-comparison}.
+
+The leading active systems in this comparison are all based on STARK proving
+systems \cite{STARK}, but the internal architecture is no longer uniform.
+Some systems use AIR traces with DEEP STARK and FRI, ZisK uses PIL2 state
+machines, and the current SP1 Hypercube backend uses a multilinear IOP with
+Jagged PCS and Basefold. At the same time, these systems also differ in ISA
+design, trace structure, memory organization, and recursion strategy, which
+complicates direct performance comparison \cite{SoKZkVMs}.
+
+Table \ref{tab:zkvm-comparison} compares selected zkVMs relevant to this thesis.
+Airbender, ZisK, Pico, and OpenVM were active on EthProofs at the time of
+writing, while SP1 was listed there as inactive and Nexus zkVM was not listed.
+Because these systems expose different final proof artifacts, compressed
+recursive proofs in some cases and wrapped SNARKs in others, proof size figures
+should be interpreted only as approximate.
 
 \begin{table}[h]
 	\centering
-	\small
-	\begin{tabular}{@{}lccc@{}}
+	\scriptsize
+	\begin{tabularx}{\textwidth}{@{}l>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X@{}}
 		\toprule
-		                      & \textbf{Airbender} & \textbf{ZisK} & \textbf{Pico}      \\
+		                            & \textbf{Airbender} & \textbf{ZisK}     & \textbf{Pico}      & \textbf{SP1}  & \textbf{Nexus}     & \textbf{OpenVM}     \\
 		\midrule
-		\textbf{Organization} & Matter Labs        & Polygon Labs  & Brevis Network     \\
+		\textbf{Organization}       & Matter Labs        & Polygon Labs      & Brevis             & Succinct      & Nexus              & Axiom               \\
 		\midrule
-		\textbf{Hardware}     & 8$\times$RTX 5090  & Unknown       & 16$\times$RTX 5090 \\
+		\textbf{EthProofs hardware} & 8$\times$RTX 5090  & 24 GPU            & 16$\times$RTX 5090 & n/a           & n/a                & 16$\times$ RTX 5090 \\
 		\midrule
-		\textbf{Proving time} & 5.9s               & 8.3s          & 9.8s               \\
-		\textbf{Proof size}   & $\sim$1MB          & $\sim$260KB   & $\sim$1MB          \\
+		\textbf{EthProofs time}     & 5.9s               & 8.3s              & 9.8s               & n/a           & n/a                & 4.3s                \\
+		\textbf{Proof size}         & $\sim$1MB          & $\sim$260KB       & $\sim$1MB          & 260B / 868B   & n/a                & 277 KB              \\
 		\midrule
-		\textbf{ISA}          & RV32IM             & RV64IMA       & RV32IM             \\
+		\textbf{ISA}                & RV32IM             & RV64IMA           & RV32IM             & RV64IM        & RV32IM             & RV32IM              \\
 		\midrule
-		\textbf{Proof system} & STARKs             & STARKs        & STARKs             \\
-		\textbf{Commitment}   & FRI                & FRI           & FRI                \\
-		\midrule
-		\textbf{Prime field}  & Mersenne31         & Goldilocks    & KoalaBear/BabyBear \\
-		\midrule
-		\textbf{Post quantum} & Yes                & Yes           & Yes                \\
-		\midrule
-		\textbf{Status}       & Production         & Research      & Production         \\
+		\textbf{Constraint system}  & AIR-style          & PIL2 SMs          & AIR                & AIR           & AIR                & AIR                 \\
+		\textbf{Base zk system}     & DEEP-STARK         & zk-STARK          & STARK              & Hypercube IOP & \shortstack{Circle                       \\ STARK} & \shortstack{STARK +\\ FRI} \\
+		\textbf{Wrapper}            & SNARK              & \shortstack{PLONK                                                                                 \\FFLONK}  & Groth16            & \shortstack{Groth16\\PLONK} & n/a                & \shortstack{Halo2\\BN254}         \\
 		\bottomrule
-	\end{tabular}
-	\caption{Comparison of top 3 ZkVMs on EthProofs as of April 2026}
+	\end{tabularx}
+	\caption{Comparison of selected zkVMs relevant}
 	\label{tab:zkvm-comparison}
 \end{table}
 
