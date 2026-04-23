@@ -38,8 +38,8 @@ on CPU.
 \section{Comparison with other ZkVMs}
 
 Additional benchmark artifacts were collected on the same machine for Pico,
-SP1, and ZKsync Airbender. Table~\ref{tab:zkvm-benchmarks-v2} compares the
-wall-clock time of the proving and the peak RAM usage.
+SP1, ZKsync Airbender, and Nexus zkVM 3.0. Table~\ref{tab:zkvm-benchmarks-v2}
+compares the wall-clock time of the proving and the peak RAM usage.
 
 ZisK is not included in this comparison. The benchmark server did not support
 the SIMD instruction set required by ZisK, and therefore a comparable proof run
@@ -55,6 +55,7 @@ could not be executed on the same hardware.
 		Pico             & 2:04.50             & 6.27 GB           \\
 		SP1              & 1:50.17             & 9.96 GB           \\
 		ZKsync Airbender & 4:06.73             & 24.34 GB          \\
+		Nexus zkVM 3.0   & 0:22.81             & 0.12 GB           \\
 		\hline
 	\end{tabular}
 	\caption{Comparison of proof generation time and peak RAM usage for the Fibonacci benchmark.}
@@ -62,8 +63,9 @@ could not be executed on the same hardware.
 \end{table}
 
 The comparison shows that the proposed system is slower than the compared
-systems. Pico and SP1 complete the proof much faster, and Airbender is also
-significantly faster in time, although it uses substantially more memory.
+systems. Pico and SP1 complete the proof much faster, Nexus zkVM 3.0 is also
+substantially faster, and Airbender is also significantly faster in time,
+although it uses substantially more memory.
 As recent systematization work emphasizes, such differences are influenced not
 only by the proof system itself, but also by ISA choice, trace layout, memory
 checking strategy, and recursion architecture \cite{SoKZkVMs}.
