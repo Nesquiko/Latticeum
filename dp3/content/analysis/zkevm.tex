@@ -346,43 +346,54 @@ Ethereum blocks. EthProofs \cite{EthProofs} is a portal where ZkEVM teams can
 join and be measured on the most important thing, the proving times of Ethereum
 blocks. As of writing this work, around 75\% of blocks are proven under 10 seconds.
 
-The leading active systems in this comparison are all based on STARK proving
-systems \cite{STARK}, but the internal architecture is no longer uniform.
-Some systems use AIR traces with DEEP STARK and FRI, ZisK uses PIL2 state
-machines, and the current SP1 Hypercube backend uses a multilinear IOP with
-Jagged PCS and Basefold. At the same time, these systems also differ in ISA
+The leading active systems in this comparison are STARK-based
+\cite{STARK}, but their internal architecture is not uniform.
+Airbender uses AIR constraint system with a DEEP-STARK/FRI pipeline.
+ZisK uses PIL2 as a state machine arithmetization with a STARK prover.
+Pico uses AIR with modular STARK and CircleSTARK backends. OpenVM is
+also AIR-based, but organizes much of the machine through modular chips, buses,
+interactions, and lookup/range check relations, and then wraps the result for
+Ethereum with Halo2 on BN254. Nexus zkVM 3.0 is AIR-based and uses lookup/logup
+relations over the Stwo Circle-STARK prover. SP1 is
+again somewhat different. Its Hypercube stack is AIR-based, but the base proof
+system is better described as a polynomial-IOP/STARK construction built
+from subprotocols such as Jagged PCS and Basefold rather than as a conventional
+univariate STARK pipeline. At the same time, these systems also differ in ISA
 design, trace structure, memory organization, and recursion strategy, which
 complicates direct performance comparison \cite{SoKZkVMs}.
 
-Table \ref{tab:zkvm-comparison} compares selected zkVMs relevant to this thesis.
-Airbender, ZisK, Pico, and OpenVM were active on EthProofs at the time of
-writing, while SP1 was listed there as inactive and Nexus zkVM was not listed.
-Because these systems expose different final proof artifacts, compressed
-recursive proofs in some cases and wrapped SNARKs in others, proof size figures
-should be interpreted only as approximate.
+Table \ref{tab:zkvm-comparison} compares selected zkVMs relevant to this
+thesis. Airbender, ZisK, Pico, and OpenVM 2.0 were active on EthProofs at the
+time of writing, while SP1 was listed there as inactive and Nexus zkVM was not
+listed. Because these systems expose different final proof artifacts,
+compressed recursive proofs in some cases and wrapped SNARKs in others, proof
+size figures should be interpreted only as approximate. For Nexus, the table
+describes the current 3.0.
 
 \begin{table}[h]
 	\centering
 	\scriptsize
 	\begin{tabularx}{\textwidth}{@{}l>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X@{}}
 		\toprule
-		                            & \textbf{Airbender} & \textbf{ZisK}     & \textbf{Pico}      & \textbf{SP1}  & \textbf{Nexus}     & \textbf{OpenVM}     \\
+		                            & \textbf{Airbender} & \textbf{ZisK} & \textbf{Pico}      & \textbf{SP1}  & \textbf{Nexus}  & \textbf{OpenVM}     \\
 		\midrule
-		\textbf{Organization}       & Matter Labs        & Polygon Labs      & Brevis             & Succinct      & Nexus              & Axiom               \\
+		\textbf{Organization}       & Matter Labs        & SilentSig     & Brevis             & Succinct      & Nexus           & Axiom               \\
 		\midrule
-		\textbf{EthProofs hardware} & 8$\times$RTX 5090  & 24 GPU            & 16$\times$RTX 5090 & n/a           & n/a                & 16$\times$ RTX 5090 \\
+		\textbf{EthProofs hardware} & 8$\times$RTX 5090  & 24 GPU        & 16$\times$RTX 5090 & n/a           & n/a             & 16$\times$ RTX 5090 \\
 		\midrule
-		\textbf{EthProofs time}     & 5.9s               & 8.3s              & 9.8s               & n/a           & n/a                & 4.3s                \\
-		\textbf{Proof size}         & $\sim$1MB          & $\sim$260KB       & $\sim$1MB          & 260B / 868B   & n/a                & 277 KB              \\
+		\textbf{EthProofs time}     & 5.9s               & 8.3s          & 9.8s               & n/a           & n/a             & 4.3s                \\
 		\midrule
-		\textbf{ISA}                & RV32IM             & RV64IMA           & RV32IM             & RV64IM        & RV32IM             & RV32IM              \\
+		\textbf{Proof size}         & $\sim$1MB          & $\sim$260KB   & $\sim$1MB          & 260B / 868B   & n/a             & 277 KB              \\
 		\midrule
-		\textbf{Constraint system}  & AIR-style          & PIL2 SMs          & AIR                & AIR           & AIR                & AIR                 \\
-		\textbf{Base zk system}     & DEEP-STARK         & zk-STARK          & STARK              & Hypercube IOP & \shortstack{Circle                       \\ STARK} & \shortstack{STARK +\\ FRI} \\
-		\textbf{Wrapper}            & SNARK              & \shortstack{PLONK                                                                                 \\FFLONK}  & Groth16            & \shortstack{Groth16\\PLONK} & n/a                & \shortstack{Halo2\\BN254}         \\
+		\textbf{ISA}                & RV32IM             & RV64IMA       & RV32IM             & RV64IM        & RV32IM          & RV32IM              \\
+		\midrule
+		\textbf{Constraint system}  & AIR                & PIL2          & AIR                & AIR           & AIR + logup     & AIR                 \\
+		\textbf{Base zk system}     & DEEP-STARK/FRI     & STARK         & STARK              & Hypercube     & Circle STARK    & STARK + FRI         \\
+		\midrule
+		\textbf{Wrapper}            & SNARK              & PLONK/FFLONK  & Groth16            & Groth16 PLONK & none documented & Halo2/BN254         \\
 		\bottomrule
 	\end{tabularx}
-	\caption{Comparison of selected zkVMs relevant}
+	\caption{Comparison of selected zkVMs relevant to this thesis. EthProofs hardware and proving-time entries are shown where publicly available; the architectural rows summarize the currently documented proof stacks.}
 	\label{tab:zkvm-comparison}
 \end{table}
 
