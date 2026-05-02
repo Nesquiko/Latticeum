@@ -72,6 +72,11 @@
 
 	\include{content/fw_and_conslussion}
 
+	\ifx\FIITlagEN\undefined
+	\else
+		\include{pages/resume}
+	\fi
+
 	% Bibliography
 	\printbibliography[heading=references,segment=\therefsegment]
 
@@ -84,6 +89,7 @@
 \appendix
 
 \include{pages/time_schedule}
-\include{pages/resume}
+
+\include{pages/digital_medium}
 
 \end{document}

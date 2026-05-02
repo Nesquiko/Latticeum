@@ -1,0 +1,62 @@
+% Contents of the digital medium
+\thispagestyle{empty}
+
+\ifx\FIITlagEN\undefined
+	\chapter{Obsah digitálneho média}
+\else
+	\chapter{Contents of the digital medium}
+\fi
+
+\pagenumbering{arabic}
+\renewcommand*{\thepage}{B-\arabic{page}}
+
+\ifx\FIITlagEN\undefined
+	\par Evidenčné číslo práce v informačnom systéme: \FIITevidenceNumber
+\else
+	\par Registration number of the thesis in the information system: \FIITevidenceNumber
+\fi
+
+\ifx\FIITlagEN\undefined
+	\par Obsah digitálnej časti práce (archív ZIP):
+\else
+	\par Contents of the digital medium (ZIP archive):
+\fi
+
+{\small
+\begin{tabularx}{\textwidth}{@{}p{0.33\textwidth}X@{}}
+	\toprule
+	\textbf{Folder}                                        & \textbf{Contents}                                   \\
+	\midrule
+	\texttt{/crates}                                       & Rust source crates                                  \\
+	\hspace*{1em}\texttt{configuration}                    & Shared configuration among the VM, zkVM, and guest  \\
+	\hspace*{1em}\texttt{cyclotomic-rings}\footnotemark[1] & Ring primitives and challenge-set utilities         \\
+	\hspace*{1em}\texttt{guest}                            & Guest SDK for Rust programs runnable in the zkVM    \\
+	\hspace*{1em}\texttt{latticefold}\footnotemark[2]      & Folding scheme and proof machinery                  \\
+	\hspace*{1em}\texttt{stark-rings}\footnotemark[3]      & Ring, linear algebra, and polynomial support crates \\
+	\hspace*{1em}\texttt{vm}                               & RISC-V emulator                                     \\
+	\hspace*{1em}\texttt{zkvm}                             & Proof generation for VM execution                   \\
+	\addlinespace
+	\texttt{/guests}                                       & Testing guest programs                              \\
+	\hspace*{1em}\texttt{evm}                              & REVM based proving of block 24740084                \\
+	\hspace*{1em}\texttt{fibonacci}                        & Computes the 100th Fibonacci number                 \\
+	\addlinespace
+	\texttt{/sages}                                        & SageMath debugging scripts                          \\
+	\bottomrule
+\end{tabularx}
+}
+
+\par \texttt{cyclotomic-rings}\footnote{\url{https://github.com/NethermindEth/latticefold}}
+was forked from Nethermind's LatticeFold repository, in order to update underlying
+cryptographic library for optimized version.
+\par \texttt{latticefold}\footnote{\url{https://github.com/NethermindEth/latticefold}}
+was forked from Nethermind's LatticeFold repository, in order to update underlying
+cryptographic library for optimized version, and expose internal state needed in ZkVM proving.
+\par \texttt{stark-rings}\footnote{\url{https://github.com/NethermindEth/stark-rings}}
+was cloned from Nethermind's Stark Rings repository, in order to update underlying
+cryptographic library for optimized version.
+
+\ifx\FIITlagEN\undefined
+	\par Názov odovzdaného archívu: \FIITArchiveName.
+\else
+	\par Name of the submitted archive: \FIITArchiveName.
+\fi
