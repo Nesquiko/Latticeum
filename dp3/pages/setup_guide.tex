@@ -1,0 +1,57 @@
+\thispagestyle{empty}
+\pagenumbering{arabic}
+\renewcommand*{\thepage}{C-\arabic{page}}
+
+\chapter{Setup guide}
+
+This guide was developed and tested on Arch Linux (kernel 6.18.24-1-lts) on an
+11th Gen Intel Core i7-1165G7 @ 2.80GHz with 16 GiB RAM. For reference, the
+benchmarks in this thesis were run on an Intel Xeon E312xx server with Ubuntu
+24.04 and 64 GB RAM.
+
+\section{Requirements}
+
+The workspace is pinned to \texttt{nightly-2025-08-19}. Stable Rust is not
+enough, because the workspace uses nightly-only features. The guest programs are
+compiled for \texttt{riscv32imac-unknown-none-elf}, while the prover runs on the
+native Linux host target (\texttt{x86\_64-unknown-linux-gnu} here).
+
+\begin{itemize}
+	\item Rust toolchain \texttt{nightly-2025-08-19}.
+	\item Guest target \texttt{riscv32imac-unknown-none-elf}.
+	\item About 14 GiB of free RAM for the proving run.
+\end{itemize}
+
+Downloading \texttt{rustup} is sufficient, everything else can be downloaded through it.
+After installing it, run:
+
+\begin{minted}[breaklines,obeytabs=true,tabsize=2,breaksymbolleft=]{bash}
+rustup toolchain install nightly-2025-08-19
+rustup target add --toolchain nightly-2025-08-19 riscv32imac-unknown-none-elf
+\end{minted}
+
+\section{How to run}
+
+\begin{enumerate}
+	\item Compile the Fibonacci guest.
+
+	      \begin{minted}[breaklines,obeytabs=true,tabsize=2,breaksymbolleft=]{bash}
+cd guests/fibonacci
+cargo build --release --target riscv32imac-unknown-none-elf
+\end{minted}
+
+	      The resulting binary is stored at:
+
+	      \begin{minted}[breaklines,obeytabs=true,tabsize=2,breaksymbolleft=]{text}
+target/riscv32imac-unknown-none-elf/release/fibonacci
+\end{minted}
+
+	\item Run the zkVM prover from the repository root.
+
+	      \begin{minted}[breaklines,obeytabs=true,tabsize=2,breaksymbolleft=]{bash}
+RUST_LOG=debug cargo run --bin zkvm --features debug,latticefold/parallel --release -- --guest ./target/riscv32imac-unknown-none-elf/release/fibonacci
+\end{minted}
+\end{enumerate}
+
+The proving run is memory-intensive and should be done on a machine with roughly
+14 GiB of free RAM or more.
