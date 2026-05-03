@@ -175,3 +175,85 @@ $i$ becomes the \texttt{IVCStepInput} for step $i+1$.
 	\label{fig:execution_flow_overview}
 \end{tikzFigure}
 
+\pagebreak
+
+\subsection{Toolchain summary}
+
+The implementation is built with the following software stack:
+
+\begin{itemize}
+	\item \textbf{Rust:} \texttt{nightly-2025-08-19}, edition 2024.
+	\item \textbf{Targets:} native host execution for the prover and \texttt{riscv32imac-unknown-none-elf} for guest programs.
+	\item \textbf{LatticeFold:} a fork of Nethermind's \texttt{latticefold} implementation, used for Ajtai commitments, decomposition, linearization, and NIFS folding.
+	\item \textbf{Plonky3 core crates:} \texttt{p3-field}, \texttt{p3-goldilocks}, \texttt{p3-poseidon2}, \texttt{p3-merkle-tree}, \texttt{p3-commit}, \texttt{p3-matrix}, \texttt{p3-mds}, \texttt{p3-challenger}, and \texttt{p3-symmetric}.
+	\item \textbf{REVM:} version \texttt{36.0.0}, used inside the \texttt{evm} guest for replaying Ethereum block execution.
+\end{itemize}
+
+\subsection{Instruction coverage}
+
+Emulator doesn't have a full \texttt{rv32imac} instruction coverage, just
+enough for running a Fibonacci program and proving a block with REVM.
+And also the zkVM doesn't constraint all the supported instructions.
+
+\paragraph{Implemented in the VM emulator:}
+
+\begin{itemize}
+	\item \textbf{RV32I control flow:} \texttt{LUI}, \texttt{AUIPC}, \texttt{JAL}, \texttt{JALR}, \texttt{BEQ}, \texttt{BNE}, \texttt{BLT}, \texttt{BGE}, \texttt{BLTU}, \texttt{BGEU}.
+	\item \textbf{RV32I memory:} \texttt{LB}, \texttt{LH}, \texttt{LW}, \texttt{LBU}, \texttt{LHU}, \texttt{SB}, \texttt{SH}, \texttt{SW}.
+	\item \textbf{RV32I integer arithmetic and logic:} \texttt{ADDI}, \texttt{SLTI}, \texttt{SLTIU}, \texttt{XORI}, \texttt{ORI}, \texttt{ANDI}, \texttt{SLLI}, \texttt{SRLI}, \texttt{SRAI}, \texttt{ADD}, \texttt{SUB}, \texttt{SLL}, \texttt{SLT}, \texttt{SLTU}, \texttt{XOR}, \texttt{SRL}, \texttt{SRA}, \texttt{OR}, \texttt{AND}.
+	\item \textbf{RV32M:} \texttt{MUL}, \texttt{MULHU}, \texttt{DIVU}, \texttt{REMU}.
+	\item \textbf{RV32A:} \texttt{LR.W}, \texttt{SC.W}, \texttt{AMOADD.W}.
+	\item \textbf{Other:} \texttt{FENCE}, \texttt{ECALL}. The local compressed decoder also contains an explicit fallback for \texttt{C.SUB}, \texttt{C.XOR}, \texttt{C.OR}, and \texttt{C.AND}, which are translated to their canonical RV32I forms.
+\end{itemize}
+
+\paragraph{Unsupported:}
+
+\begin{itemize}
+	\item \textbf{RV32I:} \texttt{EBREAK}.
+	\item \textbf{RV32M:} \texttt{MULH}, \texttt{MULHSU}, \texttt{DIV}, \texttt{REM}.
+	\item \textbf{RV32A:} \texttt{AMOSWAP.W}, \texttt{AMOXOR.W}, \texttt{AMOAND.W}, \texttt{AMOOR.W}.
+	\item \textbf{RV32A:} \texttt{AMOMIN.W}, \texttt{AMOMAX.W}, \texttt{AMOMINU.W}, \texttt{AMOMAXU.W}.
+\end{itemize}
+
+\paragraph{Constrained inside the zkVM:}
+
+\begin{itemize}
+	\item \texttt{LUI}, \texttt{AUIPC}, \texttt{JAL}, \texttt{JALR}, \texttt{BNE}, \texttt{SW}, \texttt{ADDI}, and \texttt{ADD}.
+\end{itemize}
+
+\subsection{Parameter set}
+
+The implementation fixes the following algebraic and cryptographic parameters:
+
+\begin{itemize}
+	\item \textbf{Base field:} the Goldilocks prime field with modulus
+	      $p = 2^{64} - 2^{32} + 1 = 18446744069414584321$.
+	\item \textbf{Cyclotomic ring:} coefficient representation over
+	      $R_q = \mathbb{F}_q[X]/(X^{24} - X^{12} + 1)$, so the ring degree is 24.
+	\item \textbf{CRT/NTT form:} the ring splits into 8 NTT components over
+	      $\mathbb{F}_{q^3}$, i.e. extension degree 3 and \texttt{TAU} $= 24 / 8 = 3$.
+	\item \textbf{Challenge set:} short lattice challenges use coefficients in the range $[-32, 32)$.
+	\item \textbf{Ajtai/LatticeFold decomposition parameters:}
+	      $B = 2^{15}$, $L = 5$, $B_{\text{small}} = 2$, and $K = 15$.
+	\item \textbf{Commitment module rank:} $\kappa = 32$ ring elements.
+	\item \textbf{Poseidon2 commitments:} output width 4, narrow state width/rate $(8, 4)$, wide state width/rate $(16, 12)$, full rounds 8, partial rounds 22, and S-box degree 7.
+	\item \textbf{Hash security estimate:} the wide Poseidon2 sponge uses capacity 4 over a 64-bit field, which gives roughly 128-bit security.
+	\item \textbf{Commitment matrix width:} the Ajtai commitment uses
+	      $N = \texttt{w\_size} \cdot L = 19763 \cdot 5 = 98815$ columns.
+\end{itemize}
+
+\subsection{CCS dimensions}
+
+The resulting instance has:
+
+\begin{itemize}
+	\item witness layout size $\texttt{w\_size} = 19763$,
+	\item total $z$-vector size $n = 19768$,
+	\item public input size $\ell = 4$,
+	\item padded row count $m = 131072 = 2^{17}$,
+	\item number of matrices $t = 125$,
+	\item number of multisets $q = 52$,
+	\item maximal multiset degree $d = 7$,
+	\item row logarithm $s = 17$,
+	\item column logarithm $s' = 15$.
+\end{itemize}
