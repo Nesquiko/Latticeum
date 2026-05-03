@@ -86,8 +86,7 @@ And also it must enforce constraints on the $z_{i-1\_\text{comm}}$'s preimage:
 
 Following the integrity check, $F'$ executes the verification logic for the
 LatticeFold Non Interactive Folding Scheme (NIFS). This verifies the
-mathematical correctness of the folding process without re
-executing the prior computation.
+mathematical correctness of the folding process without re-executing the prior computation.
 
 The circuit accepts the folding proof $\pi_{i-1}$ as part of the witness. It
 then executes the LatticeFold verifier with the previous accumulator $U_{i-1}$
@@ -105,3 +104,13 @@ $z_{0\_\text{comm}}$, the new state commitment $z_{i\_\text{comm}}$, and the
 new accumulator commitment $U_{i\_\text{comm}}$ using Poseidon2. This
 $h_i$ becomes the public input for the next iteration of the recursive loop.
 
+\subsection{IVC verification}
+
+After the final IVC chain terminates, the output is final witness-instance pair
+and a proof of last folding. These artifacts would be enough for proving
+that there exists a valid execution trace of a program $P$, staring from public
+initial state $z_0$, ending in public final state $z_n$, such that every
+instruction transition follows the selected RISC-V ISA, every memory
+operation is consistent with read-over-write semantics, and every
+folded accumulator is valid under LatticeFold. However, they are not succinct,
+so they must be wrapped in order to produce a succinct proof.

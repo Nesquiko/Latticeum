@@ -2,18 +2,20 @@
 
 This chapter details the architectural and cryptographic design of the
 proposed lattice-based RISC-V ZkVM. It is structured to first
-establish the system's high-level architecture \ref{sec:arch}, describing the
+establish the system's high-level architecture (\ref{sec:arch}), describing the
 lifecycle of a proof from high-level Rust code to a finalized succinct
 argument. Following this, the specific cryptographic primitives are defined
-\ref{sec:crypto}, selecting the LatticeFold folding scheme \cite{LatticeFold}
+(\ref{sec:crypto}), selecting the LatticeFold folding scheme (\cite{LatticeFold})
 as the core recursion engine, while identifying Greyhound \cite{Greyhound} as
 the necessary wrapping SNARK for final verification. The design then proceeds
-to the construction of the RISC-V step circuit $F$ \ref{sec:riscv_circuit},
+to the construction of the RISC-V step circuit $F$ (\ref{sec:riscv_circuit}),
 detailing how 32 bit integer arithmetic is arithmetized into the Goldilocks ring
 elements required by LatticeFold using CCS \cite{CCS}. Finally, the recursive
-mechanism $F'$ is defined \ref{sec:ivc}, outlining
+mechanism $F'$ is defined (\ref{sec:ivc}), outlining
 how IVC \cite{ValiantIVC} is enforced to prove the integrity of long running
-computations.
+computations. The chapter concludes with the design of the final wrapping
+SNARK (\ref{sec:wrapping_snark_design}), which compresses the final folded
+artifacts into a succinct proof suitable for external verification.
 
 \input{content/solution/high-level-arch.tex}
 
@@ -22,3 +24,5 @@ computations.
 \input{content/solution/riscv-circuit.tex}
 
 \input{content/solution/ivc.tex}
+
+\input{content/solution/wrapping-snark.tex}

@@ -49,7 +49,10 @@ A CCS instance consists of a public input $x \in \mathbb{F}^\ell$. A CCS
 witness consists of a vector $w \in \mathbb{F}^{n-\ell-1}$. A CCS
 structure-instance tuple $(S, x)$ is satisfied by a CCS witness $w$ if:
 
-$$ \sum_{i=0}^{q-1} c_i \cdot \bigcirc_{j \in S_i} (M_j \cdot z) = \mathbf{0}, $$
+\begin{equation}
+	\sum_{i=0}^{q-1} c_i \cdot \bigcirc_{j \in S_i} (M_j \cdot z) = \mathbf{0}
+\end{equation}
+
 
 where $z = (w, 1, x) \in \mathbb{F}^n$, $M_j \cdot z$ denotes matrix-vector
 multiplication, $\bigcirc$ denotes the Hadamard (entry-wise) product between
@@ -73,7 +76,7 @@ remain hard even in the presence of quantum computers \cite{AjtaiLattices,
 
 \subsection{LatticeFold}
 
-LatticeFold \cite{LatticeFold} can be though of as a HyperNova \cite{HyperNova},
+LatticeFold \cite{LatticeFold} can be thought of as a HyperNova \cite{HyperNova},
 but with post-quantum guarantees. It utilizes the Module-SIS \cite{MSIS}
 problem to construct Ajtai vector commitment scheme. Unlike DLP-based folding,
 the challenge in LatticeFold is the growth of the witness norm during folding
@@ -141,7 +144,7 @@ by Ozdemir, Laufer, and Boneh:
 	      that each read returns the most recent written value to its address.
 \end{enumerate}
 
-for the detailed construction and security analysis of these protocols, refer
+For the detailed construction and security analysis of these protocols, refer
 to the original work \cite{MemoryAccessInSnarks}.
 
 \subsection{LatticeFold+}

@@ -39,7 +39,7 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 		            value, and read/write flags).
 	      \end{itemize}
 
-	\item \textbf{Arithmetization and witness generation:} The raw data is
+	\item \textbf{Arithmetization and witness generation:} The raw data are
 	      transformed into a vector of Goldilocks ring elements $\mathbb{Z}_q$.
 	      This vector serves as the \textit{witness} for the constraint system.
 	      The logic verifying the transition from input state to output state
@@ -79,9 +79,10 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 	      the execution concludes \cite{MemoryAccessInSnarks}.
 
 	\item \textbf{Final wrapping:} Once the program halts, the system holds a
-	      single folded instance-witness pair. To produce a
-	      succinct proof suitable for blockchain verification, this large
-	      lattice-based artifact is wrapped in a final SNARK as depicted in Figure \ref{fig:snark_wrap}.
+	      single folded instance-witness pair and final folding proof.
+	      These could be used to prove the execution, but they are not succinct. To produce a
+	      succinct proof suitable for blockchain verification, these large
+	      lattice-based artifacts are wrapped in a final SNARK as depicted in Figure \ref{fig:snark_wrap}.
 	      This wrapper consist of the SuperSpartan IOP \cite{HyperNova} to
 	      prove the validity of the folded CCS instance, combined with the
 	      Greyhound \cite{Greyhound} PCS to ensure post-quantum security and
@@ -152,7 +153,7 @@ Figure \ref{fig:execution_flow}. This workflow is defined by the following stage
 		\node[dataNode, above=0.6cm of wrapper, xshift=-2.8cm] (accFinal) {Accumulator\\$U_{final}$};
 		\node[dataNode, above=0.6cm of wrapper] (finalProof) {Final folding proof\\$\pi_{final\ fold}$};
 		\node[dataNode, above=0.6cm of wrapper, xshift=2.8cm] (memLogFinal) {Memory\\operations log};
-		\node[dataNode, right=1.8cm of wrapper] (proof) {Final proof\\$\pi_{final}$};
+		\node[dataNode, right=1.8cm of wrapper] (proof) {Final succinct proof\\$\pi_{final}$};
 		\draw[arrow, dotted] (repeatUnderLogRight) to[out=-80, in=90] node[midway, right] {After last step} (finalProof.north);
 		\draw[arrow] (accFinal.south) -- (wrapper.north);
 		\draw[arrow] (finalProof.south) -- (wrapper.north);

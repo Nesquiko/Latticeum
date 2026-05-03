@@ -23,15 +23,15 @@ and 4 zeroes must be in the witness. Here this input will be denoted as $s = (s_
 Then the output of the MDS application is captured into the witness, denoted as $s_{after\_mds}$.
 The constraint enforces
 
-\[
+\begin{equation}
 	s_{after\_mds\_i} - s'_i = 0
-\]
+\end{equation}
 
 where $i \in (0, 1, \ldots, 15)$ and $s' = \texttt{MDS} \cdot s$.
 
 \paragraph{External initial rounds.}
 
-Next are external rounds where a round constant is added and S-box is applied
+Next are external rounds where a round constant is added and S-box
 is applied to all state elements. There are 4 external initial rounds, after each
 the state of 16 elements must be captured (denoted as
 $s_{\text{ext\_init\_r\_i}}; \quad r \in (0, 1, 2, 3); \quad i \in (0, 1, \ldots, 15)$).
@@ -109,9 +109,9 @@ sense that they do not only depend on a fixed small set of witness variables,
 but on the final structure of the whole CCS. The most notable example is the
 linearization inner-product check, which verifies the relation
 
-\[
+\begin{equation}
 	\texttt{inner} = \sum_i c_i \cdot \prod_{j \in S_i} u_j,
-\]
+\end{equation}
 
 where the multisets $S_i$ are precisely the multisets of the CCS currently being
 built. Therefore, this part of the verifier is self-aware. It must inspect the

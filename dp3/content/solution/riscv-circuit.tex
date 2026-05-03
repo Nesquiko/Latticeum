@@ -10,7 +10,7 @@ The target architecture is a 32 bit RISC-V machine. The state of this machine
 within the cryptographic proof system is represented by elements from the
 Goldilocks field. The Goldilocks prime is defined as $p = 2^{64} - 2^{32} + 1$. Since $p >
 	2^{32}$, a single field element can losslessly represent any 32 bit register
-value or memory address without overflow during standard representation.
+value or memory address.
 
 The LatticeFold protocol operates over cyclotomic rings. A Goldilocks field
 element is mapped into the ring $R_q$ using a Number Theoretic Transform (NTT)
@@ -66,9 +66,9 @@ and $z_i$. This process involves the following constraints:
 		            between the active selector flag and the instruction, opcode
 		            bits $z_{\texttt{INSTRUCTION}}[0:7]$ are constrained to
 		            match the weighted sum of opcode constants:
-		            \[
+		            \begin{equation}
 			            \sum_{s \in S} (s \cdot \texttt{OPCODE}_s) = z_{\texttt{INSTRUCTION}}[0:7]
-		            \]
+		            \end{equation}
 		            Where $\texttt{OPCODE}_s$ is the corresponding constant to the
 		            instruction $s$\footnote{\texttt{ADD} and \texttt{SUB} are R type instruction,
 			            which means, for them $\texttt{OPCODE}_s = 0110011$}.
@@ -84,12 +84,12 @@ and $z_i$. This process involves the following constraints:
 			            and \texttt{SUB} have the same \texttt{OPCODE} and
 			            \texttt{funct3}, but their \texttt{funct7} differ}.
 		            The circuit enforces:
-		            \[
+		            \begin{equation}
 			            \sum_{s \in S_{\texttt{F3}}} s \cdot (z_{\texttt{INSTRUCTION}}[12:14] - \texttt{F3}_s) = 0
-		            \]
-		            \[
+		            \end{equation}
+		            \begin{equation}
 			            \sum_{s \in S_{\texttt{F7}}} s \cdot (z_{\texttt{INSTRUCTION}}[25:31] - \texttt{F7}_s) = 0
-		            \]
+		            \end{equation}
 		            Instructions that do not require these fields, are not in the
 		            subsets, and these terms equal to 0.
 
@@ -135,7 +135,8 @@ When a load or store instruction is executed:
 	      root in the state $z_i$.
 \end{enumerate}
 
-The memory log is not fully verified against the register state at every step.
+Each memory event is constrained to match the executed instruction; only global
+read-over-write consistency is deferred.
 Instead, the correctness of the read/write history is verified in the final
 wrapping SNARK (discussed in subsection \ref{subsec:wrapping_snark}) using
 checks described in previous subsection \ref{subsec:memory_check}.
