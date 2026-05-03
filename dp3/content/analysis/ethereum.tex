@@ -27,7 +27,7 @@ wraps them into a block and gossips (sends) the new block to other participants
 over the consensus p2p network. The rest of the validator pool can in 32 slot
 (one epoch) attest to that new block's validity. In order for a block to be
 finalized, it must be attested by a super-majority, which is 66\% of the total
-balance of all validators. \cite{ethereumConsensusMechanisms}.
+balance of all validators \cite{ethereumConsensusMechanisms}.
 
 \subsection{Execution}\label{subsec:ethereum_execution}
 
@@ -39,8 +39,8 @@ transaction is executed in Ethereum-Virtual-Machine (EVM). EVM is a stack based
 virtual machine operating 256 bit words which executes smart contract code.
 Ethereum is a decentralized state machine, with rules defined by the EVM.
 EVM can be thought of as a function. Given a valid state and valid set of
-transactions\footnote{validity of transactions, and thus transitively validity
-	of state, is guaranteed by the consensus layer \ref{subsec:ethereum_consensus}},
+transactions\footnote{Transaction and state-transition validity are verified by
+	execution clients; consensus clients coordinate agreement on blocks containing execution payloads \ref{subsec:ethereum_consensus}.},
 outputs next valid state:
 
 \[
@@ -49,6 +49,6 @@ outputs next valid state:
 
 Thus, Ethereum's state transition function is described by the EVM. This function
 must be executed by each execution node for each new block in order to keep up
-with the current chain state. \cite{ethereumEthereumVirtual}
+with the current chain state \cite{ethereumEthereumVirtual}.
 
 

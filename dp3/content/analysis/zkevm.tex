@@ -91,6 +91,7 @@ those based FRI \cite{FRI}) and systems with short proofs (like Groth16
 	\caption{Recursive proving}
 \end{tikzFigure}
 
+\pagebreak
 The recursive ZKP is an instantiation of 2 step Incrementally Verifiable Computation (IVC)
 \cite{ValiantIVC}.
 
@@ -178,7 +179,7 @@ recursive SNARKs \cite{RecursiveSNARKsIVC}.
 
 In the 2022 to early 2024 first generation of ZkEVMs was successfully deployed.
 Thanks to recursive proving, it was feasible for these ZkEVMs to be created.
-They first prove the EVM execution, and then prove knowledge of a EVM proof inside another circuit.
+They first prove the EVM execution, and then prove knowledge of an EVM proof inside another circuit.
 This enabled parallelization of proving and reduced the size and complexity of
 the final proof submitted to L1. The proving system landscape of this period was
 strongly influenced by PLONK \cite{Plonk}, while recursive systems such as
@@ -335,7 +336,7 @@ the EVM's stack-based architecture. Another benefit is the mature tooling
 ecosystem, debuggers, and libraries.
 This allows developers to write provable programs in familiar languages like
 Rust, C, and C++. RISC-V is a general purpose ISA, which opens possibilities
-for proving not just blockchain applications. Due to this, a EVM written in
+for proving not just blockchain applications. Due to this, an EVM written in
 a language that can be compiled into RISC-V, can be executed inside a ZkVM and
 together this combination creates a ZkEVM.
 
@@ -345,6 +346,13 @@ The only sensible comparison method for ZkEVMs is to benchmark them on proving
 Ethereum blocks. EthProofs \cite{EthProofs} is a portal where ZkEVM teams can
 join and be measured on the most important thing, the proving times of Ethereum
 blocks. As of writing this work, around 75\% of blocks are proven under 10 seconds.
+
+Table \ref{tab:zkvm-comparison} compares selected zkVMs relevant to this
+thesis. Airbender, ZisK, Pico, and OpenVM 2.0 were active on EthProofs at the
+time of writing, while SP1 was listed there as inactive and Nexus zkVM was not
+listed. Because these systems expose different final proof artifacts,
+compressed recursive proofs in some cases and wrapped SNARKs in others, proof
+size figures should be interpreted only as approximate.
 
 The leading active systems in this comparison are STARK-based
 \cite{STARK}, but their internal architecture is not uniform.
@@ -362,12 +370,6 @@ univariate STARK pipeline. At the same time, these systems also differ in ISA
 design, trace structure, memory organization, and recursion strategy, which
 complicates direct performance comparison \cite{SoKZkVMs}.
 
-Table \ref{tab:zkvm-comparison} compares selected zkVMs relevant to this
-thesis. Airbender, ZisK, Pico, and OpenVM 2.0 were active on EthProofs at the
-time of writing, while SP1 was listed there as inactive and Nexus zkVM was not
-listed. Because these systems expose different final proof artifacts,
-compressed recursive proofs in some cases and wrapped SNARKs in others, proof
-size figures should be interpreted only as approximate.
 
 \begin{table}[h]
 	\centering

@@ -18,7 +18,7 @@ Knowledge Proofs (ZKPs) called SNARK (Succinct Non-interactive Argument of
 Knowledge) in order to offload a computation to one entity (one node, or a
 cluster that is a small subset of the whole network), which performs the
 computation and generates a proof of its validity. This proof can then be
-verified by the rest of the network at fractional compute cost.
+verified by the rest of the network at fractional compute cost \cite{NativeRollups}.
 
 \subsection{Zero Knowledge Proofs}
 
@@ -66,9 +66,9 @@ EVM. To reduce the computational burden of verifying execution using ZKPs, the
 EVM's execution logic needs to be provable with a ZKPs, creating a ZkEVM. This
 would change the state transition function (\ref{eq:state_transition}) to:
 
-\[
+\begin{equation}
 	F(state_n, T) = (state_{n+1}, \pi)
-\]
+\end{equation}
 
 Where $\pi$ is the proof of the state transition's validity. Therefore,
 verifying a block's execution state transition would involve verifying this

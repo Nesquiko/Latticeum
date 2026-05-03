@@ -14,9 +14,9 @@ represented as the set of all integer linear combinations of a set of linearly
 independent basis vectors $B = \{\mathbf{b}_1, \mathbf{b}_2, \dots, \mathbf{b}_n\}$
 where $\mathbf{b}_i \in \mathbb{R}^n$. That is:
 
-\[
+\begin{equation}
 	L(B) = \left\{ \sum_{i=1}^{n} x_i \mathbf{b}_i \mid x_i \in \mathbb{Z} \right\}
-\]
+\end{equation}
 
 The dimension of the lattice is $n$. Many cryptographic constructions are
 built upon the difficulty of solving problems like finding the shortest
@@ -27,6 +27,8 @@ One of the pioneering works in this field was by Miklós Ajtai in 1996, who
 introduced a cryptographic construction whose security could be based on the
 worst-case hardness of lattice problems \cite{AjtaiLattices}. This provided a
 stronger theoretical foundation for cryptosystems using lattices.
+
+\pagebreak
 
 Lattice-based cryptography offers several advantages:
 
@@ -84,9 +86,9 @@ dimension, and $m$ is the column dimension, with $m > n \log q$), find a
 non-zero integer vector $\mathbf{s} \in \mathbb{Z}^m$ with small norm (i.e.,
 $s_i \in s; ||s_i|| \leq \beta$, for some bound $\beta$) such that:
 
-\[
+\begin{equation}
 	A\mathbf{s} = \mathbf{0} \pmod{q}
-\]
+\end{equation}
 
 Finding such a short vector $\mathbf{s}$ is believed to be computationally
 hard for appropriate parameters.
@@ -100,12 +102,12 @@ hard for appropriate parameters.
 		      \mathbf{s}') = \mathbf{0} \pmod{q}$. If $\mathbf{s} - \mathbf{s}'$ is
 	      a short non-zero vector, this would imply a solution to the SIS
 	      problem for matrix $A$.
-	\item \textbf{Hiding:} The hiding property is based on the Learning With
-	      Errors (MLWE) problem or related assumptions. Informally, given $A$ and
-	      $A\mathbf{s} \pmod{q}$ where $\mathbf{s}$ is short and random, it is
-	      computationally difficult to recover $\mathbf{s}$. The distribution of
-	      $A\mathbf{s} \pmod{q}$ is computationally indistinguishable from a
-	      uniform random vector over $\mathbb{Z}_q^n$ \cite{LatticesInZKP}.
+	\item \textbf{Hiding:} The hiding property is based on the Module Learning
+	      With Errors (MLWE) assumption. Informally, the
+	      commitment uses randomness, so the published value does not reveal
+	      the committed vector. Under MLWE assumptions, the resulting
+	      distribution is computationally indistinguishable from uniform to any
+	      efficient adversary \cite{LatticesInZKP}.
 \end{itemize}
 
 A useful feature of some Ajtai commitments is that the size of the
@@ -195,4 +197,3 @@ for small fields such as Goldilocks, a single sum-check invocation over an
 extension of a small prime field, and a new folding friendly Ajtai commitment
 scheme with pay-per-bit commitment costs. These properties make Neo one of the
 closest known lattice-based systems to the architecture targeted in this work.
-
