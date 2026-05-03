@@ -34,10 +34,6 @@ more amenable to ZK proof generation. Recent systematization work also shows
 that ZkVMs differ substantially in ISA choices, trace layouts, memory checking,
 and proving backends \cite{SoKZkVMs}.
 
-While many ZKP systems rely on assumptions vulnerable to quantum attacks,
-lattice-based cryptography provides a foundation for post-quantum secure ZK
-solutions, with security often based on hard problems like SVP or SIS \cite{Ajtai1998}.
-
 The majority of currently deployed ZkVMs and ZkEVMs employ hash-based STARKs \cite{SoKZkVMs, STARK},
 which achieve post-quantum security through unstructured cryptographic hash functions
 but incur costs in proof size and verification complexity. A smaller portion
