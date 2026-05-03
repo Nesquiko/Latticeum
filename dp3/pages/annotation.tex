@@ -16,36 +16,29 @@
 
 	\FIITthesisSK: \FIITtitleSK
 
-	Vedúci bakalárskej práce: \FIITsupervisor
+	Vedúci diplomovej práce: \FIITsupervisor
 
 	\FIITdateSK
 \end{minipage}
 
 \bigskip{}
 
-Táto práca skúma návrh a potenciálnu implementáciu riešení využívajúcich
-dôkazy s nulovou znalosťou (ZKP) v rámci ekosystému Ethereum, s cieľom riešiť
-problémy škálovateľnosti a dosiahnuť post-kvantovú bezpečnosť. Dôkaz s
-nulovou znalosťou je kryptografická metóda, ktorá umožňuje overenie integrity
-výpočtov bez odhalenia citlivých dát, čo ich robí mimoriadne vhodnými pre
-zlepšenie súkromia a efektivity v blockchainových systémoch. Ústredným
-zameraním tejto práce je prieskum Zero-Knowledge Virtual Machine (ZkVM)
-prispôsobenej pre inštrukčnú sadu RISC-V, s využitím princípov kryptografie
-založenej na mriežkach. Kľúčovou aplikáciou takéhoto ZkVM by bolo dokázateľne
-spávne vykonanie Ethereum blokov cez ZkEVM.
+Táto práca skúma návrh a implementáciu riešení využívajúcich
+dôkazy s nulovou znalosťou (ZKP) v rámci ekosystému Ethereum.
+Hlavným cieľom bolo za pomoci ZkVM odbremeniť nódy na exekučnej
+vrstve o potrebu znova-vykonania nového bloku. Na docielenie
+bola použitiá lattice-based kryptografia, ktorá na rozdiel od eliptických
+kriviek, je post-kvantovo bezpečná a na rozdiel od haší, produkuje dôkazy
+s veľkosťou v desiatkach kilobajtoch a nie stovkach až tisícoch.
 
-Výskum zahŕňa analýzu architektúry Ethereum, konceptu "snarkifikácie" pre
-konsenzuálnu aj exekučnú vrstvu, evolúciu a prirodzené výzvy ZkEVM (vrátane
-rekurzívnych dôkazov a skladacích schém), a preskúmanie kryptografických
-primitív založených na mriežkach, ako sú Ajtaiho záväzky, spolu so súčasnými
-systémami LaBRADOR, Greyhound a LatticeFold/LatticeFold+.
-
-Cieľom tejto diplomovej práce je prispieť do odboru zhodnotením potenciálnej
-výkonnosti ZKP systémov postavených na kryptografii založenej na mriežkach pre
-úlohu dokazovania správneho vykonania Ethereum blokov. Práca sa ďalej snaží
-porovnať tieto nové riešenia s etablovanými klasickými ZKP prístupmi, pričom
-zachováva post-kvantovú odolnosť.
-
+V práci sa podarilo navrhnúť architektúru a čiastočne implementovať
+prototyp lattice-based ZkVM. Implementovaný prototyp na porovnaniach výpočtu 100. Fibonacciho čísla
+vygeneroval dôkaz za 688,24 za využitia 12,34 GB RAM. V dlhšom EVM experimente
+systém bežal približne 9 hodín a využil 13,7 GB RAM. Výsledky ukazujú, že
+prístup je zatiaľ pomalší než etablované ZkVM riešenia, no súčasne naznačujú,
+že negatívny výsledok nie je spôsobený principiálym problémom, ale
+potrebuje optimalizacie. Čo sa týka veľkosti post-kvantovo bezpečných dôkazov,
+tak tie sú 4 až 5krát menšie, ako porovnané riešenia.
 
 \newpage{}\thispagestyle{empty}\medskip{}
 
@@ -74,29 +67,23 @@ zachováva post-kvantovú odolnosť.
 
 \bigskip{}
 
-This thesis explores the design and potential implementation of
-solutions utilizing Zero-Knowledge Proofs (ZKPs) within the Ethereum
-ecosystem, aiming to address scalability challenges and achieve post-quantum
-security. ZKPs are cryptographic methods that allow the verification of
-computational integrity without revealing sensitive data, making them
-suitable for improving privacy and efficiency in blockchain systems. The
-central focus of this work is the exploration of a Zero-Knowledge Virtual
-Machine (ZkVM) for the RISC-V instruction set, leveraging lattice-based
-cryptography. A key application of such a ZkVM would be to enable creating
-proofs of correct execution of EVM.
+This thesis examines the design and implementation of solutions using
+Zero-Knowledge Proofs (ZKPs) in the Ethereum ecosystem. The main goal was to
+relieve execution-layer nodes from the need to re-execute every new block by
+means of a ZkVM. To achieve this, lattice-based cryptography was used, which,
+unlike elliptic-curve-based approaches, is post-quantum secure and, unlike
+hash-based approaches, can produce proofs in the order of tens of kilobytes
+rather than hundreds or thousands.
 
-The research includes an analysis of Ethereum's architecture, the concept of
-"snarkification" for both consensus and execution layers, the evolution and
-challenges of ZkEVMs (recursive proofs and folding schemes), and an
-examination of lattice-based cryptographic primitives, such as Ajtai
-commitments, along with contemporary systems like LaBRADOR, Greyhound, and
-LatticeFold/LatticeFold+.
-
-This engineer's thesis aims to contribute to the field by evaluating the
-potential performance of ZKP systems built on lattice-based cryptography for
-the task of proving the correct execution of Ethereum blocks. The work further
-seeks to compare these emerging solutions with established classical ZKP
-approaches, while maintaining post-quantum resistance.
+The thesis succeeded in designing the architecture and partially implementing a
+prototype lattice-based ZkVM. On the 100th Fibonacci benchmark, the prototype
+produced a proof in 688.24 seconds using 12.34 GB of RAM. In a longer EVM
+experiment, the system ran for approximately 9 hours and used 13.7 GB of RAM.
+The results show that the approach is currently slower than established ZkVM
+solutions, but they also suggest that this negative result is not caused by a
+fundamental limitation and that further optimization is needed. In terms of
+proof size, the post-quantum secure proofs are 4 to 5 times smaller than the
+compared solutions.
 
 \newpage{}\thispagestyle{empty}
 
