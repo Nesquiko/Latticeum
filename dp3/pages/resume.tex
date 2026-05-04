@@ -233,13 +233,13 @@ cieľom nie je preukázať produkčnú pripravenosť systému, ale posúdiť, č
 navrhnutá architektúra funguje v praxi a aké výsledky dosahuje neúplný
 prototyp.
 
-Základný benchmark bol vykonaný na programe \texttt{fibonacci}. V optimalizovanej
-binárke kompilátor výsledok 100. Fibonacciho čísla fakticky materializoval ako
-konštantu, takže beh nemeral plných 100 iterácií, ale krátku vykonávaciu stopu.
-Pri tomto behu vznikla stopa dlhá 16 inštrukcií a zaznamenali sa 2 pamäťové
-operácie. Celkový čas skladania dosiahol 688,24 sekundy. Už tento jednoduchý
-príklad ukázal, že aktuálny prototyp je výrazne pomalší než moderné ZkVM
-riešenia.
+Základný benchmark bol vykonaný na jednoduchom programe \texttt{fibonacci}. V
+optimalizovanej binárke kompilátor výsledok 100. Fibonacciho čísla fakticky
+materializoval ako konštantu, takže beh nemeral plných 100 iterácií, ale krátku
+vykonávaciu stopu. Pri tomto behu vznikla stopa dlhá 16 inštrukcií a zaznamenali
+sa 2 pamäťové operácie. Celkový čas skladania dosiahol 688,24 sekundy. Už tento
+jednoduchý príklad ukázal, že aktuálny prototyp je výrazne pomalší než moderné
+ZkVM riešenia.
 
 Podrobnejšie porovnanie s inými systémami je uvedené v tabuľke~\ref{tab:zkvm-benchmarks-v2}.
 Na rovnakom hardvéri dosiahla implementácia tejto práce čas generovania dôkazu
