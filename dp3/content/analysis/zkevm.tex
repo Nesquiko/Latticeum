@@ -98,7 +98,8 @@ The recursive ZKP is an instantiation of 2 step Incrementally Verifiable Computa
 \subsection{IVC}
 
 IVC is a cryptographic primitive for proving the correctness of an
-iterated and incremental computation (such as an EVM or RISC-V microprocessor execution).
+iterated and incremental computation (such as an EVM or RISC-V microprocessor execution)
+\cite{ValiantIVC, SuperNova}.
 
 Let $F$ be a step function (e.g., representing the execution of a single
 instruction). The output state of step $i$ is fed as input into step $i+1$,
@@ -240,7 +241,8 @@ Folding scheme can be made non-interactive by using Fiat-Shamir heuristic \cite{
 \subsection{Instantiating IVC with folding scheme}
 
 IVC instantiation via folding schemes requires wrapping the base computation
-$F$ within an augmented function $F'$, where $F$ is the "application" circuit \cite{Nova, HyperNova}.
+$F$ within an augmented function $F'$, where $F$ is the "application" circuit
+\cite{Nova, SuperNova, HyperNova}.
 The function $F'$ is structured to perform two primary tasks:
 
 \begin{enumerate}
@@ -268,7 +270,7 @@ The function $F'$ is structured to perform two primary tasks:
 
 Finally, $F'$ outputs a new hash $h_i$, committing to the updated state $(i+1,
 	z_0, z_i, U_i)$, which serves as the public input for the next step
-\cite{Nova, HyperNova}. Figure~\ref{fig:ivc-folding} illustrates this data flow.
+\cite{Nova, SuperNova, HyperNova}. Figure~\ref{fig:ivc-folding} illustrates this data flow.
 
 \begin{tikzFigure}
 	\begin{tikzpicture}[
