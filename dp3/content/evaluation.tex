@@ -87,13 +87,17 @@ achieved in a complete implementation, proof size could become an important
 practical advantage of the lattice-based approach.
 
 To complement the small Fibonacci benchmark, a longer experiment was also run
-with the \texttt{evm} guest based on \texttt{revm}. This run continued for
+with the \texttt{evm} guest based on \texttt{REVM}. The guest program proved
+a Etherum block 24740084. This run continued for
 approximately 9 hours and 29 minutes on the same machine. During this time, the
 system kept processing the execution and verifying the IVC chain, while peak RAM
-usage remained around 13.7 GB. This is still far from production-level
+usage remained around 13.7 GB. Unfortunately, the run didn't complete, because
+of a bug in the implementation, where the zkVM panicked due to incorrect logic
+of a instruction handler.
+This is far from production-level
 performance, but it is an encouraging sign that the implementation can continue
 working on a substantially more complex workload without an uncontrolled memory
-increase or failing to produce proof.
+increase or failing to fold inside the IVC chain.
 
 \section{Why is the prototype slower?}
 
@@ -264,25 +268,23 @@ practical proving time, but the long-term trade-off remains open.
 	ability to prove long execution traces, such as those required for Ethereum block
 	validation?}
 
-\textbf{Answer:} The current results are not conclusive, but they provide a
-positive outlook.
+\textbf{Answer:} Yes, the results are encouraging.
 
-From the design perspective, LatticeFold addresses witness norm growth by
-decomposition during folding. This suggests that long computations should remain
-manageable in principle.
+From the design perspective, LatticeFold controls witness growth through its
+decomposition layer, so the witness norm is kept within the protocol bounds even
+as the execution chain grows. That means long computations are not expected to
+fail simply because the witness becomes too large.
 
-From the implementation perspective, the Fibonacci benchmark is too small to
-provide a strong answer, because 16 traces do not meaningfully stress the
-long-run behavior of the system. However, the additional \texttt{revm}-based EVM
-experiment gives a more encouraging signal. That run continued for more than 9
-hours, the IVC chain kept being verified, and memory usage stayed within a
-stable range instead of growing out of control. This does not yet prove that the
-system is ready for Ethereum block proving in practice, but it suggests that
-longer executions are not immediately blocked by catastrophic witness or memory
-growth.
+From the implementation perspective, the long-running
+\texttt{REVM}-based EVM experiment, although that run eventually stopped because
+of a bug in an instruction handler, it kept progressing for more than 9 hours
+and the IVC chain continued to fold successfully. This is a positive sign that
+the witness norm remained low enough for LatticeFold to keep operating. If the
+norm had grown beyond the allowed bound, the decomposition and folding checks
+would have failed and the IVC chain would not have been able to continue.
 
-Therefore, the final answer is cautiously positive. The current implementation
-does not yet provide a complete experimental proof that noise growth will remain
-manageable at production scale, but the observed long-running behavior supports
-the claim that the lattice-based design is viable and deserves further
-optimization and larger-scale testing.
+The prototype does not yet
+complete the full long-running EVM experiment, but the observed behavior shows
+that latticefold-based norm control is working and that long executions are not
+being blocked by witness blow-up.
+

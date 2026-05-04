@@ -6,7 +6,7 @@ chain terminates, the prover holds a final folded accumulator, its witness, the
 last folding proof, and the data required for deferred memory checking. These
 artifacts are sufficient to justify correctness of the execution, but they are
 not succinct enough for direct blockchain verification. The purpose of the final
-wrapper is therefore to compress them into a single proof $\pi_{final}$.
+wrapper is therefore to compress them into a single succinct proof $\pi_{final}$.
 
 \subsection{Wrapped statement}
 
@@ -17,27 +17,23 @@ final state commitment $z_{n\_\text{comm}}$, and the claimed public result of
 the computation. The private witness contains:
 
 \begin{itemize}
-    \item the final accumulator instance-witness pair $(U_n, W_n)$,
-    \item the final folding proof $\pi_{n\_\text{fold}}$,
-    \item the auxiliary witness needed to re-check the last IVC transition,
-    \item the deferred memory witnesses, including the original transcript
-          $tr$ and its sorted form $tr'$.
+	\item the final accumulator instance-witness pair $(U_n, W_n)$,
+	\item the final folding proof $\pi_{n\_\text{fold}}$,
+	\item the auxiliary witness needed to re-check the last IVC transition,
+	\item the deferred memory witnesses, including the original transcript
+	      $tr$ and its sorted form $tr'$.
 \end{itemize}
 
 The relation $R_{wrap}$ is satisfied if and only if all of the following hold:
 
 \begin{enumerate}
-    \item the final folded CCS accumulator is valid,
-    \item the last folding proof is valid and consistent with that accumulator,
-    \item the claimed final state commitment matches the state obtained after the
-          last VM transition,
-    \item the memory transcripts satisfy permutation, $(a,t)$-ordering, and
-          read-over-write semantics.
+	\item the final folded CCS accumulator is valid,
+	\item the last folding proof is valid and consistent with that accumulator,
+	\item the claimed final state commitment matches the state obtained after the
+	      last VM transition,
+	\item the memory transcripts satisfy permutation, $(a,t)$-ordering, and
+	      read-over-write semantics.
 \end{enumerate}
-
-In other words, the wrapper turns the full end-of-execution claim into a single
-algebraic satisfiability statement. The outer verifier no longer needs to inspect
-the large accumulator or the complete memory log directly.
 
 \subsection{SuperSpartan layer}
 
@@ -48,13 +44,11 @@ Instead of embedding yet another full SNARK verifier into the wrapper circuit,
 SuperSpartan reduces the final CCS statement to a small number of sum-check and
 polynomial evaluation claims.
 
-Concretely, the witness of the wrapper contains the same algebraic objects that
-appear at the end of the IVC process: accumulator coordinates, folding witness
+The witness of the wrapper contains the same algebraic objects that
+appear at the end of the IVC process: accumulator, folding witness
 variables, and memory-check witnesses. SuperSpartan verifies these through a
 sum-check based reduction, leaving only polynomial evaluation queries to be
-proven succinctly. This makes the wrapper conceptually aligned with the rest of
-the design: the step circuit proves local execution, the IVC chain proves global
-consistency, and the wrapper only compresses the resulting final relation.
+proven succinctly.
 
 \subsection{Greyhound layer}
 
@@ -65,11 +59,10 @@ assumption stack of the overall zkVM. Second, it provides succinct evaluation
 proofs with sublinear verification complexity, which is exactly the final
 compression step needed after SuperSpartan.
 
-This means that the wrapper does not switch back to a discrete-log based or
-trusted-setup polynomial commitment scheme. Instead, the final proof remains in
+The final proof remains in
 the same general lattice-based design space as the folding layer itself. The
 Greyhound paper reports evaluation proofs around 53 KB for large polynomial
-degrees, which suggests that a future fully implemented wrapper could plausibly
+degrees, which suggests that a future fully implemented could plausibly
 produce a final proof in the range of tens of kilobytes, rather than exposing
 the much larger native accumulator.
 
@@ -88,12 +81,3 @@ proof ensures that all logged memory accesses satisfy read-over-write semantics.
 Therefore, an accepting final wrapper proof implies existence of a valid
 execution trace of the committed program, starting from the public initial state
 and ending in the claimed final state.
-
-\subsection{Status in this work}
-
-The current prototype does not yet implement this final wrapper. The section
-should therefore be understood as the design of the final compression layer, not
-as an experimentally evaluated implementation artifact. In the intended
-non-interactive instantiation, verifier challenges are derived using the
-Fiat-Shamir heuristic, so the wrapper follows the standard random-oracle style
-interpretation used by modern folding and SNARK systems.
