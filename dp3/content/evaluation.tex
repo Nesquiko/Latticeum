@@ -21,16 +21,17 @@ following configuration:
 
 \section{Fibonacci benchmark}
 
-A simple benchmark was conducted using the compiled \\texttt{fibonacci} guest.
-In the optimized guest binary, the wrapped 32-bit value of the 100th Fibonacci
-number is effectively hardcoded by the compiler rather than recomputed through
-the full iterative loop at runtime. This means the benchmark does not measure a
-real 100-step Fibonacci computation, but only the execution of the optimized
-guest that materializes the final constant and writes it to memory. Even so,
-this is still sufficient as a small reproducible benchmark for comparing the
-prototype against other ZkVMs.
+A benchmark was prepared with two \\texttt{fibonacci} guest variants. The first,
+non-optimized variant computes the 100th Fibonacci number inside the guest
+itself; its compiled binary contains 35 static instructions in the text section,
+including 27 instructions in \\texttt{main}. That full runtime trace is too long
+to prove and benchmark comfortably in the current prototype. For the reported
+measurements, the optimized guest variant was therefore used instead, where the
+compiler effectively materializes the wrapped 32-bit 100th Fibonacci value as a
+constant and the program only writes it to memory. This keeps the benchmark at a
+reasonable scale while still exercising the proof pipeline.
 
-The Fibonacci program execution in the prototype resulted in:
+The optimized Fibonacci program execution in the prototype resulted in:
 
 \begin{itemize}
 	\item \textbf{Execution traces:} 16 instructions
@@ -295,4 +296,3 @@ The prototype does not yet
 complete the full long-running EVM experiment, but the observed behavior shows
 that latticefold-based norm control is working and that long executions are not
 being blocked by witness blow-up.
-

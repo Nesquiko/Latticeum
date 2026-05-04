@@ -359,14 +359,14 @@ The leading active systems in this comparison are STARK-based
 Airbender uses AIR constraint system with a DEEP-STARK/FRI pipeline.
 ZisK uses PIL2 as a state machine arithmetization with a STARK prover.
 Pico uses AIR with modular STARK and CircleSTARK backends. OpenVM is
-also AIR-based, but organizes much of the machine through modular chips, buses,
+also AIR-based \cite{OpenvmDesignSpec}, but organizes much of the machine through modular chips, buses,
 interactions, and lookup/range check relations, and then wraps the result for
 Ethereum with Halo2 on BN254. Nexus zkVM 3.0 is AIR-based and uses lookup/logup
 relations over the Stwo Circle-STARK prover. SP1 is
 again somewhat different. Its Hypercube stack is AIR-based, but the base proof
 system is better described as a polynomial-IOP/STARK construction built
 from subprotocols such as Jagged PCS and Basefold rather than as a conventional
-univariate STARK pipeline. At the same time, these systems also differ in ISA
+univariate STARK pipeline \cite{SP1Hypercube}. At the same time, these systems also differ in ISA
 design, trace structure, memory organization, and recursion strategy, which
 complicates direct performance comparison \cite{SoKZkVMs}.
 
