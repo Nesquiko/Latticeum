@@ -58,18 +58,24 @@ could not be executed on the same hardware.
 	\centering
 	\begin{tabular}{|l|c|c|}
 		\hline
-		\textbf{ZkVM}    & \textbf{Proof time} & \textbf{Peak RAM} \\
+		\textbf{ZkVM}        & \textbf{Proof time} & \textbf{Peak RAM} \\
 		\hline
-		This work        & 11:28.92            & 12.34 GB          \\
-		Pico             & 2:04.50             & 6.27 GB           \\
-		SP1              & 1:50.17             & 9.96 GB           \\
-		ZKsync Airbender & 4:06.73             & 24.34 GB          \\
-		Nexus zkVM 3.0   & 0:22.81             & 0.12 GB           \\
+		This work            & 11:28.92            & 12.34 GB          \\
+		Pico                 & 2:04.50             & 6.27 GB           \\
+		SP1                  & 1:50.17             & 9.96 GB           \\
+		ZKsync Airbender     & 4:06.73             & 24.34 GB          \\
+		Nexus zkVM 3.0$^{*}$ & 0:22.81             & 0.12 GB           \\
 		\hline
 	\end{tabular}
 	\caption{Comparison of proof generation time and peak RAM usage for the benchmark program.}
 	\label{tab:zkvm-benchmarks-v2}
 \end{table}
+
+\noindent\textit{* The Nexus zkVM 3.0 result reflects the documented
+	proof flow from the public SDK quick-start. The public
+	Nexus documentation consulted for this thesis does not provide a concrete
+	instructions for the full recursive/wrapped proving pipeline, so that pipeline was
+	not run.}
 
 The comparison shows that the proposed system is slower than the compared
 systems. Pico and SP1 complete the proof much faster, Nexus zkVM 3.0 is also

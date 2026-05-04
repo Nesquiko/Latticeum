@@ -6,27 +6,39 @@ AI was used in document writing, implementation, and evaluation.
 
 \section{Document writing}
 
-AI was used for proofreading, cross-checking citations, and drafting LaTeX commands
-and TikZ diagrams.
+\begin{itemize}
+	\item brainstorming how to best write and explain certain parts,
+	\item proofreading,
+	\item cross-checking citations,
+	\item writing LaTeX commands and TikZ diagrams.
+\end{itemize}
 
-This was confirmed by reading the generated corrections.
-The cited papers were opened directly at the reported places, and the compiled
-document and diagrams were checked visually.
+This was controlled by reading the generated corrections, opening the cited papers
+at the reported places, and checking the compiled document and diagrams visually.
 
 \section{Implementation}
 
-AI was used for debugging CCS satisfiability in SageMath, writing tests for correct
-RISC-V VM execution and instruction decoding, and navigating the forked
-dependencies.
+\begin{itemize}
+	\item debugging CCS satisfiability in SageMath,
+	\item writing tests for correct RISC-V VM execution and instruction decoding,
+	\item navigating the forked dependencies,
+	\item writing VM instruction handlers,
+	\item setting up the EVM guest program for proving block 24740084,
+	      including downloading all necessary block, transaction, and Ethereum state data
+	      from the Ethereum blockchain.
+\end{itemize}
 
-This was confirmed by changing constraints until numbers in constraints matched
-numbers from the Sage scripts, and until they actually passed. Running the
-tests on compiled guest binaries, and opening the reported dependency sources to
-verify that the guidance matched the code.
+This was controlled by changing constraints until the numbers in the constraints
+matched the numbers from the Sage scripts and the checks passed, running the
+tests on compiled guest binaries to validate the VM instruction handlers,
+opening the reported dependency sources to verify that the guidance matched the
+code, and running REVM on the downloaded data to validate block 24740084.
 
 \section{Evaluation}
 
-AI was used to research how other zkVMs are run.
+\begin{itemize}
+	\item researching how other zkVMs are run.
+\end{itemize}
 
-This was confirmed by actually running the referenced systems and checking that
+This was controlled by actually running the referenced systems and checking that
 the described commands and observed behaviour matched.
