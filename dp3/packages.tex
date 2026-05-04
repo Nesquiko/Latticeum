@@ -37,7 +37,8 @@
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{lipsum}
-\usepackage{minted}
+% latexmk writes auxiliary files into latex-builds, so minted must look there too.
+\usepackage[outputdir=latex-builds]{minted}
 \usepackage{tikz}
 \usetikzlibrary{babel, shapes.geometric, arrows.meta, positioning, calc, fit, decorations.pathreplacing, patterns, backgrounds}
 \usepackage{tocloft}
