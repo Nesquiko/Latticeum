@@ -31,8 +31,8 @@
 	\hspace*{1em}\texttt{configuration}                    & Shared configuration among the VM, zkVM, and guest  \\
 	\hspace*{1em}\texttt{cyclotomic-rings}\footnotemark[1] & Ring primitives and challenge-set utilities         \\
 	\hspace*{1em}\texttt{guest}                            & Guest SDK for Rust programs runnable in the zkVM    \\
-	\hspace*{1em}\texttt{latticefold}\footnotemark[2]      & Folding scheme and proof machinery                  \\
-	\hspace*{1em}\texttt{stark-rings}\footnotemark[3]      & Ring, linear algebra, and polynomial support crates \\
+	\hspace*{1em}\texttt{latticefold}\footnotemark[1]      & Folding scheme and proof machinery                  \\
+	\hspace*{1em}\texttt{stark-rings}\footnotemark[2]      & Ring, linear algebra, and polynomial support crates \\
 	\hspace*{1em}\texttt{vm}                               & RISC-V emulator                                     \\
 	\hspace*{1em}\texttt{zkvm}                             & Proof generation for VM execution                   \\
 	\addlinespace
@@ -48,7 +48,7 @@
 \par \texttt{cyclotomic-rings}\footnote{\url{https://github.com/NethermindEth/latticefold}}
 was forked from Nethermind's LatticeFold repository, in order to update underlying
 cryptographic library for optimized version.
-\par \texttt{latticefold}\footnote{\url{https://github.com/NethermindEth/latticefold}}
+\par \texttt{latticefold}\footnotemark[1]
 was forked from Nethermind's LatticeFold repository, in order to update underlying
 cryptographic library for optimized version, and expose internal state needed in ZkVM proving.
 \par \texttt{stark-rings}\footnote{\url{https://github.com/NethermindEth/stark-rings}}

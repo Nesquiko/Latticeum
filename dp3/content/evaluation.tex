@@ -2,10 +2,13 @@
 
 This chapter evaluates the lattice-based RISC-V ZkVM prototype developed in
 this work. The current implementation is incomplete and should not be understood
-as a production-ready ZkVM. The goal of this chapter is therefore not to claim
-state-of-the-art performance, but to compare the prototype with existing ZkVMs,
-to explain the observed differences, and to answer the research questions of
-this thesis.
+as a production-ready ZkVM: the software VM supports a larger instruction set
+than the subset currently constrained inside the zkVM, the final Greyhound-based
+wrapping proof is not yet integrated, and the full recursive workflow is not
+yet proved end-to-end inside in-circuit. The goal of this
+chapter is therefore not to claim state-of-the-art performance, but to compare
+the prototype with existing ZkVMs, to explain the observed differences, and to
+answer the research questions of this thesis.
 
 The performance measurements were conducted on server-grade hardware with the
 following configuration:
@@ -18,9 +21,14 @@ following configuration:
 
 \section{Fibonacci benchmark}
 
-A simple benchmark was conducted using a program that computes the 100th
-Fibonacci number. This benchmark was selected because it is small, easy to
-reproduce, and does not require a large number of RISC-V instructions.
+A simple benchmark was conducted using the compiled \\texttt{fibonacci} guest.
+In the optimized guest binary, the wrapped 32-bit value of the 100th Fibonacci
+number is effectively hardcoded by the compiler rather than recomputed through
+the full iterative loop at runtime. This means the benchmark does not measure a
+real 100-step Fibonacci computation, but only the execution of the optimized
+guest that materializes the final constant and writes it to memory. Even so,
+this is still sufficient as a small reproducible benchmark for comparing the
+prototype against other ZkVMs.
 
 The Fibonacci program execution in the prototype resulted in:
 
